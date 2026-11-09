@@ -1,0 +1,31 @@
+{
+  "old_sha": "2761ac0af8247daf56a4c4ef70762da2a6a07c4058296ed76dc3564a989f2f23",
+  "new_sha": "f1e366765851d69f0767674ac68adcc185f7413fef0841593959f617e436a9b1",
+  "old_bytes": 71704,
+  "new_bytes": 71704,
+  "byte_differences": [
+    [
+      65369,
+      1,
+      2
+    ],
+    [
+      65371,
+      0,
+      2
+    ],
+    [
+      70962,
+      105,
+      107
+    ]
+  ],
+  "physical_validation": "not run",
+  "hardware_access": false,
+  "semantic_model": "public older Apple collection algorithms only; not current DriverKit behavior",
+  "absolute_report_descriptor": {
+    "bytes": 70,
+    "sha256": "71a46f041c678f745096d44bfda98c4b82a97728fe4e7cf20d3d12cc47b46173",
+    "hex": "05010901a10185030902a1020509190129051500250175019505810295038101050109300931150026ff7f75109502810209381581257f750895018106050c0a38028106c0c0"
+  }
+}

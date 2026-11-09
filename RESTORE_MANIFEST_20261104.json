@@ -1,0 +1,1017 @@
+{
+  "created": [
+    "agent/Info.plist",
+    "agent/clipboard_sync.py",
+    "agent/clipboard_transfer.py",
+    "agent/discovery.py",
+    "agent/file_wire.py",
+    "firmware/ch32v407/alignment_safe_libc.c",
+    "firmware/ch32v407/bridge.c",
+    "firmware/ch32v407/bridge.h",
+    "firmware/ch32v407/descriptors.c",
+    "firmware/ch32v407/descriptors.h",
+    "firmware/ch32v407/main.c",
+    "firmware/ch32v407/newlib_context.c",
+    "firmware/ch32v407/setup_flash.c",
+    "firmware/ch32v407/setup_flash.h",
+    "firmware/ch32v407/setup_msc.c",
+    "firmware/ch32v407/setup_msc.h",
+    "firmware/ch32v467_petros/setup_flash_none.c",
+    "firmware/main/clipboard_channel.c",
+    "firmware/main/clipboard_channel.h",
+    "firmware/main/exchange_storage.c",
+    "firmware/main/exchange_storage.h",
+    "firmware/main/exchange_tusb_config.h",
+    "firmware/main/flash_setup.c",
+    "firmware/main/flash_setup.h",
+    "firmware/main/fn_key.h",
+    "firmware/main/usb_hid.c",
+    "firmware/main/wire_protocol.c",
+    "firmware/main/wire_protocol.h",
+    "hardware/CH32V407_SUPPLY_BOM_AND_OPENPCB_AUDIT_20261031.md",
+    "hardware/HIGH_SPEED_TWO_PORT_FEASIBILITY_20261030.md",
+    "hardware/JLC_HARDWARE_RECHECK_20261031.md",
+    "hardware/JLC_SMT_CNY_COST_REVIEW_20261031.md",
+    "hardware/NO_RADIO_PCBA_CANDIDATES_20261030.csv",
+    "hardware/NO_RADIO_PCBA_PRELIMINARY_20261030.md",
+    "hardware/USB_C_SINGLE_SIDE_SELECTION_20261031.md",
+    "hardware/ch32v407_cost_model_20261031.py",
+    "hardware/ch32v407_costdown_20261031.py",
+    "hardware/ch32v407_flash4m_cost.py",
+    "hardware/usb_c_single_side_cost_20261031.py",
+    "host/WKPointingSource.swift",
+    "host/ch32v407_host.swift",
+    "host/clipboard/README.md",
+    "host/clipboard/WKClipboardCandidateSelfTest.swift",
+    "host/clipboard/WKClipboardContent.swift",
+    "host/clipboard/WKClipboardProtocol.swift",
+    "host/clipboard/WKClipboardSelfTest.swift",
+    "host/clipboard/WKClipboardTransport.swift",
+    "host/clipboard/WKCompanionInstall.swift",
+    "host/clipboard/WKFilePipelineSelfTest.swift",
+    "host/clipboard/WKFilePortal.swift",
+    "host/clipboard/WKFilePortalSelfTest.swift",
+    "host/clipboard/WKFnKey.swift",
+    "host/clipboard/WKGestureRelay.swift",
+    "host/clipboard/WKOnDemandClipboard.swift",
+    "host/clipboard/WKOnboarding.swift",
+    "host/clipboard/WKScrollRelay.swift",
+    "host/clipboard/WKStreamFiles.swift",
+    "host/clipboard/WiredKVMCompanion.swift",
+    "host/file_copy.py",
+    "host/gui/Companion-Info.plist",
+    "host/gui/Info.plist",
+    "host/gui/WiredKVMClipboard.swift",
+    "host/gui/WiredKVMExchange.swift",
+    "host/gui/WiredKVMTransferMedia.swift",
+    "host/macos_capture.swift",
+    "host/setup/WiredKVMSetup.swift",
+    "native/clipboard_channel.hpp",
+    "native/desktop_pointer.hpp",
+    "native/exchange_service.hpp",
+    "native/file_transfer_runtime.hpp",
+    "native/iphone_edge.hpp",
+    "native/wiredkvm.cpp",
+    "native/wk_protocol.hpp",
+    "scripts/archive_ch32v407_results.py",
+    "scripts/audit_ch32_flash_capacity.py",
+    "scripts/build.sh",
+    "scripts/build_ch32_capacity_runtime.sh",
+    "scripts/build_ch32v407.sh",
+    "scripts/build_ch32v407_macos.sh",
+    "scripts/build_ch32v407_tests.sh",
+    "scripts/build_dual_setup.sh",
+    "scripts/build_macmac_setup.sh",
+    "scripts/fetch_ch32v407_sdk.py",
+    "scripts/pack_dual_setup.py",
+    "scripts/pack_flash_setup.py",
+    "scripts/prepare_ch32v407_sdk.py",
+    "scripts/probe_finder_hid.py",
+    "scripts/test_ch32v407.sh",
+    "scripts/test_ch32v407_bulk_v5.sh",
+    "scripts/test_ch32v407_core.sh",
+    "scripts/test_first_plug_onboarding.sh",
+    "scripts/test_wired_clipboard_e2e.py",
+    "scripts/verify_ch32v407_build.py",
+    "scripts/verify_dual_setup.py",
+    "scripts/verify_macmac_setup.py",
+    "tests/ch32v407_core_test.cpp",
+    "tests/ch32v407_sim.c",
+    "tests/ch32v407_sim.h",
+    "tests/ch32v407_stream_test.swift",
+    "tests/clipboard_image_selftest.swift",
+    "tests/clipboard_latency_probe.swift",
+    "tests/clipboard_unix_transport_selftest.swift",
+    "tests/companion_install_selftest.swift",
+    "tests/fake_desktop_capture.py",
+    "tests/fn_epoch_thread_test.c",
+    "tests/gesture_relay_selftest.swift",
+    "tests/installer_lifecycle_probe.swift",
+    "tests/native_clipboard_test.cpp",
+    "tests/native_input_policy_selftest.swift",
+    "tests/onboarding_selftest.swift",
+    "tests/pixel_scroll_selftest.swift",
+    "tests/pointing_source_selftest.swift",
+    "tests/run_clipboard_latency_probe.py",
+    "tests/setup_asset_test.c",
+    "tests/setup_msc_test.c",
+    "tests/support/clipboard_firmware_fixture.c",
+    "tests/support/firmware_mock/class/hid/hid_device.h",
+    "tests/support/firmware_mock/driver/uart.h",
+    "tests/support/firmware_mock/esp_log.h",
+    "tests/support/firmware_mock/esp_partition.h",
+    "tests/support/firmware_mock/esp_timer.h",
+    "tests/support/firmware_mock/freertos/FreeRTOS.h",
+    "tests/support/firmware_mock/freertos/task.h",
+    "tests/support/firmware_mock/tinyusb.h",
+    "tests/support/firmware_mock/tinyusb_default_config.h",
+    "tests/support/flash_setup_fixture.c",
+    "tests/support/wk_firmware_fixture.c",
+    "tests/test_clipboard_channel_firmware.py",
+    "tests/test_clipboard_native.py",
+    "tests/test_exchange_firmware.py",
+    "tests/test_exchange_gui.py",
+    "tests/test_exchange_native.py",
+    "tests/test_file_transfer_capture.py",
+    "tests/test_file_transfer_media.py",
+    "tests/test_file_transfer_native.py",
+    "tests/test_firmware_absolute.py",
+    "tests/test_flash_setup.py",
+    "tests/test_fn_metadata.py",
+    "tests/test_keyboard_capture.py",
+    "tests/test_native_absolute.py",
+    "tests/test_onboarding_pack.py",
+    "tests/test_setup_native.py",
+    "tests/test_trackpad_scroll.py",
+    "tests/test_wired_clipboard_capture.py"
+  ],
+  "retainedIdentical": [],
+  "files": {
+    "hardware/HIGH_SPEED_TWO_PORT_FEASIBILITY_20261030.md": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/hardware/HIGH_SPEED_TWO_PORT_FEASIBILITY_20261030.md",
+      "basis": "exact historical snapshot hash",
+      "sha256": "5c441bb468fdf5a73c6dea0ac0cbe7e9bef50a5d6aa3216bf8a0ff5feeae1d70",
+      "equalsSnapshot": true
+    },
+    "hardware/JLC_SMT_CNY_COST_REVIEW_20261031.md": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/hardware/JLC_SMT_CNY_COST_REVIEW_20261031.md",
+      "basis": "exact historical snapshot hash",
+      "sha256": "7ecbc8bee56f4f7b31b2d9852c82809bf828016b7aa974626d72b6ec21e2be48",
+      "equalsSnapshot": true
+    },
+    "hardware/ch32v407_costdown_20261031.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/hardware/ch32v407_costdown_20261031.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "b48031170b99960b68a9d911cb19a65196f4809e5a8492aee0b6c2a5f568a935",
+      "equalsSnapshot": true
+    },
+    "hardware/USB_C_SINGLE_SIDE_SELECTION_20261031.md": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/hardware/USB_C_SINGLE_SIDE_SELECTION_20261031.md",
+      "basis": "exact historical snapshot hash",
+      "sha256": "48724bb1aa89404dc1c992de018f60afccdd52dc0efdf6be6eadac2c13459ed7",
+      "equalsSnapshot": true
+    },
+    "hardware/NO_RADIO_PCBA_CANDIDATES_20261030.csv": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/hardware/NO_RADIO_PCBA_CANDIDATES_20261030.csv",
+      "basis": "exact historical snapshot hash",
+      "sha256": "e03fbedc9447a2e57c81937ad6fd0e11a3c98c8131dc5764f0bfee5ccabe0366",
+      "equalsSnapshot": true
+    },
+    "hardware/CH32V407_SUPPLY_BOM_AND_OPENPCB_AUDIT_20261031.md": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/hardware/CH32V407_SUPPLY_BOM_AND_OPENPCB_AUDIT_20261031.md",
+      "basis": "exact historical snapshot hash",
+      "sha256": "9e29c8a492a8234806b215715cc9574098802aca01078598e430f057ff35bc31",
+      "equalsSnapshot": true
+    },
+    "hardware/usb_c_single_side_cost_20261031.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/hardware/usb_c_single_side_cost_20261031.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "f66bdd25d255952ae2270165bab269fdf6eb35d33096babd775b71bec13f4cee",
+      "equalsSnapshot": true
+    },
+    "hardware/ch32v407_cost_model_20261031.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/hardware/ch32v407_cost_model_20261031.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "93d3444a1f07f0d2f1e6424d3021e5dded0b0514688f30f763e8cf719acd9f08",
+      "equalsSnapshot": true
+    },
+    "hardware/JLC_HARDWARE_RECHECK_20261031.md": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/hardware/JLC_HARDWARE_RECHECK_20261031.md",
+      "basis": "exact historical snapshot hash",
+      "sha256": "76b90cd3574a7d473f580b4979621aa070b61bb1b8f54876447ea09f4daa7f88",
+      "equalsSnapshot": true
+    },
+    "hardware/ch32v407_flash4m_cost.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/hardware/ch32v407_flash4m_cost.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "eca95ed9533ff8ec0412f4d0fb4da92bf95b9d4c1ab31a78037a80e14c44bd19",
+      "equalsSnapshot": true
+    },
+    "hardware/NO_RADIO_PCBA_PRELIMINARY_20261030.md": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/hardware/NO_RADIO_PCBA_PRELIMINARY_20261030.md",
+      "basis": "exact historical snapshot hash",
+      "sha256": "110f4b280aa786ce9c4048cb9cef19ba6da69c1d7d16e0ef4f4511ac6279e1d4",
+      "equalsSnapshot": true
+    },
+    "host/macos_capture.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/host/macos_capture.swift",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "65ff9aab95e4d6dfc08529dba63f8b827f7ecd98e15a5bd2656cf2116e900e6e",
+      "equalsSnapshot": true
+    },
+    "host/ch32v407_host.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/host/ch32v407_host.swift",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "9e6b9fe0e114810ffcaa9311554598a7774d5ddf1682ab67266d3b72ce9ded72",
+      "equalsSnapshot": true
+    },
+    "host/WKPointingSource.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/host/WKPointingSource.swift",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "791aae12a2597f42d22cc01806e9f12fbf019d2337fb3db1581b3d0ee5285b86",
+      "equalsSnapshot": true
+    },
+    "host/file_copy.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/host/file_copy.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "80f153f2dd0a3fd0dc4b8b0dfeb80e0b862eff46fde673c94ea3965485dc9338",
+      "equalsSnapshot": true
+    },
+    "native/iphone_edge.hpp": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/native/iphone_edge.hpp",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "960c04931425ac1fde07632117c8ca477e26a21a01c6039fe4ba6032798a76ec",
+      "equalsSnapshot": true
+    },
+    "native/wiredkvm.cpp": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/native/wiredkvm.cpp",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "c8723a4923f0ba4f944a9c1019be54a3393a4c4561b5519243e93f0aea118cc3",
+      "equalsSnapshot": true
+    },
+    "native/file_transfer_runtime.hpp": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/native/file_transfer_runtime.hpp",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "4546ac293cd51fc8cf69c11947fa84ce82b3a3962239893e4df2e09220c60b67",
+      "equalsSnapshot": true
+    },
+    "native/desktop_pointer.hpp": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/native/desktop_pointer.hpp",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "a0df33f546a1cbac0248c1f0495fa386f1a8a6ec2feb027cb7795e9c2c253ad5",
+      "equalsSnapshot": true
+    },
+    "native/clipboard_channel.hpp": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/native/clipboard_channel.hpp",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "af50533bf5ae420325b612b9904464c21b05a9908c93a1b0401bbce19b66515d",
+      "equalsSnapshot": true
+    },
+    "native/wk_protocol.hpp": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/native/wk_protocol.hpp",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "c05cfb7249d4f7cebe69c30c73df63842c8d2aee4282f02823012a5235413ce1",
+      "equalsSnapshot": true
+    },
+    "native/exchange_service.hpp": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/native/exchange_service.hpp",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "54b97ec5e676a2ea9841da2284d0672d403209dc11452eb52e6ef6353a6953a2",
+      "equalsSnapshot": true
+    },
+    "tests/test_clipboard_native.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/test_clipboard_native.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "2e4ee9bcd038568edf10bf0aaf21470facb97e336bd74f435a7e59a72a01f5ef",
+      "equalsSnapshot": true
+    },
+    "tests/test_file_transfer_capture.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/test_file_transfer_capture.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "750b2d77cded1b043d28c2841cc5f38cc6ee5439219c49db354c028e782c9a80",
+      "equalsSnapshot": true
+    },
+    "tests/fake_desktop_capture.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/fake_desktop_capture.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "15626ea07f8012fb2b7f53d8ec14835668e723c5aa8e010a5b106300adbc2f0f",
+      "equalsSnapshot": true
+    },
+    "tests/test_exchange_firmware.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/test_exchange_firmware.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "1184b54789cca99468a05cd3c37f6931b6d499d601a064b390135b4e8aad8d65",
+      "equalsSnapshot": true
+    },
+    "tests/pixel_scroll_selftest.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/pixel_scroll_selftest.swift",
+      "basis": "exact historical snapshot hash",
+      "sha256": "c3c130aaa2999f33ec4308a3ad38c87dae66b344395048abb92b4ba6df5e49f7",
+      "equalsSnapshot": true
+    },
+    "tests/run_clipboard_latency_probe.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/run_clipboard_latency_probe.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "b197c0fdc2252d4aa48d9cdf24a6666a3c8e0d0ff709cefa90d0fc2a629393a4",
+      "equalsSnapshot": true
+    },
+    "tests/native_input_policy_selftest.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/native_input_policy_selftest.swift",
+      "basis": "exact historical snapshot hash",
+      "sha256": "e2edc0f01282a5c58a73a6a4a2e3b0a405b1db00e57dceaceba962d4ea093d18",
+      "equalsSnapshot": true
+    },
+    "tests/onboarding_selftest.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/onboarding_selftest.swift",
+      "basis": "exact historical snapshot hash",
+      "sha256": "4e7bfaf1817bacab234db1e804b9a31d98cbcfb104c47ead5c7efaef7a6283a9",
+      "equalsSnapshot": true
+    },
+    "tests/test_firmware_absolute.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/test_firmware_absolute.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "c5f9e0a6d2c2334805859a78933fad47a71065e1cdc2dbbf5087e9e72020b0a3",
+      "equalsSnapshot": true
+    },
+    "tests/native_clipboard_test.cpp": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/native_clipboard_test.cpp",
+      "basis": "exact historical snapshot hash",
+      "sha256": "c26f49779356d881c22ca1a5a9cbf90ad0249d631ef68fa69a56a2524db3e28e",
+      "equalsSnapshot": true
+    },
+    "tests/test_exchange_native.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/test_exchange_native.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "8ac2242878135cdd55ef91ef8d4e11e88cb9de7d01d9c3dc1e1024c481500424",
+      "equalsSnapshot": true
+    },
+    "tests/test_trackpad_scroll.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/test_trackpad_scroll.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "4bdb6f010aa18100951c28297aec498dc2e035e53ca71822606fa667a413127e",
+      "equalsSnapshot": true
+    },
+    "tests/ch32v407_core_test.cpp": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/ch32v407_core_test.cpp",
+      "basis": "exact historical snapshot hash",
+      "sha256": "7704d968295f2399bdbc38927172b4b78c936bbddf7150b30a17e091fab50d4b",
+      "equalsSnapshot": true
+    },
+    "tests/test_setup_native.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/test_setup_native.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "d2edffe32f4924cd083cc096df96e02f561fa9eb51835db3d74684c44d39f000",
+      "equalsSnapshot": true
+    },
+    "tests/test_flash_setup.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/test_flash_setup.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "695e4dd6bc35859243a53dbe09fb28596a33e77c6dfb69c143558c261c4b4815",
+      "equalsSnapshot": true
+    },
+    "tests/test_file_transfer_media.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/test_file_transfer_media.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "0d4a995e82c4fa4b0f0a2e35edbebe8055d6693ec1e9739a283098d23d456cb1",
+      "equalsSnapshot": true
+    },
+    "tests/ch32v407_sim.h": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/ch32v407_sim.h",
+      "basis": "exact historical snapshot hash",
+      "sha256": "a37c3bb37df6481f9ab1649152b2b1e02d4e3d29e9a0d8aabbb23313ee1254f5",
+      "equalsSnapshot": true
+    },
+    "tests/test_onboarding_pack.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/test_onboarding_pack.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "fedac9a9f867b737f878d62e1208a3c71b8653164773f5fd9894a83f02d45fdd",
+      "equalsSnapshot": true
+    },
+    "tests/test_exchange_gui.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/test_exchange_gui.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "02c519a7322dde2ef6e0beeb8c1f964bb86d53e46004ec6aedaed64580a067b1",
+      "equalsSnapshot": true
+    },
+    "tests/test_clipboard_channel_firmware.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/test_clipboard_channel_firmware.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "803f04a9faf81d197ce81d369085fa6a1d524ce3330ce370ed21def8bc8e4b5e",
+      "equalsSnapshot": true
+    },
+    "tests/pointing_source_selftest.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/pointing_source_selftest.swift",
+      "basis": "exact historical snapshot hash",
+      "sha256": "fe731a7c91328500f187c345b40d6f20b5001ae9f91abaa9cf638e44184c50e6",
+      "equalsSnapshot": true
+    },
+    "tests/clipboard_image_selftest.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/clipboard_image_selftest.swift",
+      "basis": "exact historical snapshot hash",
+      "sha256": "6c9f0d491a89b669508aea8a02744f3ab1d1ff9835ed78cfeb8a4aafbe0d65ca",
+      "equalsSnapshot": true
+    },
+    "tests/test_keyboard_capture.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/test_keyboard_capture.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "7cf4bebcf1206912f314ce1fd4c2149b40ce8274c5dda15f455ed1e7be5ead57",
+      "equalsSnapshot": true
+    },
+    "tests/setup_msc_test.c": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/setup_msc_test.c",
+      "basis": "exact historical snapshot hash",
+      "sha256": "44b9673a6e14ee6f2eee50a5d8c2e69419560ea6ed8db657df510bb62ebf32ae",
+      "equalsSnapshot": true
+    },
+    "tests/ch32v407_stream_test.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/ch32v407_stream_test.swift",
+      "basis": "exact historical snapshot hash",
+      "sha256": "e362d85b294cdb4b8d1f748b2687e547ecec921038cb8611c27eec1238dcc1f1",
+      "equalsSnapshot": true
+    },
+    "tests/test_native_absolute.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/test_native_absolute.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "87127656f321d7e61f7b5689f3d83e0beb922f806a6f6928e33d99635acdc1dc",
+      "equalsSnapshot": true
+    },
+    "tests/test_fn_metadata.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/test_fn_metadata.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "c870cf4a900f89b10245c2f0b70ad6dfb62d26e5f3aa1b0788b2006282fba3e0",
+      "equalsSnapshot": true
+    },
+    "tests/installer_lifecycle_probe.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/installer_lifecycle_probe.swift",
+      "basis": "exact historical snapshot hash",
+      "sha256": "83a708e4b89434570773489f2d35fe78652228343f348d86aea4ce4087f94546",
+      "equalsSnapshot": true
+    },
+    "tests/ch32v407_sim.c": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/ch32v407_sim.c",
+      "basis": "exact historical snapshot hash",
+      "sha256": "bf9247cedec81d2e0760a9a8cbfc8617ae07ab9a608c189b1ea1183340ef6dab",
+      "equalsSnapshot": true
+    },
+    "tests/clipboard_latency_probe.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/clipboard_latency_probe.swift",
+      "basis": "exact historical snapshot hash",
+      "sha256": "69021287894cf7a0a4786de107ee2468303c6c40660689354b77669e6c3d6661",
+      "equalsSnapshot": true
+    },
+    "tests/companion_install_selftest.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/companion_install_selftest.swift",
+      "basis": "exact historical snapshot hash",
+      "sha256": "d0b66e5078136f72af0f4cc3ea17a70530d6b106ab949f09b3ed147ae290f238",
+      "equalsSnapshot": true
+    },
+    "tests/clipboard_unix_transport_selftest.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/clipboard_unix_transport_selftest.swift",
+      "basis": "exact historical snapshot hash",
+      "sha256": "9482bc79ebdd164d8bd803250392bcf7232ce43f110315581da81c79b4626ceb",
+      "equalsSnapshot": true
+    },
+    "tests/setup_asset_test.c": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/setup_asset_test.c",
+      "basis": "exact historical snapshot hash",
+      "sha256": "d7ac7e2607ec67e486138d4a47d11ba3071f7cb284129c853b0d7cc0f73448b4",
+      "equalsSnapshot": true
+    },
+    "tests/fn_epoch_thread_test.c": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/fn_epoch_thread_test.c",
+      "basis": "exact historical snapshot hash",
+      "sha256": "a70a62f22c8070b2ff9ef63da9cbe38f6078dc8b32bee3594c9af4cd5a0b901a",
+      "equalsSnapshot": true
+    },
+    "tests/test_wired_clipboard_capture.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/test_wired_clipboard_capture.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "d5aaeaee46fe2445565704eb862b884efd4a8da74e5b8eec66818ccb9e1bc4cd",
+      "equalsSnapshot": true
+    },
+    "tests/gesture_relay_selftest.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/gesture_relay_selftest.swift",
+      "basis": "exact historical snapshot hash",
+      "sha256": "2a7742515d38d3481b48b7012a7b1a4907bbb9242d2797d0ffae07b811095b53",
+      "equalsSnapshot": true
+    },
+    "tests/test_file_transfer_native.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/test_file_transfer_native.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "8e7c6c5c21a773ad4826901b99fa2b88c32fa0d7921215a49b183fae499d8b50",
+      "equalsSnapshot": true
+    },
+    "agent/clipboard_sync.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/agent/clipboard_sync.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "750a5ccfa85b7113976ff1d94050f4aaf5d4120c86bc5a7b98a4dab447baf687",
+      "equalsSnapshot": true
+    },
+    "agent/discovery.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/agent/discovery.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "6c0498c5cfa9e55bcc01b6ab61de859bda2df81f9712e34e4397a22049d99aa0",
+      "equalsSnapshot": true
+    },
+    "agent/clipboard_transfer.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/agent/clipboard_transfer.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "cd93e8915f42b11581d615b4b14af969f1c36ab44f4e9830c1c331e4a3acc170",
+      "equalsSnapshot": true
+    },
+    "agent/file_wire.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/agent/file_wire.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "d22b64daea7e5348811210548db730be771735e39410697d7df70c325b052618",
+      "equalsSnapshot": true
+    },
+    "agent/Info.plist": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/agent/Info.plist",
+      "basis": "exact historical snapshot hash",
+      "sha256": "24e8b8f090cfb647b79bc833e8f336e8f13239a55852a950a5852b16b3b48dab",
+      "equalsSnapshot": true
+    },
+    "scripts/test_ch32v407_bulk_v5.sh": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/test_ch32v407_bulk_v5.sh",
+      "basis": "exact historical snapshot hash",
+      "sha256": "b5a015492dbea23fd36a330de841b98dca97fea5c6cc528f83acf87b5c4442ad",
+      "equalsSnapshot": true
+    },
+    "scripts/pack_flash_setup.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/pack_flash_setup.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "d50b9617ed4c91e6044d567b01cc813f8bab3567bc490587981bc573120daf25",
+      "equalsSnapshot": true
+    },
+    "scripts/build_ch32v407_tests.sh": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/build_ch32v407_tests.sh",
+      "basis": "exact historical snapshot hash",
+      "sha256": "1818fcb902bf64be3b8e45d671612d22c84b6b4d333b3c703810848f0625bdea",
+      "equalsSnapshot": true
+    },
+    "scripts/build_macmac_setup.sh": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/build_macmac_setup.sh",
+      "basis": "exact historical snapshot hash",
+      "sha256": "be545c35ac253ffae4cf929c3d7ac950ca4104041e29d86f179fab5dd40249c0",
+      "equalsSnapshot": true
+    },
+    "scripts/archive_ch32v407_results.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/archive_ch32v407_results.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "66cf646d6fc13dae1ff8fca391c51170421470446da850f3af58e89059731c4b",
+      "equalsSnapshot": true
+    },
+    "scripts/probe_finder_hid.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/probe_finder_hid.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "7bedc7ed39f32c254ff48981298bae41abb803ec91ad6f64e2e9682a1f4571b9",
+      "equalsSnapshot": true
+    },
+    "scripts/pack_dual_setup.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/pack_dual_setup.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "1daa10c6070283524735ef1aba4c653002cf07437e6ce2aff8f51eb845a870b6",
+      "equalsSnapshot": true
+    },
+    "scripts/fetch_ch32v407_sdk.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/fetch_ch32v407_sdk.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "6467526f8aeff068105ef78f96e4e36b6f0a917e1832c518c049f869fa93bac5",
+      "equalsSnapshot": true
+    },
+    "scripts/test_ch32v407_core.sh": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/test_ch32v407_core.sh",
+      "basis": "exact historical snapshot hash",
+      "sha256": "89d50d4a696963a1d79153768486cc7f00090a3672a207699c82bdfd5395d793",
+      "equalsSnapshot": true
+    },
+    "scripts/verify_dual_setup.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/verify_dual_setup.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "838ac206c5f74772a1506a7ad25ba86667502880f01c3b6733c6ab43825600b9",
+      "equalsSnapshot": true
+    },
+    "scripts/build_ch32_capacity_runtime.sh": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/build_ch32_capacity_runtime.sh",
+      "basis": "exact historical snapshot hash",
+      "sha256": "47eb97887d57e14a7adf6504d5a1ace1eac92c911c14bc02742fd7dc66d3ce4b",
+      "equalsSnapshot": true
+    },
+    "scripts/build_ch32v407.sh": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/build_ch32v407.sh",
+      "basis": "exact historical snapshot hash",
+      "sha256": "fd92321a7156a9b0137b49f9f583f70c863f7b11397c4f9d86c750097210cf25",
+      "equalsSnapshot": true
+    },
+    "scripts/test_first_plug_onboarding.sh": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/test_first_plug_onboarding.sh",
+      "basis": "exact historical snapshot hash",
+      "sha256": "696c43bfdd763c41a9362aac0ffcab2785a80265f4efc6ac17598a9fb5c006bb",
+      "equalsSnapshot": true
+    },
+    "scripts/build.sh": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/build.sh",
+      "basis": "exact historical snapshot hash",
+      "sha256": "ffcd7d3ab9f8d6ad97ec531c12ec61c57edd1a8b813215b236d9e88859bfe55c",
+      "equalsSnapshot": true
+    },
+    "scripts/verify_ch32v407_build.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/verify_ch32v407_build.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "ba9dc54538c66c608dbccee96d84d7f89f578c2fec46e5d30d68687e42177d7e",
+      "equalsSnapshot": true
+    },
+    "scripts/audit_ch32_flash_capacity.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/audit_ch32_flash_capacity.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "105a224d064abcdc2ca1120344b1de5307cb1e3675b7570ed6c1c74042a3ca29",
+      "equalsSnapshot": true
+    },
+    "scripts/test_wired_clipboard_e2e.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/test_wired_clipboard_e2e.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "e750a6e9a2def77b03db844f7ede88b083a08a4d8108abdbe53f7f3337c423bc",
+      "equalsSnapshot": true
+    },
+    "scripts/verify_macmac_setup.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/verify_macmac_setup.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "fe14fe2f7d990346895305a7e0f769ad0d802c1d47a44175d8dd93f3e009bff8",
+      "equalsSnapshot": true
+    },
+    "scripts/prepare_ch32v407_sdk.py": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/prepare_ch32v407_sdk.py",
+      "basis": "exact historical snapshot hash",
+      "sha256": "21ae237680343a609b227c05e62140456765a99b17156185307870c6988744f8",
+      "equalsSnapshot": true
+    },
+    "scripts/test_ch32v407.sh": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/test_ch32v407.sh",
+      "basis": "exact historical snapshot hash",
+      "sha256": "c00eb649593280cb494fe2d618e61b92c11df0b71c9021ce15abc69836ecdc7c",
+      "equalsSnapshot": true
+    },
+    "scripts/build_dual_setup.sh": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/build_dual_setup.sh",
+      "basis": "exact historical snapshot hash",
+      "sha256": "e49a093de14ed2bf3a2d87fc9379da2de37f4fbe464e5c9a8d12b9c6fd6673a8",
+      "equalsSnapshot": true
+    },
+    "scripts/build_ch32v407_macos.sh": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/scripts/build_ch32v407_macos.sh",
+      "basis": "exact historical snapshot hash",
+      "sha256": "aafbc37fc0149f9544fced7c6dafbc6a4bf6a451958715322d62339b63c75096",
+      "equalsSnapshot": true
+    },
+    "tests/support/wk_firmware_fixture.c": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/support/wk_firmware_fixture.c",
+      "basis": "exact historical snapshot hash",
+      "sha256": "2a9091b186b14acae66357390e72a13c8cd0465d045ec718e473f2ee68b5546e",
+      "equalsSnapshot": true
+    },
+    "tests/support/clipboard_firmware_fixture.c": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/support/clipboard_firmware_fixture.c",
+      "basis": "exact historical snapshot hash",
+      "sha256": "b20037e6e50a0bfaa64d954edb30c1e4014de8f3451c38ddace4324c979aff25",
+      "equalsSnapshot": true
+    },
+    "tests/support/flash_setup_fixture.c": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/support/flash_setup_fixture.c",
+      "basis": "exact historical snapshot hash",
+      "sha256": "3845ee2e3fba6024d9ba7c5b298c394c3aae84f23d466a70b3a300c1d41d5975",
+      "equalsSnapshot": true
+    },
+    "tests/support/firmware_mock/tinyusb.h": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/support/firmware_mock/tinyusb.h",
+      "basis": "exact historical snapshot hash",
+      "sha256": "7eabf2b2f3703f34c8ff66d965fc8a11e65f9e1bf4a8a4f416d7a218bb845020",
+      "equalsSnapshot": true
+    },
+    "tests/support/firmware_mock/esp_log.h": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/support/firmware_mock/esp_log.h",
+      "basis": "exact historical snapshot hash",
+      "sha256": "1346f2423f9a656ca296f293d5c7b91541e8319c9aff293194fd7f4fda3772bf",
+      "equalsSnapshot": true
+    },
+    "tests/support/firmware_mock/tinyusb_default_config.h": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/support/firmware_mock/tinyusb_default_config.h",
+      "basis": "exact historical snapshot hash",
+      "sha256": "135ed6b796779931b8a7265738c4682a8650c7f86463c2a0e11da15eaf67eb0e",
+      "equalsSnapshot": true
+    },
+    "tests/support/firmware_mock/esp_partition.h": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/support/firmware_mock/esp_partition.h",
+      "basis": "exact historical snapshot hash",
+      "sha256": "57b12a9487f452f6589f84a1155d8da520219acaa71443b130e25f04434edd42",
+      "equalsSnapshot": true
+    },
+    "tests/support/firmware_mock/esp_timer.h": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/support/firmware_mock/esp_timer.h",
+      "basis": "exact historical snapshot hash",
+      "sha256": "82a7c14acf5d1cdcbea1b23bab880c69562da88013adc34ff5f2ae2115fb08d1",
+      "equalsSnapshot": true
+    },
+    "tests/support/firmware_mock/driver/uart.h": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/support/firmware_mock/driver/uart.h",
+      "basis": "exact historical snapshot hash",
+      "sha256": "b67c08b7880740cd93acd2dad5c4c8fbfca45912504351618b4c34f461b691b3",
+      "equalsSnapshot": true
+    },
+    "tests/support/firmware_mock/freertos/task.h": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/support/firmware_mock/freertos/task.h",
+      "basis": "exact historical snapshot hash",
+      "sha256": "a003745a54ba6557f38b63747c9501a3a18a676de2bd6aa903a0dba5a23981c8",
+      "equalsSnapshot": true
+    },
+    "tests/support/firmware_mock/freertos/FreeRTOS.h": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/support/firmware_mock/freertos/FreeRTOS.h",
+      "basis": "exact historical snapshot hash",
+      "sha256": "5aa50c2c245d20e83d56ed14907653802bacb05a03d68f230a74b5dd2a28752f",
+      "equalsSnapshot": true
+    },
+    "tests/support/firmware_mock/class/hid/hid_device.h": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/tests/support/firmware_mock/class/hid/hid_device.h",
+      "basis": "exact historical snapshot hash",
+      "sha256": "3d23967dc60fff9083a3c5c67d3455a1e530d62209df0ebb41f2308209eeb1e5",
+      "equalsSnapshot": true
+    },
+    "host/setup/WiredKVMSetup.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/host/setup/WiredKVMSetup.swift",
+      "basis": "exact historical snapshot hash",
+      "sha256": "61725c1dfe5db98051d7ca6ec5adb833ce4ec82586b0ac7469ff12dd08090a8c",
+      "equalsSnapshot": true
+    },
+    "host/gui/WiredKVMTransferMedia.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/host/gui/WiredKVMTransferMedia.swift",
+      "basis": "exact historical snapshot hash",
+      "sha256": "a51324999cc1c95dc97f18c5a7c0f65145c979868994e4eed1b5fc6d503459a2",
+      "equalsSnapshot": true
+    },
+    "host/gui/Companion-Info.plist": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/host/gui/Companion-Info.plist",
+      "basis": "exact historical snapshot hash",
+      "sha256": "7414526916fdc8384f12471a96e5364a4ec272446a0f929aa70d4960e89b8bb5",
+      "equalsSnapshot": true
+    },
+    "host/gui/WiredKVMClipboard.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/host/gui/WiredKVMClipboard.swift",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "62eabd90aa3446363bd31ba594af592eabf5b0e1f76b7c55eb48a063d2f30f70",
+      "equalsSnapshot": true
+    },
+    "host/gui/WiredKVMExchange.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/host/gui/WiredKVMExchange.swift",
+      "basis": "exact historical snapshot hash",
+      "sha256": "985cd66d78af31f154687cdcb25a18832f1793ac2ed7ea6321f524e023347f70",
+      "equalsSnapshot": true
+    },
+    "host/gui/Info.plist": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/host/gui/Info.plist",
+      "basis": "exact historical snapshot hash",
+      "sha256": "f5827ebb24a3dee10706e6b22222381a64c74088ad8edc79008c14cc316493ec",
+      "equalsSnapshot": true
+    },
+    "host/clipboard/WKClipboardCandidateSelfTest.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/host/clipboard/WKClipboardCandidateSelfTest.swift",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "32f00e73306d643d9a0f0b7fb1d3803f1e9424416d3ee2b25192602da28664e7",
+      "equalsSnapshot": true
+    },
+    "host/clipboard/WKFnKey.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/host/clipboard/WKFnKey.swift",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "92129863a4ecd3b8240b3020f41e7cabfe231ef68682f8b3380acf4afa5737ea",
+      "equalsSnapshot": true
+    },
+    "host/clipboard/WKFilePortalSelfTest.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/host/clipboard/WKFilePortalSelfTest.swift",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "3d6a91fc387cf5e11aeee7d75d893aeb94e8940ee50a1f30f4faf9438c73300a",
+      "equalsSnapshot": true
+    },
+    "host/clipboard/WKFilePipelineSelfTest.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/host/clipboard/WKFilePipelineSelfTest.swift",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "918d98a89ecd596fcb51c2ec45a237b99c33b7a8d4498c5af4660bbdb7cb0e10",
+      "equalsSnapshot": true
+    },
+    "host/clipboard/WKOnDemandClipboard.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/host/clipboard/WKOnDemandClipboard.swift",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "6f88416a96ba4291e97c91a48abe934230b026c6c600a30291267aa028f2b707",
+      "equalsSnapshot": false
+    },
+    "host/clipboard/WKStreamFiles.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/host/clipboard/WKStreamFiles.swift",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "6f5601f2b13c4a5a58a00d02bc9e6a47e0fadbe2b4314ad343dda3da9f93fc1c",
+      "equalsSnapshot": false
+    },
+    "host/clipboard/WiredKVMCompanion.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/host/clipboard/WiredKVMCompanion.swift",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "749334e8752add9011fcb8fef848e4094d8c4a21f3ea0aaa919ca48240f58c2d",
+      "equalsSnapshot": false
+    },
+    "host/clipboard/WKScrollRelay.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/host/clipboard/WKScrollRelay.swift",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "a2630326842518631b0c96e2cd6a8938bfbc15c21a8c28c0a2adbf4b31e20688",
+      "equalsSnapshot": true
+    },
+    "host/clipboard/WKOnboarding.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/host/clipboard/WKOnboarding.swift",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "5d59a5a14e44eff237ec1a8d70949ecb40b9a34f704f656780cabc27b4007de7",
+      "equalsSnapshot": false
+    },
+    "host/clipboard/WKClipboardProtocol.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/host/clipboard/WKClipboardProtocol.swift",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "59906012e9615426f28128185f5fe33ea22ce958c82e2a5ea4f1b3a97f8f7c34",
+      "equalsSnapshot": true
+    },
+    "host/clipboard/WKGestureRelay.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/host/clipboard/WKGestureRelay.swift",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "5b823bbfa680aaca961787f17a37683e9bd8f847facd3b1b4433af4042099b0d",
+      "equalsSnapshot": true
+    },
+    "host/clipboard/README.md": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/host/clipboard/README.md",
+      "basis": "exact historical snapshot hash",
+      "sha256": "5a4556413421369dbf549d22e66bc292d476918e2f4adbc1081e4b18bf85712d",
+      "equalsSnapshot": true
+    },
+    "host/clipboard/WKCompanionInstall.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/host/clipboard/WKCompanionInstall.swift",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "34378827bda3c0c055fcad1fbaf2b983ea59972a47defaa57aec8369cdfb414d",
+      "equalsSnapshot": true
+    },
+    "host/clipboard/WKFilePortal.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/host/clipboard/WKFilePortal.swift",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "1af07a139de5ece03c29e4ba575a0eb90cb7a6cf1ebc79b86549aae3e39f9e35",
+      "equalsSnapshot": true
+    },
+    "host/clipboard/WKClipboardTransport.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/host/clipboard/WKClipboardTransport.swift",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "a6d66d46c9ebb13545b9b2ab116b4031e0207872c70afa182aeaad38ff9b3d0e",
+      "equalsSnapshot": true
+    },
+    "host/clipboard/WKClipboardContent.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/host/clipboard/WKClipboardContent.swift",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "9df7292db5b99a815ee304402c13901e19ff883644f9c987babc00dc815e73f4",
+      "equalsSnapshot": true
+    },
+    "host/clipboard/WKClipboardSelfTest.swift": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/host/clipboard/WKClipboardSelfTest.swift",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "a70df70588237a32b1a7fad17d04f7ba05664b178a638d1c94321dc9be14b3c5",
+      "equalsSnapshot": true
+    },
+    "firmware/ch32v407/setup_flash.h": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/firmware/ch32v407/setup_flash.h",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "78f172eaa226f8460d924362e0fa622681a18a7badbe488bf36a7ddfbc75079b",
+      "equalsSnapshot": true
+    },
+    "firmware/ch32v407/bridge.h": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/firmware/ch32v407/bridge.h",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "646afb40230da0ccb56ef195c3c49bbd75658cf0b2ca142ab6f0236ff73507ef",
+      "equalsSnapshot": true
+    },
+    "firmware/ch32v407/descriptors.h": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/firmware/ch32v407/descriptors.h",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "d696b8a8cccf17a529a58df664589060f6a6073c830e0e3aef8fcf699af4dae8",
+      "equalsSnapshot": true
+    },
+    "firmware/ch32v407/setup_msc.h": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/firmware/ch32v407/setup_msc.h",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "b0f06cb229889b819e31d5d16c61da9fadc4878e857699a6a0daeb947e6f0c10",
+      "equalsSnapshot": false
+    },
+    "firmware/ch32v407/setup_flash.c": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/firmware/ch32v407/setup_flash.c",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "10b44a4335cf68f9fa54971ad1f295a6e2cd6013357100fbde01ab8812caf848",
+      "equalsSnapshot": true
+    },
+    "firmware/ch32v407/main.c": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/firmware/ch32v407/main.c",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "5fcccb9393aa8f4718984c9398ae4bdcf814b3df39f009bfe391a790b53650ec",
+      "equalsSnapshot": false
+    },
+    "firmware/ch32v407/bridge.c": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/firmware/ch32v407/bridge.c",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "43f04087e5180a1cc6727ec24fa13a6bf299232a1cc93fdcde5f1e60d90a5ce5",
+      "equalsSnapshot": true
+    },
+    "firmware/ch32v407/descriptors.c": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/firmware/ch32v407/descriptors.c",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "8c397fd480b8bc125f8af702b2c47bf2c4168ea5b1894311461c6c3f3625bf46",
+      "equalsSnapshot": true
+    },
+    "firmware/ch32v407/newlib_context.c": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/firmware/ch32v407/newlib_context.c",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "03cf936115d6f509769f42339712d55ad233564f2d16360319d9bb21e45cf624",
+      "equalsSnapshot": true
+    },
+    "firmware/ch32v407/setup_msc.c": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/firmware/ch32v407/setup_msc.c",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "8fa0fa86e86355b8ae4d169dfadbe33376aa6cdc1b7002a199f3daf50fa7a502",
+      "equalsSnapshot": false
+    },
+    "firmware/main/clipboard_channel.c": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/firmware/main/clipboard_channel.c",
+      "basis": "exact historical snapshot hash",
+      "sha256": "eb99d40c85971386203bb1b480e853f06572fd5b236b446ca7cf5c4a368c739f",
+      "equalsSnapshot": true
+    },
+    "firmware/main/fn_key.h": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/firmware/main/fn_key.h",
+      "basis": "exact historical snapshot hash",
+      "sha256": "4b67fc983e25a186132905c2321efc0e1bb2eb16f19ea3945cc54537c035de8b",
+      "equalsSnapshot": true
+    },
+    "firmware/main/wire_protocol.c": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/firmware/main/wire_protocol.c",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "019c46c8a2777f24d3dda128ffdab9916794d8ffecbca82fa969402db6bca83d",
+      "equalsSnapshot": true
+    },
+    "firmware/main/exchange_tusb_config.h": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/firmware/main/exchange_tusb_config.h",
+      "basis": "exact historical snapshot hash",
+      "sha256": "4ca5997c7d36d64846e4f85879d2201202df2927fe78de5e36bae3559e3f5499",
+      "equalsSnapshot": true
+    },
+    "firmware/main/exchange_storage.h": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/firmware/main/exchange_storage.h",
+      "basis": "exact historical snapshot hash",
+      "sha256": "eeda062dae8913d18c4deff44b62a728840f6338876ac1e5fb39a58aa5aa02df",
+      "equalsSnapshot": true
+    },
+    "firmware/main/flash_setup.c": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/firmware/main/flash_setup.c",
+      "basis": "exact historical snapshot hash",
+      "sha256": "cf3ff142b39e61d3e247ff1e3da8fcea324c09b01dcf4a2aae48acd3bbd92c16",
+      "equalsSnapshot": true
+    },
+    "firmware/main/usb_hid.c": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/firmware/main/usb_hid.c",
+      "basis": "exact historical snapshot hash",
+      "sha256": "ef69f30e6be966738569b175e3dc8856a58c09445032abe9547c2df8e35daf43",
+      "equalsSnapshot": true
+    },
+    "firmware/main/wire_protocol.h": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/firmware/main/wire_protocol.h",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "06ea869d815ebd99588153c1c9067eda67628eda51d8d0c3babab708bda12c5a",
+      "equalsSnapshot": true
+    },
+    "firmware/main/clipboard_channel.h": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/firmware/main/clipboard_channel.h",
+      "basis": "exact historical snapshot hash",
+      "sha256": "1cde5b7c3cb151d6e02b633cbb7662bb52d0577f159bae95236bff415bb8b4e8",
+      "equalsSnapshot": true
+    },
+    "firmware/main/exchange_storage.c": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/firmware/main/exchange_storage.c",
+      "basis": "exact historical snapshot hash",
+      "sha256": "039bacd7ae32684305996103f263a376008f20f68315e6d4477d501770ce6a9f",
+      "equalsSnapshot": true
+    },
+    "firmware/main/flash_setup.h": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/verified-at-snapshot/firmware/main/flash_setup.h",
+      "basis": "exact historical snapshot hash",
+      "sha256": "e5e15a85afd7cbf15f748cdf5f390e5ba4f57e8f52977c759fab9808c6290203",
+      "equalsSnapshot": true
+    },
+    "firmware/ch32v407/alignment_safe_libc.c": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/firmware/ch32v407/alignment_safe_libc.c",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "0def1dee82ca9702a51bd9ad180f65a739d03d6ccf51ce2c6cb063a443f97c99",
+      "equalsSnapshot": false
+    },
+    "firmware/ch32v467_petros/setup_flash_none.c": {
+      "source": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/combined-candidates/firmware/ch32v467_petros/setup_flash_none.c",
+      "basis": "replayed source; CH32 compile closure or recovered exact source",
+      "sha256": "709919c89832b9f3427b0222d7652c07650c9ea9648bf1b9713075ac7660a146",
+      "equalsSnapshot": false
+    }
+  },
+  "method": "Exclusive create only. No existing differing file overwritten. No deletion. Historical snapshot plus individually identified later recovery sources.",
+  "partialRecovery": true
+}

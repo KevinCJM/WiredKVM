@@ -1,0 +1,23 @@
+{
+  "old_sha": "9fbbbfc3f942dbf3e7c33720a1de2be35a18edf048358dc363812a3928a92493",
+  "new_sha": "2761ac0af8247daf56a4c4ef70762da2a6a07c4058296ed76dc3564a989f2f23",
+  "old_bytes": 71704,
+  "new_bytes": 71704,
+  "byte_differences": [
+    [
+      65363,
+      2,
+      1
+    ],
+    [
+      65479,
+      2,
+      1
+    ],
+    [
+      70962,
+      104,
+      105
+    ]
+  ]
+}

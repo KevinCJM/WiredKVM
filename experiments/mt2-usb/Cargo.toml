@@ -1,0 +1,23 @@
+[package]
+name = "wiredkvm-mt2-protocol-draft"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+
+[features]
+default = []
+c-abi = []
+native-mt2 = []
+
+[profile.release]
+panic = "abort"
+opt-level = "s"
+lto = true
+codegen-units = 1
+
+[workspace]

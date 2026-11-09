@@ -1,0 +1,15 @@
+[package]
+name = "wiredkvm-offline-regression"
+version = "0.1.0"
+edition = "2021"
+publish = false
+build = "build.rs"
+
+[lib]
+name = "wiredkvm_offline_regression"
+path = "src/lib.rs"
+
+[dependencies]
+
+[build-dependencies]
+

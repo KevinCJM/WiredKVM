@@ -1,0 +1,14 @@
+[package]
+name = "wiredkvm-transfer-tree"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[profile.release]
+opt-level = 2
+panic = "unwind"
+
+[dependencies]

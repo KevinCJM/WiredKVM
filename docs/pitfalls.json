@@ -1,0 +1,1285 @@
+{
+  "schema_version": "1.1",
+  "scope_mode": "subtree_only",
+  "pitfalls": [
+    {
+      "id": "P01",
+      "title": "initial_routing_facts_require_code_confirmation",
+      "severity": "medium",
+      "confidence": "high",
+      "risk_codes": [
+        "bootstrap_fact_uncertainty",
+        "over_learning_from_scaffold"
+      ],
+      "symptoms": [
+        "routing facts are broader than verified code behavior",
+        "future agents treat bootstrap anchors as grounded implementation facts"
+      ],
+      "trigger_actions": [
+        "create initial routing files",
+        "edit routing facts before sampling code"
+      ],
+      "related_paths": [
+        "docs/repo_map.json",
+        "docs/task_routes.json",
+        "docs/pitfalls.json"
+      ],
+      "affected_modules": [
+        "project_entrypoints",
+        "ai_routing_files"
+      ],
+      "blast_radius": [
+        "future agent task narrowing"
+      ],
+      "check_before_edit": [
+        "read sampled code before promoting facts",
+        "keep fact_status as needs_code_confirmation until verified"
+      ],
+      "safe_observation_methods": [
+        "read grounding.unsampled_paths",
+        "run smallest visible smoke command"
+      ]
+    },
+    {
+      "id": "P02",
+      "title": "routing_files_are_machine_owned_contracts",
+      "severity": "medium",
+      "confidence": "high",
+      "risk_codes": [
+        "routing_memory_drift",
+        "routing_only_scope_leak"
+      ],
+      "symptoms": [
+        "task_routes duplicates repo_map operational lists",
+        "routing-only changes include business code"
+      ],
+      "trigger_actions": [
+        "edit AGENTS.md or docs routing JSON",
+        "prepare routing-only commit"
+      ],
+      "related_paths": [
+        "AGENTS.md",
+        "docs/repo_map.json",
+        "docs/task_routes.json",
+        "docs/pitfalls.json",
+        "docs/ai_routing_evolution_policy.json",
+        "skills/ai-hermes-self-evolve/README.md",
+        "skills/ai-hermes-self-evolve/SKILL.md",
+        "skills/ai-hermes-self-evolve/agents/openai.yaml",
+        "skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py",
+        "skills/ai-hermes-self-evolve/scripts/validate_ai_routing.py",
+        "skills/ai-hermes-self-evolve/scripts/route_task.py",
+        "skills/ai-hermes-routing-init/README.md",
+        "skills/ai-hermes-routing-init/SKILL.md",
+        "skills/ai-hermes-routing-init/agents/openai.yaml",
+        "skills/ai-hermes-routing-init/scripts/init_ai_routing.py",
+        "skills/ai-hermes-routing-init/scripts/evolve_ai_routing.py",
+        "skills/ai-hermes-routing-init/scripts/validate_ai_routing.py",
+        "skills/ai-hermes-routing-init/scripts/route_task.py"
+      ],
+      "affected_modules": [
+        "ai_routing_files"
+      ],
+      "blast_radius": [
+        "AI Hermes routing",
+        "future agent task narrowing"
+      ],
+      "check_before_edit": [
+        "keep routing facts in JSON owners",
+        "run evolve and validate after routing changes"
+      ],
+      "safe_observation_methods": [
+        "python3 skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py --routing-only --changed-file <path> --json",
+        "python3 skills/ai-hermes-self-evolve/scripts/validate_ai_routing.py"
+      ]
+    },
+    {
+      "id": "P03",
+      "title": "禁止无边界的临时目录清理",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p03_guard"
+      ],
+      "symptoms": [
+        "自检 PASS 后仍执行危险清理",
+        "临时路径为空、父目录或借用失效"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "rust-rebuild/src/main.rs",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "recovery_build",
+        "session_evidence"
+      ],
+      "blast_radius": [
+        "recovery_build",
+        "session_evidence"
+      ],
+      "check_before_edit": [
+        "先备份并审核完整测试退出路径；禁用自动递归清理作为默认策略",
+        "如确需删除，核对 canonical path、独立临时根、所有权标记、符号链接；失败保留目录"
+      ],
+      "safe_observation_methods": [
+        "只读审查临时目录构造、defer、removeItem 与错误处理"
+      ]
+    },
+    {
+      "id": "P04",
+      "title": "部分恢复不等于完整工程",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p04_guard"
+      ],
+      "symptoms": [
+        "构建成功但历史源缺失",
+        "候选、历史版本和当前运行固件混用"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "RESTORE_MANIFEST_20261104.json",
+        "RECOVERY_VALIDATION_20261104.json",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "recovery_build",
+        "legacy_platforms",
+        "session_evidence"
+      ],
+      "blast_radius": [
+        "recovery_build",
+        "legacy_platforms",
+        "session_evidence"
+      ],
+      "check_before_edit": [
+        "逐文件记录来源和哈希；不覆盖不同的幸存内容",
+        "历史补丁必须匹配成功结果与当时基线；失败补丁不能回放",
+        "缺失项明确列出；需要重写时用 Rust"
+      ],
+      "safe_observation_methods": [
+        "读取恢复 manifest；先验证恢复输入 schema、计数和哈希"
+      ]
+    },
+    {
+      "id": "P05",
+      "title": "先保住当前输入控制",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p05_guard"
+      ],
+      "symptoms": [
+        "诊断中控制中断",
+        "新功能回归导致用户无法返回主机"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "native/wiredkvm.cpp",
+        "host/macos_capture.swift",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "host_input",
+        "firmware_ch32"
+      ],
+      "blast_radius": [
+        "host_input",
+        "firmware_ch32"
+      ],
+      "check_before_edit": [
+        "先确认紧急返回与退出释放逻辑；保留可用二进制及回退路径",
+        "文档任务不重启、刷写或替换用户正在使用的控制器"
+      ],
+      "safe_observation_methods": [
+        "读取当前作用范围和上次有时间戳的用户确认；运行状态须重新检查"
+      ]
+    },
+    {
+      "id": "P06",
+      "title": "设备身份不能靠串口路径",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p06_guard"
+      ],
+      "symptoms": [
+        "重插后路径变化",
+        "固定产品序列号被当作唯一标识"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "docs/history/SESSION_EVIDENCE_20261105.json",
+        "docs/history/SESSION_POSTMORTEM_20261105.md"
+      ],
+      "affected_modules": [
+        "firmware_ch32",
+        "host_input"
+      ],
+      "blast_radius": [
+        "firmware_ch32",
+        "host_input"
+      ],
+      "check_before_edit": [
+        "使用 VID/PID、完整调试器序列号、芯片 UID 与端口角色绑定",
+        "排除其他 ESP32/AI Passport 设备；重新枚举后重新定位",
+        "ioreg -l 的接口/子驱动可能继承 VID/PID、serial；物理设备必须筛 IOObjectClass=IOUSBHostDevice，不能把子接口重复计为设备或据唯一性断言失败认定断线。",
+        "ioreg plist 根节点可能是字典或列表；两种形式均须遍历。硬件操作必须在同一结构化脚本中通过身份断言后执行，不能依靠 shell 中前一语句失败自然停止。",
+        "当前授权自启服务还匹配完整 USB Product Name=WiredKVM Petros V467 Host；实时固件覆盖须保留该名称并测试字符串描述符。VID/PID 相同不等于完整发现契约不变。"
+      ],
+      "safe_observation_methods": [
+        "只读枚举并与授权目标匹配；不自动选择列表第一个串口"
+      ]
+    },
+    {
+      "id": "P07",
+      "title": "DBG 读取可能破坏被观察状态",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p07_guard"
+      ],
+      "symptoms": [
+        "停核后主机放弃 USB 枚举",
+        "调试命令改写工作寄存器"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "firmware/ch32v407/main.c",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "firmware_ch32"
+      ],
+      "blast_radius": [
+        "firmware_ch32"
+      ],
+      "check_before_edit": [
+        "读工具源码确认 halt/reset/寄存器副作用",
+        "保存恢复并核对 CPU 状态；不对已恢复输入继续停核"
+      ],
+      "safe_observation_methods": [
+        "优先使用不停止 MCU 的状态计数；无证据不认定调试器无副作用"
+      ]
+    },
+    {
+      "id": "P08",
+      "title": "返回码和进程不等于通信健康",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p08_guard"
+      ],
+      "symptoms": [
+        "HID_NOT_CONNECTED 却退出 0",
+        "PID 活着但持有旧串口",
+        "沙箱权限与真实检查不同"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "native/wiredkvm.cpp",
+        "docs/history/SESSION_EVIDENCE_20261105.json",
+        "docs/history/SESSION_POSTMORTEM_20261105.md"
+      ],
+      "affected_modules": [
+        "host_input",
+        "firmware_ch32"
+      ],
+      "blast_radius": [
+        "host_input",
+        "firmware_ch32"
+      ],
+      "check_before_edit": [
+        "检查语义输出、设备身份、当前 FD 和最近有效事务",
+        "输出截断须重取；短时探针不得称长期稳定"
+      ],
+      "safe_observation_methods": [
+        "核对捕获真正就绪和用户跨屏结果；不重复抢占正在使用的串口"
+      ]
+    },
+    {
+      "id": "P09",
+      "title": "辅助功能授权绑定运行身份",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p09_guard"
+      ],
+      "symptoms": [
+        "开关开着但 EventTap 不可用",
+        "替换应用后权限失效"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "host/macos_capture.swift",
+        "host/setup/WiredKVMSetup.swift",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "host_input",
+        "installer"
+      ],
+      "blast_radius": [
+        "host_input",
+        "installer"
+      ],
+      "check_before_edit": [
+        "核对实际运行文件与签名，再查询当前授权",
+        "保持发布身份稳定；沿用已有授权，不清空其他应用权限"
+      ],
+      "safe_observation_methods": [
+        "只读权限探针；系统验证由用户完成"
+      ]
+    },
+    {
+      "id": "P10",
+      "title": "拖选滚动返回必须独立验收",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p10_guard"
+      ],
+      "symptoms": [
+        "按钮拖动状态丢失",
+        "滚动方向不一致",
+        "拔线后本机输入未及时释放"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "native/desktop_pointer.hpp",
+        "firmware/ch32v407/bridge.c",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json",
+        "host/macos_capture.swift",
+        "host/WKPointingSource.swift",
+        "host/clipboard/WKInputRelay.swift",
+        "tests/test_independent_input.py"
+      ],
+      "affected_modules": [
+        "host_input",
+        "firmware_ch32"
+      ],
+      "blast_radius": [
+        "host_input",
+        "firmware_ch32"
+      ],
+      "check_before_edit": [
+        "分别验证按住拖动、滚动方向、边缘返回和紧急返回",
+        "校验满载、断线、超时和退出路径上的按键释放",
+        "原生像素滚动/手势与剪贴板启用分离；input-only 不启动剪贴板、文件传输或复制粘贴拦截",
+        "检查 WK_WIRED_INPUT、input-mode.json 和目标能力握手；捕获 tap ready 不代表目标已收到手势",
+        "以 IORegistry 来源及手势阶段区分设备；continuous 不能单独证明妙控板；像素通道保留方向，HID 反向开关仅影响回退路径",
+        "短滑 HID 回退保留 FixedPt 小数；最近舍入后的负余数不代表反转；方向按最后非零输入判断，零帧不补虚假刻度",
+        "普通整数 HID 滚轮的离线阈值改善不等于原生平滑；用户仍报告卡顿时，验收必须保持未通过"
+      ],
+      "safe_observation_methods": [
+        "先用无注入逻辑测试，实机结果单独记录"
+      ]
+    },
+    {
+      "id": "P11",
+      "title": "本机复制粘贴独立于跨机通道",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p11_guard"
+      ],
+      "symptoms": [
+        "两台机器内部复制粘贴被同步阻断"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "host/clipboard/WKOnDemandClipboard.swift",
+        "native/clipboard_channel.hpp",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "clipboard_bulk",
+        "host_input"
+      ],
+      "blast_radius": [
+        "clipboard_bulk",
+        "host_input"
+      ],
+      "check_before_edit": [
+        "本机粘贴不等待远端；仅跨机意图走桥接",
+        "退出、取消、错误和断线均不得清空或锁住本机剪贴板"
+      ],
+      "safe_observation_methods": [
+        "分别测试主机本机、目标本机、两个跨机方向并记录内容归属"
+      ]
+    },
+    {
+      "id": "P12",
+      "title": "排除 ToDesk 等同步干扰",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p12_guard"
+      ],
+      "symptoms": [
+        "组件关闭仍可跨机粘贴"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "clipboard_bulk"
+      ],
+      "blast_radius": [
+        "clipboard_bulk"
+      ],
+      "check_before_edit": [
+        "使用全新内容和本项目传输证据确认来源",
+        "记录其他同步工具的状态；未经授权不擅自关闭用户服务"
+      ],
+      "safe_observation_methods": [
+        "读取本项目会话/事务日志，不以目标出现旧内容为通过"
+      ]
+    },
+    {
+      "id": "P13",
+      "title": "图片文件正文只走 Bulk 二进制",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p13_guard"
+      ],
+      "symptoms": [
+        "HID 小包或 JSON/Base64 拖慢正文",
+        "大文件抢占输入"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "native/file_transfer_runtime.hpp",
+        "firmware/ch32v407/bridge.c",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "clipboard_bulk",
+        "firmware_ch32"
+      ],
+      "blast_radius": [
+        "clipboard_bulk",
+        "firmware_ch32"
+      ],
+      "check_before_edit": [
+        "控制与正文分队列；正文禁止回退旧 HID/JSON/Base64 路径",
+        "队列满载保持输入优先且每轮文件工作有界"
+      ],
+      "safe_observation_methods": [
+        "静态追踪实际发送路径；离线压力与真机延迟分开证明"
+      ]
+    },
+    {
+      "id": "P14",
+      "title": "进度出现不等于传输及时完成",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p14_guard"
+      ],
+      "symptoms": [
+        "要求用户先等十秒再粘贴",
+        "只验收进度显示而图片持续很久"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "host/clipboard/WKFilePortal.swift",
+        "host/clipboard/WKStreamFiles.swift",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "clipboard_bulk"
+      ],
+      "blast_radius": [
+        "clipboard_bulk"
+      ],
+      "check_before_edit": [
+        "先响应粘贴，再显示原生进度",
+        "同时定义图片大小、完成时间、有效吞吐；缺失原阈值不得编造"
+      ],
+      "safe_observation_methods": [
+        "记录用户按 V、进度开始、首字节和完成时间"
+      ]
+    },
+    {
+      "id": "P15",
+      "title": "取消必须释放旧事务占用",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p15_guard"
+      ],
+      "symptoms": [
+        "取消后新粘贴仍等旧传输"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "firmware/ch32v407/bridge.c",
+        "rust-rebuild/tests/bridge_stress.rs",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "clipboard_bulk",
+        "firmware_ch32"
+      ],
+      "blast_radius": [
+        "clipboard_bulk",
+        "firmware_ch32"
+      ],
+      "check_before_edit": [
+        "取消有界停止旧正文并释放队列；新事务不排在旧事务之后",
+        "用会话和事务编号拒绝迟到数据；不能取消错误一侧"
+      ],
+      "safe_observation_methods": [
+        "满队列取消后立刻发新任务；记录停传与新任务响应时间"
+      ]
+    },
+    {
+      "id": "P16",
+      "title": "内容类型与完整性不能外推",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p16_guard"
+      ],
+      "symptoms": [
+        "TXT 成功而 BIN/PNG、多文件、目录失败",
+        "文件出现即宣布完成"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "host/clipboard/WKClipboardContent.swift",
+        "host/clipboard/WKStreamFiles.swift",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "clipboard_bulk",
+        "legacy_platforms"
+      ],
+      "blast_radius": [
+        "clipboard_bulk",
+        "legacy_platforms"
+      ],
+      "check_before_edit": [
+        "逐类明确支持范围及限制；组件消失要查进程和报告",
+        "端到端核对真实 SHA-256；哨兵或仅传输 ACK 不能替代"
+      ],
+      "safe_observation_methods": [
+        "记录源文件与接收落盘哈希、大小和最终状态"
+      ]
+    },
+    {
+      "id": "P17",
+      "title": "安装慢与安装器卡死分别定位",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p17_guard"
+      ],
+      "symptoms": [
+        "启动交接超时",
+        "签名校验失败",
+        "旧安装器无响应"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "host/setup/WiredKVMSetup.swift",
+        "host/clipboard/WKCompanionInstall.swift",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "installer"
+      ],
+      "blast_radius": [
+        "installer"
+      ],
+      "check_before_edit": [
+        "先显示状态；耗时工作不得阻塞 UI；避免重复实例",
+        "核对签名参数、实际版本、旧进程与启动交接；不绕过系统安全机制"
+      ],
+      "safe_observation_methods": [
+        "按校验、复制、启动阶段记录错误和耗时"
+      ]
+    },
+    {
+      "id": "P18",
+      "title": "安装读盘速率不是硬件总上限",
+      "severity": "medium",
+      "confidence": "high",
+      "risk_codes": [
+        "p18_guard"
+      ],
+      "symptoms": [
+        "把慢串口中转当 USB 上限",
+        "挂盘慢和启动慢混为一因"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "firmware/ch32v407/setup_msc.c",
+        "firmware/ch32v407/setup_flash.c",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "installer",
+        "firmware_ch32"
+      ],
+      "blast_radius": [
+        "installer",
+        "firmware_ch32"
+      ],
+      "check_before_edit": [
+        "逐段测量数据路径及系统反复读取；确认本地 Flash 是否真正直读",
+        "自动挂盘/推出与文件读写分别验收"
+      ],
+      "safe_observation_methods": [
+        "标注硬件、版本、读大小、有效速率和测量日期"
+      ]
+    },
+    {
+      "id": "P19",
+      "title": "免安装术语与实际需求对齐",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p19_guard"
+      ],
+      "symptoms": [
+        "交换盘被当作原生剪贴板",
+        "用户被要求执行未接受的首次步骤"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json",
+        "docs/history/TARGET_ZERO_RUNTIME_20261106.md"
+      ],
+      "affected_modules": [
+        "installer",
+        "clipboard_bulk"
+      ],
+      "blast_radius": [
+        "installer",
+        "clipboard_bulk"
+      ],
+      "check_before_edit": [
+        "区分免下载、免安装、无组件和无首次确认",
+        "先确认 OS 接入与实际用户动作；安装不得依赖用户不可获得的输入设备",
+        "当前用户已明确选择直接从线内运行：目标CPU可临时执行线内应用，不复制到应用程序、不注册后台服务或登录项。历史零运行限制已被此选择替代；不得据此扩大为隐蔽安装或任意远程终端权限。"
+      ],
+      "safe_observation_methods": [
+        "用用户实际复制粘贴和首次接入流程验收"
+      ]
+    },
+    {
+      "id": "P20",
+      "title": "量产预算必须保留供料条件",
+      "severity": "medium",
+      "confidence": "high",
+      "risk_codes": [
+        "p20_guard"
+      ],
+      "symptoms": [
+        "开发板价格与量产整板混比",
+        "旧报价被当当前承诺"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "hardware/ch32v407_costdown_20261031.py",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "hardware_cost"
+      ],
+      "blast_radius": [
+        "hardware_cost"
+      ],
+      "check_before_edit": [
+        "按具体料号、人民币、日期、数量阶梯与供料方式核算",
+        "包含 PCB/贴装/损耗/测试/工艺余量；用 Decimal；折扣未核实不得消掉条件"
+      ],
+      "safe_observation_methods": [
+        "刷新可供料价格与适用条款；每块打样和整批费用分列"
+      ]
+    },
+    {
+      "id": "P21",
+      "title": "系列名称不能替代具体芯片和板版本",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p21_guard"
+      ],
+      "symptoms": [
+        "商品图与端口能力不一致",
+        "把 DBG 当数据口"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "hardware/CH32V407_SUPPLY_BOM_AND_OPENPCB_AUDIT_20261031.md",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "hardware_cost"
+      ],
+      "blast_radius": [
+        "hardware_cost"
+      ],
+      "check_before_edit": [
+        "核对完整订货型号、USB 控制器数量、端口布线和官方资料版本",
+        "电气防回流未知要单列；软件枚举不能证明"
+      ],
+      "safe_observation_methods": [
+        "先读已给截图和精确资料，不重复索取已有信息"
+      ]
+    },
+    {
+      "id": "P22",
+      "title": "PSRAM 不保存安装包",
+      "severity": "medium",
+      "confidence": "high",
+      "risk_codes": [
+        "p22_guard"
+      ],
+      "symptoms": [
+        "4 MB Flash 容量仅估算",
+        "将 V467 额外 RAM 当量产资源"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "scripts/audit_ch32_flash_capacity.py",
+        "hardware/ch32v407_flash4m_cost.py",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "hardware_cost",
+        "installer"
+      ],
+      "blast_radius": [
+        "hardware_cost",
+        "installer"
+      ],
+      "check_before_edit": [
+        "按实际签名压缩包、分区、镜像开销和升级余量核算",
+        "V467 额外 PSRAM 不可掩盖 V407 限制；不混淆零等待与总 Flash 口径"
+      ],
+      "safe_observation_methods": [
+        "检查实际构建大小、分区、map 和目标资源预算"
+      ]
+    },
+    {
+      "id": "P23",
+      "title": "模拟测试不能替代实机验收",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p23_guard"
+      ],
+      "symptoms": [
+        "满载路由测试通过即称键鼠无延迟",
+        "V467 通过即放行 V407"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "RECOVERY_VALIDATION_20261104.json",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "firmware_ch32",
+        "clipboard_bulk",
+        "hardware_cost",
+        "recovery_build",
+        "session_evidence",
+        "legacy_platforms"
+      ],
+      "blast_radius": [
+        "firmware_ch32",
+        "clipboard_bulk",
+        "hardware_cost",
+        "recovery_build",
+        "session_evidence",
+        "legacy_platforms"
+      ],
+      "check_before_edit": [
+        "静态、主机模拟、真机、用户反馈分别记结果",
+        "真机测双向大文件、SHA、p50/p95/p99/max 输入延迟、自动返回、取消和本机粘贴"
+      ],
+      "safe_observation_methods": [
+        "所有验收标记硬件、二进制哈希、条件与未完成项"
+      ]
+    },
+    {
+      "id": "P24",
+      "title": "主机 libc 行为不能代表 QingKe 对齐安全",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p24_guard"
+      ],
+      "symptoms": [
+        "未对齐 memcmp/memcpy 等触发 MCU trap"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "firmware/ch32v407/alignment_safe_libc.c",
+        "rust-rebuild/src/firmware_build.rs",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "firmware_ch32"
+      ],
+      "blast_radius": [
+        "firmware_ch32"
+      ],
+      "check_before_edit": [
+        "核对实际库实现和对齐编译约束；不因主机测试通过删除安全替代",
+        "比较板上哈希与候选；不同 USB 故障不自动归到旧 trap"
+      ],
+      "safe_observation_methods": [
+        "依据 mcause/mepc/mtval 和匹配 ELF 定位；调试副作用另记"
+      ]
+    },
+    {
+      "id": "P25",
+      "title": "恢复可用与根因修复分开",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p25_guard"
+      ],
+      "symptoms": [
+        "完全掉电恢复就断言只可能固件或线问题"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "docs/history/SESSION_EVIDENCE_20261105.json",
+        "docs/history/SESSION_POSTMORTEM_20261105.md"
+      ],
+      "affected_modules": [
+        "firmware_ch32",
+        "session_evidence"
+      ],
+      "blast_radius": [
+        "firmware_ch32",
+        "session_evidence"
+      ],
+      "check_before_edit": [
+        "每次操作只检验明确假设并记录改变的变量",
+        "DEV_EN 脉冲不等于全控制器复位；正常挂起不能循环重置"
+      ],
+      "safe_observation_methods": [
+        "记录主循环/枚举/挂起与主机状态；未取证的根因保留未知"
+      ]
+    },
+    {
+      "id": "P26",
+      "title": "睡眠目标可能没有本地键鼠",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p26_guard"
+      ],
+      "symptoms": [
+        "目标未醒被误判硬件断开",
+        "要求用户使用不存在的 mini 键鼠"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "firmware/ch32v407/main.c",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "firmware_ch32",
+        "host_input"
+      ],
+      "blast_radius": [
+        "firmware_ch32",
+        "host_input"
+      ],
+      "check_before_edit": [
+        "区分睡眠、挂起、断线和枚举；确认实际可用唤醒方式",
+        "输入转发唤醒是独立能力，未实测不得承诺"
+      ],
+      "safe_observation_methods": [
+        "只读状态后再用最少的物理动作；不能长按电源当普通唤醒"
+      ]
+    },
+    {
+      "id": "P27",
+      "title": "减少无诊断收益的重复操作",
+      "severity": "medium",
+      "confidence": "high",
+      "risk_codes": [
+        "p27_guard"
+      ],
+      "symptoms": [
+        "连续双击等待或反复翻线仍无新证据"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "session_evidence"
+      ],
+      "blast_radius": [
+        "session_evidence"
+      ],
+      "check_before_edit": [
+        "先看已知问题与现有证据；复发两次就换证据手段",
+        "先恢复最低可用控制，再继续分析；不要求重复已明确回答的信息"
+      ],
+      "safe_observation_methods": [
+        "每次请求注明能排除什么；不提前宣告马上可用"
+      ]
+    },
+    {
+      "id": "P28",
+      "title": "日期化证据不能充当实时状态",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p28_guard"
+      ],
+      "symptoms": [
+        "旧 PID/端口/未部署记录过期",
+        "说明书引用实际不存在"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "README.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json",
+        "docs/history/SESSION_POSTMORTEM_20261105.md"
+      ],
+      "affected_modules": [
+        "recovery_build",
+        "session_evidence",
+        "project_entrypoints"
+      ],
+      "blast_radius": [
+        "recovery_build",
+        "session_evidence",
+        "project_entrypoints"
+      ],
+      "check_before_edit": [
+        "运行前重新验证；日期记录不覆盖历史，现状入口单独更新",
+        "路径不存在应标缺失，不制造原文件或虚构原测试数据"
+      ],
+      "safe_observation_methods": [
+        "读取存在性、最近证据与来源哈希；状态口径显式注明"
+      ]
+    },
+    {
+      "id": "P29",
+      "title": "工具失败与授权边界需如实处理",
+      "severity": "medium",
+      "confidence": "high",
+      "risk_codes": [
+        "p29_guard"
+      ],
+      "symptoms": [
+        "连接器 Internal error 却继续猜远端状态",
+        "把只读授权扩成源码导出或安装"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "installer",
+        "session_evidence"
+      ],
+      "blast_radius": [
+        "installer",
+        "session_evidence"
+      ],
+      "check_before_edit": [
+        "沿用已有明确授权；超出授权范围再解释具体需要",
+        "连接器失败不视为成功；不复读相同失败，也不凭空补齐远端结果"
+      ],
+      "safe_observation_methods": [
+        "使用正确工具 schema；只读取与任务相关的文件和日志"
+      ]
+    },
+    {
+      "id": "P30",
+      "title": "非 Git 路由验证须显式适配",
+      "severity": "medium",
+      "confidence": "high",
+      "risk_codes": [
+        "p30_guard"
+      ],
+      "symptoms": [
+        "初始化器假定 Git 或配套 Skill 一定存在"
+      ],
+      "trigger_actions": [
+        "修改或诊断受影响模块"
+      ],
+      "related_paths": [
+        "docs/ai_routing_evolution_policy.json",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "affected_modules": [
+        "ai_routing_files",
+        "hardware_cost",
+        "session_evidence"
+      ],
+      "blast_radius": [
+        "ai_routing_files",
+        "hardware_cost",
+        "session_evidence"
+      ],
+      "check_before_edit": [
+        "先 dry-run 并检查依赖；缺失配套从已安装可信副本补齐并校验",
+        "非 Git 仅关闭不适用的跟踪检查，保留路径/引用/语法/覆盖校验及文件哈希"
+      ],
+      "safe_observation_methods": [
+        "不伪造 Git 状态，不为过校验屏蔽全部检查"
+      ]
+    },
+    {
+      "id": "P31",
+      "title": "Apple 身份会改变复合设备所有接口的驱动匹配",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p31_guard"
+      ],
+      "symptoms": [
+        "保留原 HID 描述符却假定键鼠与自动返回一定不变"
+      ],
+      "trigger_actions": [
+        "修改或诊断 MT2 实验固件"
+      ],
+      "related_paths": [
+        "docs/research/MT2_FIRMWARE_FEASIBILITY_20261105.md",
+        "experiments/mt2-petros-profile/README.md",
+        "docs/history/MT2_STAGE1_PREPARATION_20261105.md"
+      ],
+      "affected_modules": [
+        "mt2_firmware_experiment"
+      ],
+      "blast_radius": [
+        "mt2_firmware_experiment"
+      ],
+      "check_before_edit": [
+        "Book 15.6.1 的 05ac:0265 匹配包含接口通配和 Mouse usage；阶段1实测 iface0/1 被专用多点事件驱动接管，iface6 才创建完整多点设备。",
+        "第一阶段在 Book 检查每个接口的实际驱动绑定及 Feature 状态；零触点枚举成功不是四指成功",
+        "实验身份不代表可量产使用；保持已核对回退固件，mini 无本地键鼠时不直接交付候选",
+        "Pointer usage 已在 Book 避开 Mouse 专用驱动匹配，但实际绝对 XY 被解析为 MultiAxisPointer。NoPreferred 实机既无 MultiAxisPointer 也无 AbsolutePointer 属性，尚未注入坐标验证；属性缺失不能独自证明输入失败，不能仅凭绑定或字段宣告自动返回通过。",
+        "026c 旧草稿 close/open 取消存在 DATA toggle／旧完成问题；2026-11-09 新路径以 NAK + SIE idle + DONE 清除保留 DMA 所有权，模型和构建通过但未实测。硬件 quiescing 必须经状态位传给主机，不能将 nonce 清零视为停传完成；2026-11-09 真实 WCH 核心联调与回调顺序审核后，仅允许编译绑定已审核 0c8da9dd 候选进入受控 Book 五点试验；默认/旧版仍拒绝。必须有新鲜刷写回读、同板身份和单口现场检查，不能把 Book 测试许可扩为 mini 或量产部署。"
+      ],
+      "safe_observation_methods": [
+        "离线完整回调测试、链接证据与物理枚举分别记录；不暂停当前控制做调试读取"
+      ]
+    },
+    {
+      "id": "P32",
+      "title": "WCH 控制请求完成回调与 Rust 静态库格式需实核",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p32_guard"
+      ],
+      "symptoms": [
+        "GET setup 成功但完成阶段 STALL",
+        "GNU ld 拒绝含 LLVM bitcode 的 Rust 静态库"
+      ],
+      "trigger_actions": [
+        "修改或诊断 MT2 实验固件"
+      ],
+      "related_paths": [
+        "experiments/mt2-petros-profile/mt2_glue.c",
+        "experiments/mt2-petros-profile/test_profile.py",
+        "experiments/mt2-petros-profile/build_profile.py"
+      ],
+      "affected_modules": [
+        "mt2_firmware_experiment"
+      ],
+      "blast_radius": [
+        "mt2_firmware_experiment"
+      ],
+      "check_before_edit": [
+        "实际 SDK 在 IN 数据发送完成后也调用 interface_data；已接受的 GET 完成不可误拒绝",
+        "测试覆盖 setup 到 completion 及 disable 清理暂存帧",
+        "Rust C ABI 构建显式关闭 linker-plugin-lto，链接前核对 ELF32 RISC-V 成员；保留对齐安全 libc"
+      ],
+      "safe_observation_methods": [
+        "离线完整回调测试、链接证据与物理枚举分别记录；不暂停当前控制做调试读取"
+      ]
+    },
+    {
+      "id": "P33",
+      "title": "自动服务、辅助功能和物理重插分别验收",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p33_guard"
+      ],
+      "symptoms": [
+        "Codex/终端启动有权限，launchd 启动无权限",
+        "启动项存在但 USB1 重插未枚举",
+        "bootout 尚未完成就 bootstrap 导致错误 5"
+      ],
+      "trigger_actions": [
+        "修改或安装主控自动启动服务"
+      ],
+      "related_paths": [
+        "native/control-service",
+        "scripts/configure_control_autostart.py",
+        "docs/history/CONTROL_AUTOSTART_20261109.md"
+      ],
+      "affected_modules": [
+        "host_autostart",
+        "host_input"
+      ],
+      "blast_radius": [
+        "Book input capture and reconnect"
+      ],
+      "check_before_edit": [
+        "沿用固定输入二进制及哈希；实际登录服务须单独查询并通过辅助功能授权，不以交互启动权限替代。",
+        "用 PID、创建时间、完整路径验证进程再接管或结束；保留单实例锁，防止旧记录误伤。",
+        "正常退出释放本机输入；监督服务异常退出用 AbandonProcessGroup 保留子进程并重新接管。",
+        "卸载服务后等待 launchctl 确认退出，再 bootstrap；不可因错误 5 直接升为 root。",
+        "实际 USB1-only 重插已两次未重新枚举；RESET 未恢复。程序自动拉起通过不等于热插拔通过，不能把序号相同的其他设备当 CH32。",
+        "用户纠正 mini-first 失败与 Book-first 成功：必须标注真实插入顺序。Book-first 已自动恢复且用户验收；不得扩称任意顺序或 USB1-only 通过。CC inactive 日志仅定位连接阶段，VBUS 回灌需实测或实际板原理图。",
+        "服务按 wiredkvm-native/macos-capture 等固定 basename 识别子进程。候选放入版本目录并保持原文件名；不要因每8秒 readiness 重试重建辅助功能授权。"
+      ],
+      "safe_observation_methods": [
+        "读取 launchctl、status.txt、session.tsv、IORegistry 与有时间戳的用户反馈；记录未完成的真实重启和电气验证。"
+      ]
+    },
+    {
+      "id": "P34",
+      "title": "私有触点 API 的设备枚举不等于触点或手势通过",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p34_guard"
+      ],
+      "symptoms": [
+        "通用 AppleMultitouchDevice 名称被当成鼠标或未知设备",
+        "零帧窗口被记成四指成功",
+        "把 DockSwipe 当作四个真实触点"
+      ],
+      "trigger_actions": [
+        "修改或运行 Book 触点诊断"
+      ],
+      "related_paths": [
+        "experiments/host-touch-observer/README.md",
+        "experiments/host-touch-observer/src/lib.rs",
+        "experiments/host-touch-observer/src/main.rs",
+        "experiments/host-touch-observer/src/mac.rs",
+        "docs/history/HOST_TOUCH_20261109.md",
+        "experiments/host-touch-observer/src/forward.rs",
+        "docs/history/LIVE_TOUCH_20261109.md"
+      ],
+      "affected_modules": [
+        "host_touch_capture",
+        "host_input",
+        "mt2_firmware_experiment"
+      ],
+      "blast_radius": [
+        "Book input observation and future gesture forwarding"
+      ],
+      "check_before_edit": [
+        "设备按实际 registry ID、built-in、Product、SPI 核对；不按索引或 generic 名称猜设备。",
+        "96 字节布局只是公开逆向候选；macOS 版本匹配、启动返回成功、零帧和合成测试均不证明本机 ABI 或四指。",
+        "观察须有界、无输入注入；只在未运行的本进程设备句柄上 Start，Stop 后核查 IsRunning，再注销与释放。",
+        "回调 try_lock 丢帧只可用于诊断；不可直接用此诊断统计器交付 begin/end 可靠转发。",
+        "等待用户实际两指/四指与接线配合，不重复刷写或擅自更改正在使用的控制通路。",
+        "公开 MT 状态 5=BreakTouch、6=Linger，不可用 mactic 的 press 描述保留为 down。只把 3/4 算 down；旧 15 帧统计含 5，不能事后伪装成新规则四指验证。",
+        "实时 helper 只写有界 callback 队列；Swift 独占 stdout、native 独占 CDC。会话 epoch 与返回/退出清理必须在实际主循环联调。",
+        "stage-1 input_done 清零帧在 submit 时运行；实时 Rust 队列的 done 必须接实际 USB data_cb 完成，不能接到 send。",
+        "只合并同一触点拓扑的移动；增减触点、释放与清空帧不得被最新帧替换。空闲等待不等于触点断流。",
+        "Linux MT2 的最高两位状态仅为粗分类；macOS 还使用3位 Finger/3位 State及24位时钟。不能把未建模字段清零、State只留两位或timestamp最高字节0x88固定后声称原生格式完整。",
+        "回调静止时可能不产生新帧；不能把120ms无触点回调直接当断线。用框架运行状态、队列溢出、进程/USB/会话生命周期撤销，保留静止触点的有线租约。",
+        "真实mini失败后，先关闭Book实验通道并验证原滚动与返回恢复。优先在Book的虚拟USB接收设备检查实际解码；若双口受连接问题阻断，记录未注入，再用已授权的mini实机手势与保留功能反馈验收。USB提交计数不得代替验收。",
+        "协议2与旧协议1不可混用；静止触点续租、完整Finger/State/时钟修正已在当前mini用户动作中通过，不外推Windows或其它macOS版本。"
+      ],
+      "safe_observation_methods": [
+        "默认 dry-run 不加载 framework；inspect 不启动回调；有界 observe 输出聚合数量，零帧如实记录未验证。"
+      ]
+    }
+  ]
+}

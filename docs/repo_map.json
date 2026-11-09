@@ -1,0 +1,1204 @@
+{
+  "schema_version": "1.2",
+  "scope": {
+    "root": ".",
+    "mode": "subtree_only",
+    "parent_inspection_allowed": true,
+    "notes": [
+      "Writes stay inside WiredKVM. External recovery evidence may be read within authorization.",
+      "Non-Git, partially recovered workspace. Module routing is navigation, not runtime proof.",
+      "Historical evidence is under docs/history; AGENTS contains current constraints and protocol only."
+    ]
+  },
+  "modules": [
+    {
+      "id": "project_entrypoints",
+      "name": "project_entrypoints",
+      "path": "README.md",
+      "kind": "project_overview",
+      "purpose": "Partially recovered project entrypoints; inspect current source and dated validation before claiming complete functionality.",
+      "module_tags": [
+        "project",
+        "bootstrap",
+        "needs_code_confirmation"
+      ],
+      "entry_files": [
+        "README.md",
+        "RESTORE_MANIFEST_20261104.json",
+        "RECOVERY_VALIDATION_20261104.json"
+      ],
+      "key_symbols": [],
+      "child_modules": [],
+      "first_read_files": [
+        "README.md",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "RECOVERY_VALIDATION_20261104.json"
+      ],
+      "then_check_files": [
+        "rust-rebuild/README.md"
+      ],
+      "upstream_dependencies": [],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [],
+      "related_tests": [],
+      "related_configs": [],
+      "risk_flags": [
+        "bootstrap_facts_require_confirmation"
+      ],
+      "edit_risk": "unknown",
+      "blast_radius": [
+        "unknown until routed code is sampled"
+      ],
+      "pitfall_ids": [
+        "P01",
+        "P03",
+        "P04",
+        "P23",
+        "P28"
+      ],
+      "minimum_regression": [],
+      "routing_confidence": "low",
+      "scope_flags": [
+        "subtree_only",
+        "initial_bootstrap"
+      ],
+      "grounding": {
+        "fact_status": "needs_code_confirmation",
+        "evidence": [
+          "README.md",
+          "RESTORE_MANIFEST_20261104.json",
+          "RECOVERY_VALIDATION_20261104.json"
+        ],
+        "unsampled_paths": [
+          "firmware/ch32v407",
+          "host",
+          "native",
+          "windows"
+        ]
+      }
+    },
+    {
+      "id": "ai_routing_files",
+      "name": "ai_routing_files",
+      "path": "docs/repo_map.json",
+      "kind": "routing_docset",
+      "purpose": "AI Hermes routing files and project-local skill scripts created by the routing initializer.",
+      "module_tags": [
+        "ai_routing",
+        "bootstrap",
+        "skills",
+        "scripts"
+      ],
+      "entry_files": [
+        "AGENTS.md",
+        "docs/repo_map.json",
+        "docs/task_routes.json",
+        "docs/pitfalls.json",
+        "docs/ai_routing_evolution_policy.json",
+        "skills/ai-hermes-self-evolve/README.md",
+        "skills/ai-hermes-self-evolve/SKILL.md",
+        "skills/ai-hermes-self-evolve/agents/openai.yaml",
+        "skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py",
+        "skills/ai-hermes-self-evolve/scripts/validate_ai_routing.py",
+        "skills/ai-hermes-self-evolve/scripts/route_task.py",
+        "skills/ai-hermes-routing-init/README.md",
+        "skills/ai-hermes-routing-init/SKILL.md",
+        "skills/ai-hermes-routing-init/agents/openai.yaml",
+        "skills/ai-hermes-routing-init/scripts/init_ai_routing.py",
+        "skills/ai-hermes-routing-init/scripts/evolve_ai_routing.py",
+        "skills/ai-hermes-routing-init/scripts/validate_ai_routing.py",
+        "skills/ai-hermes-routing-init/scripts/route_task.py",
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json",
+        "docs/history/ROUTING_VALIDATION_20261105.json"
+      ],
+      "key_symbols": [
+        "validate_docset",
+        "build_report",
+        "main"
+      ],
+      "child_modules": [],
+      "first_read_files": [
+        "AGENTS.md",
+        "docs/repo_map.json",
+        "docs/task_routes.json",
+        "docs/pitfalls.json"
+      ],
+      "then_check_files": [
+        "docs/ai_routing_evolution_policy.json",
+        "skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py",
+        "skills/ai-hermes-self-evolve/scripts/validate_ai_routing.py",
+        "skills/ai-hermes-self-evolve/scripts/route_task.py",
+        "skills/ai-hermes-routing-init/scripts/init_ai_routing.py",
+        "docs/history/ROUTING_VALIDATION_20261105.json"
+      ],
+      "upstream_dependencies": [],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [
+        "unverified external runtime behavior"
+      ],
+      "related_tests": [],
+      "related_configs": [
+        "AGENTS.md",
+        "docs/ai_routing_evolution_policy.json"
+      ],
+      "risk_flags": [
+        "routing_memory_drift",
+        "bootstrap_facts_require_confirmation",
+        "routing_only_scope_leak"
+      ],
+      "edit_risk": "medium",
+      "blast_radius": [
+        "AI Hermes routing",
+        "future agent task narrowing"
+      ],
+      "pitfall_ids": [
+        "P01",
+        "P02",
+        "P30"
+      ],
+      "minimum_regression": [
+        "python3 -m py_compile skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py skills/ai-hermes-self-evolve/scripts/validate_ai_routing.py skills/ai-hermes-self-evolve/scripts/route_task.py skills/ai-hermes-routing-init/scripts/init_ai_routing.py",
+        "python3 skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py --routing-only --changed-file docs/repo_map.json --changed-file skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py --json",
+        "python3 skills/ai-hermes-self-evolve/scripts/route_task.py --route-id R02 --mode context",
+        "python3 skills/ai-hermes-self-evolve/scripts/validate_ai_routing.py"
+      ],
+      "routing_confidence": "high",
+      "scope_flags": [
+        "subtree_only",
+        "routing_memory_coverage_check"
+      ],
+      "grounding": {
+        "fact_status": "grounded",
+        "evidence": [
+          "AGENTS.md",
+          "docs/repo_map.json",
+          "docs/task_routes.json",
+          "docs/pitfalls.json",
+          "docs/ai_routing_evolution_policy.json",
+          "skills/ai-hermes-self-evolve/README.md",
+          "skills/ai-hermes-self-evolve/SKILL.md",
+          "skills/ai-hermes-self-evolve/agents/openai.yaml",
+          "skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py",
+          "skills/ai-hermes-self-evolve/scripts/validate_ai_routing.py",
+          "skills/ai-hermes-self-evolve/scripts/route_task.py",
+          "skills/ai-hermes-routing-init/README.md",
+          "skills/ai-hermes-routing-init/SKILL.md",
+          "skills/ai-hermes-routing-init/agents/openai.yaml",
+          "skills/ai-hermes-routing-init/scripts/init_ai_routing.py",
+          "skills/ai-hermes-routing-init/scripts/evolve_ai_routing.py",
+          "skills/ai-hermes-routing-init/scripts/validate_ai_routing.py",
+          "skills/ai-hermes-routing-init/scripts/route_task.py"
+        ],
+        "unsampled_paths": []
+      }
+    },
+    {
+      "id": "session_evidence",
+      "name": "session_evidence",
+      "path": "docs/history/SESSION_POSTMORTEM_20261105.md",
+      "kind": "evidence_docset",
+      "purpose": "Dated session postmortem, user confirmations and evidence limits. No live device state.",
+      "module_tags": [
+        "session_evidence",
+        "grounded"
+      ],
+      "entry_files": [
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "key_symbols": [],
+      "child_modules": [],
+      "first_read_files": [
+        "docs/history/SESSION_POSTMORTEM_20261105.md",
+        "docs/history/SESSION_EVIDENCE_20261105.json"
+      ],
+      "then_check_files": [
+        "docs/history/INPUT_CLIPBOARD_STATUS_20261106.md"
+      ],
+      "upstream_dependencies": [],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [],
+      "related_tests": [],
+      "related_configs": [],
+      "risk_flags": [
+        "dated_evidence_not_live"
+      ],
+      "edit_risk": "medium",
+      "blast_radius": [
+        "session_evidence"
+      ],
+      "pitfall_ids": [
+        "P03",
+        "P04",
+        "P23",
+        "P25",
+        "P27",
+        "P28"
+      ],
+      "minimum_regression": [],
+      "routing_confidence": "high",
+      "scope_flags": [
+        "subtree_only"
+      ],
+      "grounding": {
+        "fact_status": "grounded",
+        "evidence": [
+          "docs/history/SESSION_POSTMORTEM_20261105.md",
+          "docs/history/SESSION_EVIDENCE_20261105.json"
+        ],
+        "unsampled_paths": []
+      }
+    },
+    {
+      "id": "firmware_ch32",
+      "name": "firmware_ch32",
+      "path": "firmware/ch32v407",
+      "kind": "implementation_entrypoints",
+      "purpose": "CH32 firmware entrypoints; reconfirm USB, alignment, endpoint and reconnect behavior in current source.",
+      "module_tags": [
+        "firmware_ch32",
+        "needs_code_confirmation"
+      ],
+      "entry_files": [
+        "firmware/ch32v407/main.c",
+        "firmware/ch32v407/bridge.c",
+        "firmware/ch32v407/alignment_safe_libc.c"
+      ],
+      "key_symbols": [],
+      "child_modules": [],
+      "first_read_files": [
+        "firmware/ch32v407/main.c",
+        "firmware/ch32v407/bridge.c",
+        "firmware/ch32v407/alignment_safe_libc.c"
+      ],
+      "then_check_files": [
+        "firmware/ch32v407/descriptors.c",
+        "firmware/ch32v407/newlib_context.c",
+        "rust-rebuild/src/firmware_build.rs"
+      ],
+      "upstream_dependencies": [],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [],
+      "related_tests": [
+        "tests"
+      ],
+      "related_configs": [],
+      "risk_flags": [
+        "needs_code_confirmation",
+        "physical_acceptance_not_implied"
+      ],
+      "edit_risk": "medium",
+      "blast_radius": [
+        "firmware_ch32"
+      ],
+      "pitfall_ids": [
+        "P05",
+        "P06",
+        "P07",
+        "P08",
+        "P10",
+        "P13",
+        "P15",
+        "P23",
+        "P24",
+        "P25",
+        "P26"
+      ],
+      "minimum_regression": [],
+      "routing_confidence": "medium",
+      "scope_flags": [
+        "subtree_only"
+      ],
+      "grounding": {
+        "fact_status": "needs_code_confirmation",
+        "evidence": [
+          "firmware/ch32v407/main.c",
+          "firmware/ch32v407/bridge.c",
+          "firmware/ch32v407/alignment_safe_libc.c"
+        ],
+        "unsampled_paths": [
+          "firmware/ch32v407/main.c",
+          "firmware/ch32v407/bridge.c",
+          "firmware/ch32v407/alignment_safe_libc.c",
+          "firmware/ch32v407/descriptors.c",
+          "firmware/ch32v407/newlib_context.c",
+          "rust-rebuild/src/firmware_build.rs"
+        ]
+      }
+    },
+    {
+      "id": "host_input",
+      "name": "host_input",
+      "path": "host/macos_capture.swift",
+      "kind": "implementation_entrypoints",
+      "purpose": "Current native-v2 Book capture/CDC controller retains keyboard, pointer, mouse wheel and automatic edge return, with multi-finger raw touch gated by remote session and firmware readiness. User accepted mini two/four-finger gestures, direction, drag selection and both local text clipboards. Target-program scroll/gesture receivers remain disabled. Cross-machine clipboard is incomplete; physical file saturation and Windows support are unverified.",
+      "module_tags": [
+        "host_input",
+        "needs_code_confirmation"
+      ],
+      "entry_files": [
+        "native/wiredkvm.cpp",
+        "host/macos_capture.swift",
+        "native/desktop_pointer.hpp"
+      ],
+      "key_symbols": [],
+      "child_modules": [],
+      "first_read_files": [
+        "native/wiredkvm.cpp",
+        "host/macos_capture.swift",
+        "native/desktop_pointer.hpp"
+      ],
+      "then_check_files": [
+        "host/WKPointingSource.swift",
+        "host/clipboard/WKScrollRelay.swift",
+        "host/clipboard/WKGestureRelay.swift",
+        "host/clipboard/WKInputRelay.swift",
+        "host/clipboard/WiredKVMCompanion.swift",
+        "native/clipboard_channel.hpp",
+        "docs/history/SHORT_SCROLL_OPTIMIZATION_20261105.md",
+        "docs/research/MT2_FIRMWARE_FEASIBILITY_20261105.md",
+        "docs/history/PORTABLE_COMPANION_20261106.md",
+        "docs/history/TARGET_ZERO_RUNTIME_20261106.md",
+        "host/WKRawTouch.swift",
+        "native/raw_touch_wire.hpp",
+        "docs/history/LIVE_TOUCH_20261109.md",
+        "results/live-touch-20261109/CURRENT_RUNTIME.json",
+        "results/live-touch-20261109/accepted-native-v2/user-acceptance.json"
+      ],
+      "upstream_dependencies": [],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [],
+      "related_tests": [
+        "tests",
+        "tests/test_independent_input.py",
+        "tests/input_relay_selftest.swift",
+        "tests/test_clipboard_native.py",
+        "tests/test_trackpad_scroll.py",
+        "tests/raw_touch_wire_test.cpp",
+        "tests/raw_touch_lifecycle.swift",
+        "tests/test_raw_touch_native.py"
+      ],
+      "related_configs": [],
+      "risk_flags": [
+        "needs_code_confirmation",
+        "physical_acceptance_not_implied"
+      ],
+      "edit_risk": "medium",
+      "blast_radius": [
+        "host_input"
+      ],
+      "pitfall_ids": [
+        "P05",
+        "P06",
+        "P08",
+        "P09",
+        "P10",
+        "P26"
+      ],
+      "minimum_regression": [],
+      "routing_confidence": "medium",
+      "scope_flags": [
+        "subtree_only"
+      ],
+      "grounding": {
+        "fact_status": "needs_code_confirmation",
+        "evidence": [
+          "native/wiredkvm.cpp",
+          "host/macos_capture.swift",
+          "native/desktop_pointer.hpp"
+        ],
+        "unsampled_paths": [
+          "native/wiredkvm.cpp",
+          "host/macos_capture.swift",
+          "native/desktop_pointer.hpp",
+          "host/WKPointingSource.swift",
+          "host/clipboard/WKScrollRelay.swift",
+          "host/clipboard/WKGestureRelay.swift"
+        ]
+      }
+    },
+    {
+      "id": "clipboard_bulk",
+      "name": "clipboard_bulk",
+      "path": "host/clipboard",
+      "kind": "implementation_entrypoints",
+      "purpose": "Current user accepts a receiver application stored on the cable and temporarily executed by the target CPU, without copying it into Applications or registering persistence. Historical clipboard/stream sources can now be audited for that portable path. Live input baseline is preserved; complete bidirectional text/images/files/folders and high-speed end-to-end acceptance remain pending.",
+      "module_tags": [
+        "clipboard_bulk",
+        "needs_code_confirmation"
+      ],
+      "entry_files": [
+        "host/clipboard/WKOnDemandClipboard.swift",
+        "host/clipboard/WKStreamFiles.swift",
+        "native/file_transfer_runtime.hpp"
+      ],
+      "key_symbols": [],
+      "child_modules": [],
+      "first_read_files": [
+        "host/clipboard/WKOnDemandClipboard.swift",
+        "host/clipboard/WKStreamFiles.swift",
+        "native/file_transfer_runtime.hpp"
+      ],
+      "then_check_files": [
+        "host/clipboard/WKFilePortal.swift",
+        "host/clipboard/WKClipboardTransport.swift",
+        "host/clipboard/WKClipboardContent.swift",
+        "native/clipboard_channel.hpp",
+        "agent/file_wire.py",
+        "docs/history/INPUT_CLIPBOARD_STATUS_20261106.md",
+        "results/clipboard-audit-20261106/AUDIT.md",
+        "results/clipboard-audit-20261106/summary.json",
+        "docs/history/PORTABLE_COMPANION_20261106.md",
+        "docs/history/TARGET_ZERO_RUNTIME_20261106.md",
+        "native/transfer-tree",
+        "host/clipboard/WKTransferTree.swift",
+        "results/collection-transfer-20261106/stream-v1/collections.json",
+        "docs/research/CLIPBOARD_ZERO_RUNTIME_GATE_20261109.md",
+        "results/clipboard-zero-runtime-20261109/admission_probe.c",
+        "results/clipboard-zero-runtime-20261109/admission-probe.log"
+      ],
+      "upstream_dependencies": [],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [],
+      "related_tests": [
+        "tests/test_file_transfer_native.py",
+        "tests/test_clipboard_native.py",
+        "tests/ch32v407_stream_test.swift",
+        "tests/ch32v407_sim.c",
+        "tests/test_collection_transfer.py",
+        "tests/collection_transfer_selftest.swift"
+      ],
+      "related_configs": [],
+      "risk_flags": [
+        "needs_code_confirmation",
+        "physical_acceptance_not_implied"
+      ],
+      "edit_risk": "medium",
+      "blast_radius": [
+        "clipboard_bulk"
+      ],
+      "pitfall_ids": [
+        "P11",
+        "P12",
+        "P13",
+        "P14",
+        "P15",
+        "P16",
+        "P23"
+      ],
+      "minimum_regression": [],
+      "routing_confidence": "medium",
+      "scope_flags": [
+        "subtree_only"
+      ],
+      "grounding": {
+        "fact_status": "needs_code_confirmation",
+        "evidence": [
+          "host/clipboard/WKOnDemandClipboard.swift",
+          "host/clipboard/WKStreamFiles.swift",
+          "native/file_transfer_runtime.hpp"
+        ],
+        "unsampled_paths": [
+          "host/clipboard/WKOnDemandClipboard.swift",
+          "host/clipboard/WKStreamFiles.swift",
+          "native/file_transfer_runtime.hpp",
+          "host/clipboard/WKFilePortal.swift",
+          "host/clipboard/WKClipboardTransport.swift",
+          "host/clipboard/WKClipboardContent.swift",
+          "native/clipboard_channel.hpp",
+          "agent/file_wire.py"
+        ]
+      }
+    },
+    {
+      "id": "installer",
+      "name": "installer",
+      "path": "host/setup",
+      "kind": "implementation_entrypoints",
+      "purpose": "Historical installer and WK_PORTABLE sources. Current task is direct execution from the cable, with no Applications copy, background service or login item. Reuse requires source audit and new physical acceptance; old installer permission or old zero-runtime prohibition must not override the latest explicit user choice.",
+      "module_tags": [
+        "installer",
+        "needs_code_confirmation"
+      ],
+      "entry_files": [
+        "host/setup/WiredKVMSetup.swift",
+        "host/clipboard/WKCompanionInstall.swift",
+        "host/clipboard/WKOnboarding.swift"
+      ],
+      "key_symbols": [],
+      "child_modules": [],
+      "first_read_files": [
+        "host/setup/WiredKVMSetup.swift",
+        "host/clipboard/WKCompanionInstall.swift",
+        "host/clipboard/WKOnboarding.swift"
+      ],
+      "then_check_files": [
+        "firmware/ch32v407/setup_msc.c",
+        "firmware/ch32v407/setup_flash.c",
+        "scripts/pack_dual_setup.py",
+        "scripts/pack_flash_setup.py",
+        "scripts/build_portable_companion.py",
+        "host/clipboard/WiredKVMCompanion.swift",
+        "host/clipboard/WKOnDemandClipboard.swift",
+        "host/clipboard/WKClipboardContent.swift",
+        "host/clipboard/WKFilePortal.swift",
+        "docs/history/PORTABLE_COMPANION_20261106.md",
+        "docs/history/TARGET_ZERO_RUNTIME_20261106.md"
+      ],
+      "upstream_dependencies": [],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [],
+      "related_tests": [
+        "tests/test_setup_native.py",
+        "tests/test_portable_companion.py"
+      ],
+      "related_configs": [],
+      "risk_flags": [
+        "needs_code_confirmation",
+        "physical_acceptance_not_implied"
+      ],
+      "edit_risk": "medium",
+      "blast_radius": [
+        "installer"
+      ],
+      "pitfall_ids": [
+        "P09",
+        "P17",
+        "P18",
+        "P19",
+        "P22",
+        "P29"
+      ],
+      "minimum_regression": [],
+      "routing_confidence": "medium",
+      "scope_flags": [
+        "subtree_only"
+      ],
+      "grounding": {
+        "fact_status": "needs_code_confirmation",
+        "evidence": [
+          "host/setup/WiredKVMSetup.swift",
+          "host/clipboard/WKCompanionInstall.swift",
+          "host/clipboard/WKOnboarding.swift"
+        ],
+        "unsampled_paths": [
+          "host/setup/WiredKVMSetup.swift",
+          "host/clipboard/WKCompanionInstall.swift",
+          "host/clipboard/WKOnboarding.swift",
+          "firmware/ch32v407/setup_msc.c",
+          "firmware/ch32v407/setup_flash.c",
+          "scripts/pack_dual_setup.py",
+          "scripts/pack_flash_setup.py"
+        ]
+      }
+    },
+    {
+      "id": "hardware_cost",
+      "name": "hardware_cost",
+      "path": "hardware",
+      "kind": "implementation_entrypoints",
+      "purpose": "Existing hardware and CNY cost-analysis entrypoints, not current supplier quotes or PCB approval.",
+      "module_tags": [
+        "hardware_cost",
+        "needs_code_confirmation"
+      ],
+      "entry_files": [
+        "hardware/HIGH_SPEED_TWO_PORT_FEASIBILITY_20261030.md",
+        "hardware/ch32v407_costdown_20261031.py",
+        "hardware/JLC_SMT_CNY_COST_REVIEW_20261031.md"
+      ],
+      "key_symbols": [],
+      "child_modules": [],
+      "first_read_files": [
+        "hardware/HIGH_SPEED_TWO_PORT_FEASIBILITY_20261030.md",
+        "hardware/ch32v407_costdown_20261031.py",
+        "hardware/JLC_SMT_CNY_COST_REVIEW_20261031.md"
+      ],
+      "then_check_files": [
+        "hardware/CH32V407_SUPPLY_BOM_AND_OPENPCB_AUDIT_20261031.md",
+        "hardware/USB_C_SINGLE_SIDE_SELECTION_20261031.md",
+        "hardware/ch32v407_flash4m_cost.py",
+        "scripts/audit_ch32_flash_capacity.py"
+      ],
+      "upstream_dependencies": [],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [],
+      "related_tests": [],
+      "related_configs": [],
+      "risk_flags": [
+        "needs_code_confirmation",
+        "physical_acceptance_not_implied"
+      ],
+      "edit_risk": "medium",
+      "blast_radius": [
+        "hardware_cost"
+      ],
+      "pitfall_ids": [
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P30"
+      ],
+      "minimum_regression": [],
+      "routing_confidence": "medium",
+      "scope_flags": [
+        "subtree_only"
+      ],
+      "grounding": {
+        "fact_status": "needs_code_confirmation",
+        "evidence": [
+          "hardware/HIGH_SPEED_TWO_PORT_FEASIBILITY_20261030.md",
+          "hardware/ch32v407_costdown_20261031.py",
+          "hardware/JLC_SMT_CNY_COST_REVIEW_20261031.md"
+        ],
+        "unsampled_paths": [
+          "hardware/HIGH_SPEED_TWO_PORT_FEASIBILITY_20261030.md",
+          "hardware/ch32v407_costdown_20261031.py",
+          "hardware/JLC_SMT_CNY_COST_REVIEW_20261031.md",
+          "hardware/CH32V407_SUPPLY_BOM_AND_OPENPCB_AUDIT_20261031.md",
+          "hardware/USB_C_SINGLE_SIDE_SELECTION_20261031.md",
+          "hardware/ch32v407_flash4m_cost.py",
+          "scripts/audit_ch32_flash_capacity.py"
+        ]
+      }
+    },
+    {
+      "id": "recovery_build",
+      "name": "recovery_build",
+      "path": "rust-rebuild",
+      "kind": "implementation_entrypoints",
+      "purpose": "Recovered-source provenance, Rust build entrypoint and offline regressions; not a full Rust port or deployment.",
+      "module_tags": [
+        "recovery_build",
+        "needs_code_confirmation"
+      ],
+      "entry_files": [
+        "rust-rebuild/README.md",
+        "RESTORE_MANIFEST_20261104.json",
+        "RECOVERY_VALIDATION_20261104.json"
+      ],
+      "key_symbols": [],
+      "child_modules": [],
+      "first_read_files": [
+        "rust-rebuild/README.md",
+        "RESTORE_MANIFEST_20261104.json",
+        "RECOVERY_VALIDATION_20261104.json"
+      ],
+      "then_check_files": [
+        "rust-rebuild/src/main.rs",
+        "rust-rebuild/src/firmware_build.rs",
+        "rust-rebuild/build.rs",
+        "rust-rebuild/src/lib.rs"
+      ],
+      "upstream_dependencies": [],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [],
+      "related_tests": [
+        "rust-rebuild/tests/bridge_stress.rs"
+      ],
+      "related_configs": [],
+      "risk_flags": [
+        "needs_code_confirmation",
+        "physical_acceptance_not_implied"
+      ],
+      "edit_risk": "medium",
+      "blast_radius": [
+        "recovery_build"
+      ],
+      "pitfall_ids": [
+        "P03",
+        "P04",
+        "P23",
+        "P28"
+      ],
+      "minimum_regression": [
+        "cargo run --offline --manifest-path rust-rebuild/Cargo.toml -- check-sources .",
+        "cargo test --offline --manifest-path rust-rebuild/Cargo.toml"
+      ],
+      "routing_confidence": "medium",
+      "scope_flags": [
+        "subtree_only"
+      ],
+      "grounding": {
+        "fact_status": "needs_code_confirmation",
+        "evidence": [
+          "rust-rebuild/README.md",
+          "RESTORE_MANIFEST_20261104.json",
+          "RECOVERY_VALIDATION_20261104.json"
+        ],
+        "unsampled_paths": [
+          "rust-rebuild/README.md",
+          "RESTORE_MANIFEST_20261104.json",
+          "RECOVERY_VALIDATION_20261104.json",
+          "rust-rebuild/src/main.rs",
+          "rust-rebuild/src/firmware_build.rs",
+          "rust-rebuild/build.rs",
+          "rust-rebuild/src/lib.rs"
+        ]
+      }
+    },
+    {
+      "id": "legacy_platforms",
+      "name": "legacy_platforms",
+      "path": "windows",
+      "kind": "implementation_entrypoints",
+      "purpose": "Surviving Windows and earlier platform files; completeness and cross-platform acceptance remain unconfirmed.",
+      "module_tags": [
+        "legacy_platforms",
+        "needs_code_confirmation"
+      ],
+      "entry_files": [
+        "windows/README.md",
+        "windows/WiredKVMTray.cpp"
+      ],
+      "key_symbols": [],
+      "child_modules": [],
+      "first_read_files": [
+        "windows/README.md",
+        "windows/WiredKVMTray.cpp"
+      ],
+      "then_check_files": [
+        "windows/CMakeLists.txt",
+        "firmware/main",
+        "agent"
+      ],
+      "upstream_dependencies": [],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [],
+      "related_tests": [],
+      "related_configs": [],
+      "risk_flags": [
+        "needs_code_confirmation",
+        "physical_acceptance_not_implied"
+      ],
+      "edit_risk": "medium",
+      "blast_radius": [
+        "legacy_platforms"
+      ],
+      "pitfall_ids": [
+        "P04",
+        "P16",
+        "P23"
+      ],
+      "minimum_regression": [],
+      "routing_confidence": "medium",
+      "scope_flags": [
+        "subtree_only"
+      ],
+      "grounding": {
+        "fact_status": "needs_code_confirmation",
+        "evidence": [
+          "windows/README.md",
+          "windows/WiredKVMTray.cpp"
+        ],
+        "unsampled_paths": [
+          "windows/README.md",
+          "windows/WiredKVMTray.cpp",
+          "windows/CMakeLists.txt",
+          "firmware/main",
+          "agent"
+        ]
+      }
+    },
+    {
+      "id": "mt2_firmware_experiment",
+      "name": "mt2_firmware_experiment",
+      "path": "experiments",
+      "kind": "isolated_firmware_experiment",
+      "purpose": "Native-v2 firmware 9322b86a is flashed/readback verified on CH32V467WEU6 UID ad21ad506c54c6c6. User accepted two/four-finger gestures, automatic return, drag selection, local text copy/paste and matching scroll direction. Same-Book dual-port decode bench was blocked before USB2 reset; no bench touches injected. Continuous bidirectional Bulk with input/touch passed the real-main offline test; physical saturated-transfer latency remains unverified. Cross-machine clipboard is incomplete under zero target runtime.",
+      "module_tags": [
+        "mt2",
+        "firmware",
+        "experimental"
+      ],
+      "entry_files": [
+        "experiments/mt2-usb/README.md",
+        "experiments/mt2-petros-profile/README.md"
+      ],
+      "key_symbols": [
+        "FfiCore",
+        "FeatureMachine",
+        "wkmt2_profile_setup",
+        "wkmt2_profile_data",
+        "overlays",
+        "wkap_abort_ep82",
+        "wkap_core_quiescing"
+      ],
+      "child_modules": [],
+      "first_read_files": [
+        "docs/research/MT2_FIRMWARE_FEASIBILITY_20261105.md",
+        "experiments/mt2-petros-profile/README.md",
+        "experiments/mt2-usb/README.md"
+      ],
+      "then_check_files": [
+        "experiments/mt2-usb/src/lib.rs",
+        "experiments/mt2-usb/src/ffi.rs",
+        "experiments/mt2-usb/include/wkmt2.h",
+        "experiments/mt2-petros-profile/build_profile.py",
+        "experiments/mt2-petros-profile/mt2_glue.c",
+        "experiments/mt2-petros-profile/mt2_glue.h",
+        "experiments/mt2-petros-profile/inspect_book.py",
+        "docs/history/MT2_STAGE1_PREPARATION_20261105.md",
+        "experiments/ch32-dmi-snapshot/README.md",
+        "experiments/mt2-petros-profile/probe_absolute_book.py",
+        "experiments/mt2-petros-profile/NEXT_POINTER_CANDIDATE.md",
+        "docs/history/INPUT_CLIPBOARD_STATUS_20261106.md",
+        "experiments/mt2-single-port-probe/README.md",
+        "experiments/mt2-single-port-probe/src/main.rs",
+        "experiments/mt2-single-port-probe/src/lib.rs",
+        "experiments/mt2-single-port-probe/src/mac.rs",
+        "experiments/mt2-petros-profile/single-port-core/src/lib.rs",
+        "experiments/mt2-petros-profile/single_port_probe.c",
+        "experiments/mt2-petros-profile/single_port_probe.h",
+        "docs/history/TARGET_ZERO_RUNTIME_20261106.md",
+        "experiments/mt2-petros-profile/single_port_abort.c",
+        "experiments/mt2-petros-profile/single_port_abort.h",
+        "docs/history/MT2_CANCEL_20261109.md",
+        "experiments/mt2-petros-profile/test_abort_sdk.py",
+        "experiments/mt2-petros-profile/test_abort_sdk.c",
+        "docs/history/MT2_SDK_REVIEW_20261109.md",
+        "docs/history/MT2_FLASH_CANCEL_20261109.md",
+        "experiments/mt2-usb/tests/synthesis.rs",
+        "docs/history/TOUCH_PHASE_20261109.md",
+        "experiments/mt2-usb/src/live.rs",
+        "experiments/mt2-petros-profile/live_touch.c",
+        "experiments/mt2-petros-profile/live_abort.c",
+        "docs/history/LIVE_TOUCH_20261109.md",
+        "experiments/mt2-usb/src/native_format.rs",
+        "experiments/mt2-usb/examples/native_stationary_probe.rs",
+        "experiments/mt2-petros-profile/probe_native_book.py",
+        "results/live-touch-20261109/CURRENT_RUNTIME.json",
+        "results/live-touch-20261109/accepted-native-v2/user-acceptance.json"
+      ],
+      "upstream_dependencies": [
+        "firmware_ch32"
+      ],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [
+        "macOS Apple driver behavior requires physical enumeration",
+        "recovered WCH SDK and toolchain outside project"
+      ],
+      "related_tests": [
+        "experiments/mt2-usb/tests",
+        "experiments/mt2-petros-profile/test_profile.py",
+        "experiments/ch32-dmi-snapshot/src/main.rs",
+        "experiments/mt2-petros-profile/test_absolute_probe.py",
+        "experiments/mt2-single-port-probe/src/lib.rs",
+        "experiments/mt2-single-port-probe/src/main.rs",
+        "experiments/mt2-petros-profile/single-port-core/src/lib.rs",
+        "experiments/mt2-petros-profile/test_abort_sdk.py",
+        "experiments/mt2-petros-profile/test_abort_sdk.c",
+        "experiments/mt2-usb/tests/live.rs",
+        "experiments/mt2-petros-profile/test_live_touch.py",
+        "experiments/mt2-petros-profile/test_live_touch_main.c",
+        "experiments/mt2-usb/tests/native_format.rs",
+        "experiments/mt2-usb/tests/native_live.rs"
+      ],
+      "related_configs": [
+        "experiments/mt2-usb/Cargo.toml"
+      ],
+      "risk_flags": [
+        "experimental_apple_identity",
+        "physical_acceptance_not_implied",
+        "must_preserve_live_control"
+      ],
+      "edit_risk": "high",
+      "blast_radius": [
+        "experimental USB profile only; production source untouched"
+      ],
+      "pitfall_ids": [
+        "P05",
+        "P23",
+        "P24",
+        "P26",
+        "P31",
+        "P32"
+      ],
+      "minimum_regression": [
+        "cargo test --offline --manifest-path experiments/mt2-usb/Cargo.toml --features c-abi",
+        "python3 experiments/mt2-petros-profile/test_profile.py",
+        "cargo test --offline --manifest-path experiments/mt2-single-port-probe/Cargo.toml",
+        "cargo test --offline --manifest-path experiments/mt2-petros-profile/single-port-core/Cargo.toml"
+      ],
+      "routing_confidence": "high",
+      "scope_flags": [
+        "subtree_only",
+        "experiment_only"
+      ],
+      "grounding": {
+        "fact_status": "grounded",
+        "evidence": [
+          "experiments/mt2-usb/src/lib.rs",
+          "experiments/mt2-usb/src/ffi.rs",
+          "experiments/mt2-petros-profile/build_profile.py",
+          "experiments/mt2-petros-profile/mt2_glue.c",
+          "docs/research/MT2_FIRMWARE_FEASIBILITY_20261105.md",
+          "docs/history/MT2_STAGE1_PREPARATION_20261105.md",
+          "docs/history/MT2_CANCEL_20261109.md",
+          "docs/history/MT2_SDK_REVIEW_20261109.md",
+          "results/mt2-flash-cancel-20261109/flash-result.json",
+          "results/mt2-flash-cancel-20261109/book-evidence.json"
+        ],
+        "unsampled_paths": []
+      }
+    },
+    {
+      "id": "host_autostart",
+      "name": "host_autostart",
+      "path": "native/control-service",
+      "kind": "implementation_entrypoints",
+      "purpose": "Book-only Rust LaunchAgent supervisor: discovers CH32 host control CDC identity and manages input-only runtime. LaunchAgent restart, controller exit and Book-first cold start passed; user confirmed control and edge return after automatic startup. USB1-only hotplug and mini-first order still fail before OS enumeration. Actual Book reboot not tested. Restored after the Book-only test, reconnected automatically; user reconfirmed control and edge return.",
+      "module_tags": [
+        "host_autostart",
+        "host_input",
+        "grounded"
+      ],
+      "entry_files": [
+        "native/control-service/src/main.rs",
+        "scripts/configure_control_autostart.py"
+      ],
+      "key_symbols": [
+        "decide",
+        "Session",
+        "start",
+        "run",
+        "WKUSBDiscovery"
+      ],
+      "child_modules": [],
+      "first_read_files": [
+        "native/control-service/README.md",
+        "native/control-service/src/lib.rs",
+        "native/control-service/src/main.rs"
+      ],
+      "then_check_files": [
+        "native/control-service/src/macos.c",
+        "native/control-service/build.rs",
+        "scripts/configure_control_autostart.py",
+        "docs/history/CONTROL_AUTOSTART_20261109.md",
+        "results/control-autostart-20261109/summary.json"
+      ],
+      "upstream_dependencies": [
+        "host_input"
+      ],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [
+        "macOS launchd and TCC",
+        "board electrical behavior"
+      ],
+      "related_tests": [
+        "native/control-service/src/lib.rs",
+        "native/control-service/src/main.rs"
+      ],
+      "related_configs": [
+        "native/control-service/Cargo.toml",
+        "native/control-service/Cargo.lock"
+      ],
+      "risk_flags": [
+        "usb_enumeration_not_fixed",
+        "login_session_permission_identity",
+        "physical_reboot_not_tested"
+      ],
+      "edit_risk": "high",
+      "blast_radius": [
+        "Book input control autostart"
+      ],
+      "pitfall_ids": [
+        "P05",
+        "P06",
+        "P08",
+        "P09",
+        "P25",
+        "P28",
+        "P33"
+      ],
+      "minimum_regression": [
+        "cargo test --offline --manifest-path native/control-service/Cargo.toml",
+        "python3 -m py_compile scripts/configure_control_autostart.py"
+      ],
+      "routing_confidence": "high",
+      "scope_flags": [
+        "Book_only",
+        "no_target_runtime"
+      ],
+      "grounding": {
+        "fact_status": "grounded",
+        "evidence": [
+          "native/control-service/src/lib.rs",
+          "native/control-service/src/main.rs",
+          "native/control-service/src/macos.c",
+          "native/control-service/Cargo.toml",
+          "native/control-service/Cargo.lock",
+          "native/control-service/build.rs",
+          "native/control-service/README.md",
+          "scripts/configure_control_autostart.py",
+          "results/control-autostart-20261109/summary.json"
+        ],
+        "unsampled_paths": []
+      }
+    },
+    {
+      "id": "hardware_power_requirements",
+      "name": "hardware_power_requirements",
+      "path": "hardware/USB_POWER_AND_HOTPLUG_REQUIREMENTS.md",
+      "kind": "documentation",
+      "purpose": "User-confirmed PCBA power requirement: USB1 is the sole board power input; USB2 retains data and high-impedance VBUS detection without backfeed. Either plug order and independent replug must recover. Requirements only; no PCB design or hardware repair acceptance.",
+      "module_tags": [
+        "hardware",
+        "requirements",
+        "grounded"
+      ],
+      "entry_files": [
+        "hardware/USB_POWER_AND_HOTPLUG_REQUIREMENTS.md"
+      ],
+      "key_symbols": [],
+      "child_modules": [],
+      "first_read_files": [
+        "hardware/USB_POWER_AND_HOTPLUG_REQUIREMENTS.md"
+      ],
+      "then_check_files": [
+        "docs/history/CONTROL_AUTOSTART_20261109.md",
+        "results/control-autostart-20261109/summary.json"
+      ],
+      "upstream_dependencies": [],
+      "downstream_dependencies": [
+        "firmware_ch32",
+        "host_autostart"
+      ],
+      "out_of_scope_dependencies": [
+        "Petros board circuit and electrical measurement"
+      ],
+      "related_tests": [],
+      "related_configs": [],
+      "risk_flags": [
+        "requirements_not_implementation",
+        "backfeed_not_measured"
+      ],
+      "edit_risk": "low",
+      "blast_radius": [
+        "PCBA power and hotplug acceptance"
+      ],
+      "pitfall_ids": [
+        "P23",
+        "P25",
+        "P33"
+      ],
+      "minimum_regression": [],
+      "routing_confidence": "high",
+      "scope_flags": [
+        "no_pcb_design",
+        "requirements_only"
+      ],
+      "grounding": {
+        "fact_status": "grounded",
+        "evidence": [
+          "AGENTS.md",
+          "hardware/USB_POWER_AND_HOTPLUG_REQUIREMENTS.md",
+          "results/control-autostart-20261109/order-probe/port-failed.json",
+          "results/control-autostart-20261109/order-probe/port-mini-removed.json"
+        ],
+        "unsampled_paths": []
+      }
+    },
+    {
+      "id": "host_touch_capture",
+      "name": "host_touch_capture",
+      "path": "experiments/host-touch-observer",
+      "kind": "isolated_host_diagnostic",
+      "purpose": "Book-only built-in SPI raw-touch helper forwards native-v2 typed contacts with full lifecycle and 24-bit clock through Swift/native/CH32. Current native-v2 runtime is active and user accepted two/four-finger gestures and return on mini without target code. Preserve frozen helper/runtime hashes and fixed executable basenames; private ABI is only checked on this Book OS.",
+      "module_tags": [
+        "trackpad",
+        "host",
+        "experimental"
+      ],
+      "entry_files": [
+        "experiments/host-touch-observer/README.md"
+      ],
+      "key_symbols": [
+        "eligible_builtin",
+        "decode",
+        "contact_frame"
+      ],
+      "child_modules": [],
+      "first_read_files": [
+        "experiments/host-touch-observer/README.md"
+      ],
+      "then_check_files": [
+        "experiments/host-touch-observer/src/lib.rs",
+        "experiments/host-touch-observer/src/main.rs",
+        "experiments/host-touch-observer/src/mac.rs",
+        "docs/history/HOST_TOUCH_20261109.md",
+        "docs/history/TOUCH_PHASE_20261109.md",
+        "experiments/host-touch-observer/src/forward.rs",
+        "docs/history/LIVE_TOUCH_20261109.md",
+        "experiments/host-touch-observer/src/forward_native.rs",
+        "results/live-touch-20261109/CURRENT_RUNTIME.json",
+        "results/live-touch-20261109/accepted-native-v2/user-acceptance.json"
+      ],
+      "upstream_dependencies": [],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [
+        "Apple private MultitouchSupport ABI and real user gestures"
+      ],
+      "related_tests": [
+        "experiments/host-touch-observer/src/lib.rs",
+        "experiments/host-touch-observer/src/main.rs"
+      ],
+      "related_configs": [
+        "experiments/host-touch-observer/Cargo.toml"
+      ],
+      "risk_flags": [
+        "private_abi",
+        "zero_frames_not_acceptance",
+        "preserve_live_control"
+      ],
+      "edit_risk": "medium",
+      "blast_radius": [
+        "isolated Book diagnostic only"
+      ],
+      "pitfall_ids": [
+        "P05",
+        "P10",
+        "P34"
+      ],
+      "minimum_regression": [
+        "cargo test --offline --manifest-path experiments/host-touch-observer/Cargo.toml"
+      ],
+      "routing_confidence": "high",
+      "scope_flags": [
+        "subtree_only",
+        "experiment_only"
+      ],
+      "grounding": {
+        "fact_status": "grounded",
+        "evidence": [
+          "experiments/host-touch-observer/README.md",
+          "experiments/host-touch-observer/src/lib.rs",
+          "experiments/host-touch-observer/src/main.rs",
+          "experiments/host-touch-observer/src/mac.rs",
+          "docs/history/HOST_TOUCH_20261109.md",
+          "results/host-touch-20261109/inspect.json",
+          "results/host-touch-20261109/lifecycle-1s.json",
+          "results/mt2-flash-cancel-20261109/book-evidence.json"
+        ],
+        "unsampled_paths": []
+      }
+    }
+  ],
+  "workspace_status": {
+    "observed_date": "2026-11-05",
+    "git_worktree": false,
+    "codegraph_present": false,
+    "complete_historical_project": false,
+    "missing_known_paths": [
+      "hardware/PCBA_REQUIREMENTS.md",
+      "host/gui/WiredKVMCore.swift",
+      "host/gui/WiredKVMMenu.swift"
+    ],
+    "requirements_document": "Missing; recover or explicitly reconstruct from user requirements. Do not invent historical threshold numbers.",
+    "runtime_facts_owner": "docs/history/SESSION_EVIDENCE_20261105.json",
+    "runtime_facts_freshness": "Historical snapshot only. Refresh before device operations.",
+    "language": "Recovered C/C++/Swift/Python remains; components that require rewriting use Rust."
+  }
+}

@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+"""Real generated main/C adapter/Rust queue with USB boundary mocks. No device I/O."""
+import ast
+import argparse
+import importlib.util
+from pathlib import Path
+import subprocess
+import tempfile
+HERE=Path(__file__).resolve().parent
+spec=importlib.util.spec_from_file_location('profile',HERE/'build_profile.py')
+profile=importlib.util.module_from_spec(spec);spec.loader.exec_module(profile)
+spec=importlib.util.spec_from_file_location('old_tests',HERE/'test_profile.py')
+old=importlib.util.module_from_spec(spec);spec.loader.exec_module(old)
+
+def run(command,work):
+    r=subprocess.run([str(x) for x in command],capture_output=True,text=True,timeout=120)
+    with (work/'test.log').open('a') as f:f.write(r.stdout+r.stderr)
+    if r.returncode:raise RuntimeError(str(work/'test.log'))
+    return r.stdout
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--native-format',action='store_true');args=parser.parse_args();native=args.native_format
+    work=Path(tempfile.mkdtemp(prefix='live-main-test-',dir=HERE))
+    candidate=work/'candidate';profile.generate(candidate,pointer_collections=True,absolute_mouse_logical=True,live_touch=True,native_format=native)
+    constants=[n.value for n in ast.walk(ast.parse((HERE/'test_profile.py').read_text())) if isinstance(n,ast.Constant) and isinstance(n.value,str)]
+    extension=next(x for x in constants if x.startswith('\ntypedef uint8_t usb_endp_t;'))
+    header=old.STUB.replace('typedef struct {int unused;} usbd_handle_t;','typedef struct {bool enumerated;unsigned port;} usbd_handle_t;')+extension
+    (work/'usb_driver.h').write_text(header)
+    chip=next(x for x in constants if 'typedef struct {uint32_t CNT,CTLR,CMP;} mock_systick;' in x)
+    chip=chip.replace('mock_ep82','mock_ep87').replace('WKAP_EP82','WKMT2_EP87')
+    (work/'ch32v4x7.h').write_text(chip);(work/'ch32v4x7_usb.h').write_text('#pragma once\n')
+    for p in (1,2):(work/f'usbhs{p}_dcp.h').write_text(f'#pragma once\n#include "usb_driver.h"\nextern usbd_handle_t usbhs{p}d_handle;\nstatic inline void usbhs{p}_dch_init(void){{}}\nstatic inline void usbhs{p}_dch_interrupt(void){{}}\n')
+    rust=work/'rust'
+    shim=work/'host-shim';(shim/'src').mkdir(parents=True)
+    manifest_text='[package]\nname="wk-live-tests"\nversion="0.0.0"\nedition="2021"\n[lib]\ncrate-type=["staticlib"]\n[dependencies]\nwiredkvm-mt2-protocol-draft={path="'+str(profile.CORE)+'",features=["c-abi"]}\n[profile.release]\npanic="abort"\nlto=false\n[workspace]\n'
+    if native:manifest_text=manifest_text.replace('features=["c-abi"]','features=["c-abi","native-mt2"]')
+    (shim/'Cargo.toml').write_text(manifest_text)
+    (shim/'src/lib.rs').write_text('pub use wiredkvm_mt2_protocol_draft::ffi::*;\n')
+    run(['cargo','build','--release','--offline','--manifest-path',shim/'Cargo.toml','--target-dir',rust],work)
+    archives=[rust/'release/libwk_live_tests.a']
+    source=work/'main-test.c'
+    source.write_text((HERE/'test_live_touch_main.c').read_text().replace('GENERATED_MAIN',str(candidate/'generated/main.c')))
+    extra=[candidate/'generated/descriptors.c',HERE/'mt2_glue.c',HERE/'live_touch.c',HERE/'live_abort.c']+[profile.ROOT/p for p in ['firmware/ch32v407/bridge.c','firmware/ch32v407/setup_msc.c','firmware/ch32v467_petros/setup_flash_none.c','firmware/main/wire_protocol.c']]
+    run(['clang',*(['-DWKMT2_NATIVE'] if native else []),'-std=c11','-DWKMT2_LIVE','-Wall','-Wextra','-Werror','-Wno-unused-function','-I',work,'-I',HERE,'-I',profile.CORE/'include','-I',profile.ROOT/'firmware/ch32v407','-I',profile.ROOT/'firmware/main',source,*extra,*archives,'-o',work/'test'],work)
+    print(run([work/'test'],work).strip());print('RETAINED',work)
+if __name__=='__main__':main()

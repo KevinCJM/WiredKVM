@@ -1,0 +1,37 @@
+{
+  "device_access": false,
+  "dry_run": true,
+  "expected_chip": "CH32V4X7 / 0x46740011",
+  "expected_uid": "ad21ad506c54c6c6",
+  "limits": [
+    "AttachChip and halt can disturb the USB host's timing/state",
+    "No reset, flash, Program::ReadMemory, GetChipInfo, or peripheral writes",
+    "DMI loads use x5/x6 and progbuf0/1; save, restore, and verify before resume",
+    "Resume and detach attempted on every ordinary error; disconnected probe or killed process can prevent cleanup",
+    "Underlying USB API may block despite bounded DMI polling",
+    "Does not stop live control applications; operator must do preflight"
+  ],
+  "probe": {
+    "pid": "8010",
+    "serial": "A47C8F062A1A",
+    "vid": "1a86"
+  },
+  "regions_in_read_order": [
+    {
+      "address": "0x40021000",
+      "bytes": 52,
+      "name": "rcc"
+    },
+    {
+      "address": "0x40024000",
+      "bytes": 20,
+      "name": "usbhs1_device"
+    },
+    {
+      "address": "0x40023400",
+      "bytes": 20,
+      "name": "usbhs2_device"
+    }
+  ],
+  "uid_verification": "not performed; independent identity evidence required"
+}

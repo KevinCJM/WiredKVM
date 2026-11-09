@@ -1,0 +1,89 @@
+{
+  "date": "2026-11-04",
+  "sourceRestoration": {
+    "files": 144,
+    "equalsHistoricalSnapshot": 135,
+    "laterRecoveredSources": 9,
+    "completeHistoricalProject": false
+  },
+  "newImplementationLanguage": "Rust",
+  "physicalUSBTestThisRecovery": false,
+  "flashed": false,
+  "runningControllersReplaced": false,
+  "miniFilesModified": false,
+  "builds": {
+    "rebuilt-macos-20261104": {
+      "wiredkvm-native": {
+        "bytes": 207264,
+        "sha256": "17f61dc6aa45130297c046ef04a71aeaceb6e198ed428ad17c9b8e8ce53c1c3c"
+      },
+      "wiredkvm-companion": {
+        "bytes": 1474880,
+        "sha256": "0e3654258100d9a668485248d2be33074661076540a2e81eb3d8583cc24f4c77"
+      },
+      "wiredkvm-ch32-host": {
+        "bytes": 1570160,
+        "sha256": "669d0005d6b3f60f98c4439d12ead4e2f29b4db671360563dcf99d84d656f3c8"
+      },
+      "macos-capture": {
+        "bytes": 444336,
+        "sha256": "aee09b305f5bc252cd628f16d93ecefbcf64807528562a55ef5cf611a6760f35"
+      }
+    },
+    "rebuilt-petros-20261104": {
+      "wiredkvm-ch32v467-petros-recovered.bin": {
+        "bytes": 27912,
+        "sha256": "7bf16ebae4dcf6aa5443383d7ba1c644e54eac9de9424ad53ce5dda8ca8a0774"
+      },
+      "RECOVERY_BUILD.txt": {
+        "bytes": 3227,
+        "sha256": "973159cf7f62e7c8705b56bc7d337bb5d92dc350622d37dac559f9956d8a72d4"
+      },
+      "wiredkvm-ch32v467-petros-recovered.map": {
+        "bytes": 419643,
+        "sha256": "db3b5a8ba727aff6b8ee61b2e5b7912048724f4d79939aa0c7e9c22d7ecede4f"
+      },
+      "wiredkvm-ch32v467-petros-recovered.elf": {
+        "bytes": 661352,
+        "sha256": "24df33cce50831f095aa5bea329bfe8681597ce156561a5c257a6b9b4421e826"
+      }
+    }
+  },
+  "tests": {
+    "rust_bridge_routing": {
+      "passed": 4,
+      "hidMouseProbes": 120000,
+      "bidirectionalRoutedFixtureBytes": 122880000,
+      "queueSlotsPerDirection": 32,
+      "bridgeBytes": 59080,
+      "fileSHAValidation": false,
+      "physicalLatency": false
+    },
+    "recovered_C_core_ASan_UBSan": {
+      "passed": true,
+      "hidIterations": 120000,
+      "parserInputBytes": 500000,
+      "desktopReturnAndDragGuard": true,
+      "keyboardAndMouse": true
+    },
+    "capture_intents": {
+      "passed": true,
+      "nativeSameSide": true,
+      "direction": true,
+      "expiry": true
+    },
+    "capture_emergency_shortcut": {
+      "passed": true,
+      "shortcut": "Control+Option+Esc"
+    },
+    "capture_right_edge_selection": {
+      "passed": true
+    }
+  },
+  "limitations": [
+    "Legacy GUI Core/Menu and other historical files remain missing.",
+    "Firmware rebuild is non-diagnostic, uses surviving patched SDK; not current flashed diagnostic image.",
+    "No physical full-load latency, macOS clipboard interaction, or end-to-end file integrity claim."
+  ],
+  "sourceCopyHashesVerified": true
+}

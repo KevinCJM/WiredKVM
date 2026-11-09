@@ -1,0 +1,55 @@
+# Local builds, device backups, logs and private runtime evidence
+/build/
+/results/
+**/target/
+**/cargo-home/
+**/rust-target/
+**/obj/
+**/__pycache__/
+*.py[cod]
+.DS_Store
+*.log
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.elf
+*.map
+*.dmg
+*.img
+*.iso
+*.zip
+*.tar
+*.tar.gz
+*.app/
+
+# Generated firmware candidates and retained isolated test workspaces
+/experiments/mt2-petros-profile/candidate-*/
+/experiments/mt2-petros-profile/before-*/
+/experiments/mt2-petros-profile/live-main-test-*/
+/experiments/mt2-petros-profile/mt2-profile-test-*/
+/experiments/mt2-petros-profile/sdk-abort-test-*/
+/experiments/mt2-petros-profile/single-port-core-test-*/
+/experiments/mt2-petros-profile/native-object-probe*/
+
+# Preserve the physically accepted firmware and its generated source
+!/experiments/mt2-petros-profile/candidate-native-v2-final-20261109/
+/experiments/mt2-petros-profile/candidate-native-v2-final-20261109/*
+!/experiments/mt2-petros-profile/candidate-native-v2-final-20261109/generated/
+!/experiments/mt2-petros-profile/candidate-native-v2-final-20261109/profile.json
+!/experiments/mt2-petros-profile/candidate-native-v2-final-20261109/wiredkvm-mt2-stage1.bin
+
+# Local credentials and developer-specific configuration
+.env
+.env.*
+!.env.example
+*.p12
+*.pfx
+*.key
+*.pem
+/credentials.json
+/secrets.json
+/.vscode/
+/.idea/

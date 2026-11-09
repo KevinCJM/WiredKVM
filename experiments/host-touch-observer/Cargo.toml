@@ -1,0 +1,14 @@
+[package]
+name = "wk-host-touch-observer"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+wiredkvm-mt2-protocol-draft = { path = "../mt2-usb" }
+
+[features]
+default=[]
+native-mt2=["wiredkvm-mt2-protocol-draft/native-mt2"]

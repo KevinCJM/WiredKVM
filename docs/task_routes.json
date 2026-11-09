@@ -1,0 +1,534 @@
+{
+  "schema_version": "1.2",
+  "scope_mode": "subtree_only",
+  "routing_policy": {
+    "operational_list_owner": "docs/repo_map.json",
+    "route_to_module_field": "first_read_modules",
+    "expand_module_field": "expand_to_modules",
+    "operational_list_resolution": {
+      "apply_to_fields": [
+        "first_read_files",
+        "then_check_files",
+        "related_tests",
+        "related_configs",
+        "minimum_regression"
+      ],
+      "selected_modules_order": "first_read_modules_then_expand_to_modules_when_triggered",
+      "merge_strategy": "stable_order_union",
+      "dedupe": "exact_string",
+      "route_level_override": "forbidden"
+    },
+    "grounding_gate": {
+      "blocking_fact_status": [
+        "mixed",
+        "needs_code_confirmation"
+      ],
+      "required_action": "read_grounding_unsampled_paths_before_claim"
+    }
+  },
+  "rule_catalog": {
+    "expand_search": {
+      "read_reference_map_first": {
+        "action": "read_reference_map"
+      }
+    },
+    "stop_and_verify": {
+      "run_minimum_regression": {
+        "action": "run_minimum_regression"
+      }
+    },
+    "fact_check": {
+      "read_reference_map_first": {
+        "action": "read_reference_map"
+      },
+      "read_unsampled_module_paths": {
+        "action": "read_grounding_unsampled_paths"
+      }
+    }
+  },
+  "routes": [
+    {
+      "id": "R01",
+      "task_type": "general_project_work",
+      "match_keywords": [
+        "project",
+        "code",
+        "test",
+        "config",
+        "README",
+        "implementation",
+        "项目",
+        "代码",
+        "测试",
+        "功能"
+      ],
+      "negative_keywords": [
+        "repo_map",
+        "task_routes",
+        "pitfalls",
+        "AI routing"
+      ],
+      "route_priority": 10,
+      "first_read_modules": [
+        "project_entrypoints",
+        "session_evidence"
+      ],
+      "expand_to_modules": [],
+      "pitfall_ids": [
+        "P01"
+      ],
+      "expand_search_codes": [
+        "read_reference_map_first"
+      ],
+      "stop_and_verify_codes": [
+        "run_minimum_regression"
+      ],
+      "fact_check_codes": [
+        "read_unsampled_module_paths"
+      ],
+      "scope_flags": [
+        "subtree_only",
+        "initial_bootstrap"
+      ]
+    },
+    {
+      "id": "R02",
+      "task_type": "ai_routing_initialization_or_maintenance",
+      "match_keywords": [
+        "AGENTS.md",
+        "repo_map",
+        "task_routes",
+        "pitfalls",
+        "AI routing",
+        "Hermes",
+        "evolve_ai_routing",
+        "validate_ai_routing",
+        "routing memory",
+        "routing files"
+      ],
+      "negative_keywords": [],
+      "route_priority": 100,
+      "first_read_modules": [
+        "ai_routing_files",
+        "session_evidence"
+      ],
+      "expand_to_modules": [],
+      "pitfall_ids": [
+        "P01",
+        "P02"
+      ],
+      "expand_search_codes": [
+        "read_reference_map_first"
+      ],
+      "stop_and_verify_codes": [
+        "run_minimum_regression"
+      ],
+      "fact_check_codes": [
+        "read_reference_map_first"
+      ],
+      "scope_flags": [
+        "subtree_only",
+        "routing_memory_coverage_check"
+      ]
+    },
+    {
+      "id": "R03",
+      "task_type": "usb_enumeration_reconnect",
+      "match_keywords": [
+        "USB",
+        "USB1",
+        "USB2",
+        "DBG",
+        "重连",
+        "识别不到",
+        "枚举",
+        "固件",
+        "CH32"
+      ],
+      "negative_keywords": [],
+      "route_priority": 80,
+      "first_read_modules": [
+        "firmware_ch32",
+        "session_evidence"
+      ],
+      "expand_to_modules": [
+        "host_input",
+        "recovery_build"
+      ],
+      "pitfall_ids": [
+        "P05",
+        "P06",
+        "P07",
+        "P08",
+        "P24",
+        "P25",
+        "P26"
+      ],
+      "expand_search_codes": [
+        "read_reference_map_first"
+      ],
+      "stop_and_verify_codes": [
+        "run_minimum_regression"
+      ],
+      "fact_check_codes": [
+        "read_unsampled_module_paths"
+      ],
+      "scope_flags": [
+        "subtree_only"
+      ]
+    },
+    {
+      "id": "R04",
+      "task_type": "keyboard_mouse_edge_return",
+      "match_keywords": [
+        "键鼠",
+        "鼠标",
+        "键盘",
+        "拖选",
+        "滚动",
+        "边缘返回",
+        "捕获",
+        "辅助功能",
+        "EventTap"
+      ],
+      "negative_keywords": [],
+      "route_priority": 80,
+      "first_read_modules": [
+        "host_input",
+        "session_evidence"
+      ],
+      "expand_to_modules": [
+        "firmware_ch32"
+      ],
+      "pitfall_ids": [
+        "P05",
+        "P08",
+        "P09",
+        "P10",
+        "P26"
+      ],
+      "expand_search_codes": [
+        "read_reference_map_first"
+      ],
+      "stop_and_verify_codes": [
+        "run_minimum_regression"
+      ],
+      "fact_check_codes": [
+        "read_unsampled_module_paths"
+      ],
+      "scope_flags": [
+        "subtree_only"
+      ]
+    },
+    {
+      "id": "R05",
+      "task_type": "clipboard_bulk_paste",
+      "match_keywords": [
+        "剪贴板",
+        "粘贴板",
+        "复制粘贴",
+        "Bulk",
+        "图片",
+        "大文件",
+        "取消",
+        "⌘C",
+        "⌘V"
+      ],
+      "negative_keywords": [],
+      "route_priority": 80,
+      "first_read_modules": [
+        "clipboard_bulk",
+        "session_evidence"
+      ],
+      "expand_to_modules": [
+        "firmware_ch32",
+        "host_input"
+      ],
+      "pitfall_ids": [
+        "P11",
+        "P12",
+        "P13",
+        "P14",
+        "P15",
+        "P16",
+        "P23"
+      ],
+      "expand_search_codes": [
+        "read_reference_map_first"
+      ],
+      "stop_and_verify_codes": [
+        "run_minimum_regression"
+      ],
+      "fact_check_codes": [
+        "read_unsampled_module_paths"
+      ],
+      "scope_flags": [
+        "subtree_only"
+      ]
+    },
+    {
+      "id": "R06",
+      "task_type": "installer_onboarding",
+      "match_keywords": [
+        "安装",
+        "Setup",
+        "Companion",
+        "验证安装",
+        "签名",
+        "交换盘",
+        "MSC"
+      ],
+      "negative_keywords": [],
+      "route_priority": 80,
+      "first_read_modules": [
+        "installer",
+        "session_evidence"
+      ],
+      "expand_to_modules": [
+        "firmware_ch32",
+        "clipboard_bulk"
+      ],
+      "pitfall_ids": [
+        "P09",
+        "P17",
+        "P18",
+        "P19",
+        "P22",
+        "P29"
+      ],
+      "expand_search_codes": [
+        "read_reference_map_first"
+      ],
+      "stop_and_verify_codes": [
+        "run_minimum_regression"
+      ],
+      "fact_check_codes": [
+        "read_unsampled_module_paths"
+      ],
+      "scope_flags": [
+        "subtree_only"
+      ]
+    },
+    {
+      "id": "R07",
+      "task_type": "hardware_cost_requirements",
+      "match_keywords": [
+        "PCBA",
+        "BOM",
+        "成本",
+        "嘉立创",
+        "元器件",
+        "开发板",
+        "Flash",
+        "PSRAM",
+        "规格书",
+        "USB供电",
+        "回灌",
+        "插入顺序",
+        "USB1独供"
+      ],
+      "negative_keywords": [],
+      "route_priority": 80,
+      "first_read_modules": [
+        "hardware_power_requirements",
+        "hardware_cost",
+        "session_evidence"
+      ],
+      "expand_to_modules": [
+        "firmware_ch32"
+      ],
+      "pitfall_ids": [
+        "P20",
+        "P21",
+        "P22",
+        "P23",
+        "P30"
+      ],
+      "expand_search_codes": [
+        "read_reference_map_first"
+      ],
+      "stop_and_verify_codes": [
+        "run_minimum_regression"
+      ],
+      "fact_check_codes": [
+        "read_unsampled_module_paths"
+      ],
+      "scope_flags": [
+        "subtree_only"
+      ]
+    },
+    {
+      "id": "R08",
+      "task_type": "source_recovery_rebuild",
+      "match_keywords": [
+        "恢复",
+        "源码丢失",
+        "重写",
+        "Rust",
+        "构建",
+        "备份",
+        "manifest"
+      ],
+      "negative_keywords": [],
+      "route_priority": 80,
+      "first_read_modules": [
+        "recovery_build",
+        "session_evidence"
+      ],
+      "expand_to_modules": [
+        "firmware_ch32",
+        "host_input",
+        "legacy_platforms"
+      ],
+      "pitfall_ids": [
+        "P03",
+        "P04",
+        "P23",
+        "P28"
+      ],
+      "expand_search_codes": [
+        "read_reference_map_first"
+      ],
+      "stop_and_verify_codes": [
+        "run_minimum_regression"
+      ],
+      "fact_check_codes": [
+        "read_unsampled_module_paths"
+      ],
+      "scope_flags": [
+        "subtree_only"
+      ]
+    },
+    {
+      "id": "R09",
+      "task_type": "session_retrospective",
+      "match_keywords": [
+        "复盘",
+        "教训",
+        "历史",
+        "犯错",
+        "踩坑",
+        "本session",
+        "总结"
+      ],
+      "negative_keywords": [],
+      "route_priority": 90,
+      "first_read_modules": [
+        "session_evidence"
+      ],
+      "expand_to_modules": [],
+      "pitfall_ids": [
+        "P03",
+        "P04",
+        "P23",
+        "P25",
+        "P27",
+        "P28"
+      ],
+      "expand_search_codes": [
+        "read_reference_map_first"
+      ],
+      "stop_and_verify_codes": [
+        "run_minimum_regression"
+      ],
+      "fact_check_codes": [
+        "read_unsampled_module_paths"
+      ],
+      "scope_flags": [
+        "subtree_only"
+      ]
+    },
+    {
+      "id": "R10",
+      "task_type": "firmware_trackpad_emulation",
+      "match_keywords": [
+        "妙控板",
+        "四指",
+        "MT2",
+        "Magic Trackpad",
+        "trackpad emulation",
+        "固件模拟",
+        "原始触点",
+        "触点采集",
+        "MultitouchSupport"
+      ],
+      "negative_keywords": [],
+      "route_priority": 95,
+      "first_read_modules": [
+        "mt2_firmware_experiment",
+        "firmware_ch32",
+        "host_touch_capture"
+      ],
+      "expand_to_modules": [
+        "host_input"
+      ],
+      "pitfall_ids": [
+        "P10",
+        "P23",
+        "P24",
+        "P26",
+        "P31",
+        "P32",
+        "P34"
+      ],
+      "expand_search_codes": [
+        "read_reference_map_first"
+      ],
+      "stop_and_verify_codes": [
+        "run_minimum_regression"
+      ],
+      "fact_check_codes": [
+        "read_unsampled_module_paths"
+      ],
+      "scope_flags": [
+        "subtree_only",
+        "experiment_only"
+      ]
+    },
+    {
+      "id": "R11",
+      "task_type": "host_control_autostart",
+      "match_keywords": [
+        "自动启动",
+        "自启",
+        "登录启动",
+        "重启电脑",
+        "控制程序退出",
+        "拔插自动恢复",
+        "LaunchAgent",
+        "control-service"
+      ],
+      "negative_keywords": [],
+      "route_priority": 96,
+      "first_read_modules": [
+        "host_autostart"
+      ],
+      "expand_to_modules": [
+        "host_input",
+        "firmware_ch32"
+      ],
+      "pitfall_ids": [
+        "P05",
+        "P06",
+        "P08",
+        "P09",
+        "P25",
+        "P28",
+        "P33"
+      ],
+      "expand_search_codes": [
+        "read_reference_map_first"
+      ],
+      "stop_and_verify_codes": [
+        "run_minimum_regression"
+      ],
+      "fact_check_codes": [
+        "read_unsampled_module_paths"
+      ],
+      "scope_flags": [
+        "Book_only",
+        "no_target_runtime"
+      ]
+    }
+  ]
+}

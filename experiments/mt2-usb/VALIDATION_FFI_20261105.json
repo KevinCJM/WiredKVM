@@ -1,0 +1,33 @@
+{
+  "date": "2026-11-05",
+  "scope": "ISOLATED_C_ABI_STAGE1_NOT_DEPLOYED",
+  "third_party_crate_dependencies": 0,
+  "tests": {
+    "command": "cargo test --offline --manifest-path experiments/mt2-usb/Cargo.toml --features c-abi",
+    "passed": 18,
+    "failed": 0
+  },
+  "device_operations": false,
+  "production_files_changed_by_this_subtask": false,
+  "stage1": {
+    "descriptor_bytes": 110,
+    "property_response_bytes": 76,
+    "input": "one zero-contact report after MT enable",
+    "pixel_capability": false,
+    "touch_synthesis": false
+  },
+  "files": {
+    "Cargo.toml": "78dc90dae6a7f5d443e581b656ebdb765931a64f4c2aeb5df2336d45da488a61",
+    "Cargo.lock": "55f7a9bcd6e3b3350f82635b97a227a29112ce64adfecb8b880c4be80a6a55e2",
+    "src/lib.rs": "635dd40a24ca76069459dcc7eaace35d3f38eed52cbf974db4679354a4b8eedc",
+    "src/ffi.rs": "51e4e915d2c9ccf8dd40b495f2775497442320bb0860f43b343b006c6358b059",
+    "src/fixture.rs": "4aa3f96c806c29e2c0e4b538ff635369c9bc5a64b2d123a7e07002793c6d90ac",
+    "include/wkmt2.h": "14bf18e59750516de449578ede31bfe4bac075de11a6c2b384315b4ba4b4ba5d",
+    "tests/protocol.rs": "30031f57da4c51d212056b63cc8c768c2ffe22e41be4258782e0043103056395",
+    "tests/ffi.rs": "c5deaff66256311519a23eb7c3d6a3e68b84c95ba20fb4c5385acaae8c473f6f",
+    "README.md": "31e3d6ae74e09eda3a7de515d7b2bdf4b293ea8549f1a1e78f177e6c2c2f7bce",
+    "SOURCES.md": "d6209173c888eb4ae0e2119b179c8d6157d2aac4e0138a3ff1095a11dae50c45",
+    "THIRD_PARTY_NOTICES.md": "9a7200cea9f604e6db49d9ae8b3b4963ac57be4876840058a344a8157ec51dba",
+    "LICENSE-APACHE-2.0.txt": "092c8e82c47fb859d7385253c1b04052dbd65a8bcf0bbd8b6f7dba58a9e8753d"
+  }
+}

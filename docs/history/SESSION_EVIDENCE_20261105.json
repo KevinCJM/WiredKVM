@@ -1,0 +1,123 @@
+{
+  "recorded_date": "2026-11-05",
+  "timezone": "Asia/Singapore",
+  "scope": "Current conversation and inspected project/recovery records; not a new hardware validation",
+  "postmortem": "docs/history/SESSION_POSTMORTEM_20261105.md",
+  "conversation_evidence": "User reports and confirmations from this session. Earlier assertions without preserved source are not upgraded to proven root causes.",
+  "missing_paths_at_inspection": [
+    "hardware/PCBA_REQUIREMENTS.md",
+    "host/gui/WiredKVMCore.swift",
+    "host/gui/WiredKVMMenu.swift"
+  ],
+  "sources": [
+    {
+      "path": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/RECOVERY_STATUS.md",
+      "sha256": "667180cf446515c4dbf92c4098061be3ea7ccaf3c2e10835b910ba7ae73342e6",
+      "role": "historical_evidence_not_live_state"
+    },
+    {
+      "path": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/audit-core-recovery.md",
+      "sha256": "a973e7a78b97c679bec24ec15593124c973181672e25305722ad1b1502ee93c6",
+      "role": "historical_evidence_not_live_state"
+    },
+    {
+      "path": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/diagnosis-20261105/flash-backup-verification.json",
+      "sha256": "302d97ec56b7784ac5e0fca5f31e3f5c7b4bbcd5c21f91af6f057bb3a2f2c9b4",
+      "role": "historical_evidence_not_live_state",
+      "snapshot": {
+        "readBytes": 589824,
+        "fullFlashSHA256": "86fd96341db7ca4d048cae766c7b4b7e9a50f6c52b1577bc6201c46ebbc1af84",
+        "matchesPriorFirmware": true,
+        "firmwareBytes": 28524,
+        "firmwareSHA256": "53b4b741a9212ffb3c8a89dcb9aef282b4b3643bbf2a11696f8c23e5e97a6e70",
+        "probeSerial": "A47C8F062A1A",
+        "chipID": "0x46740011",
+        "uid": "ad21ad506c54c6c6"
+      }
+    },
+    {
+      "path": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/diagnosis-20261105/reconnect-checks.json",
+      "sha256": "2ad76a1abb3bb58772d4a394176b254ee474f2adf784e8ec66d7ef5062c59dd3",
+      "role": "historical_evidence_not_live_state",
+      "snapshot": {
+        "date": "2026-11-05",
+        "probeSerial": "A47C8F062A1A",
+        "chipID": "0x46740011",
+        "uid": "ad21ad506c54c6c6",
+        "flashed": false,
+        "runningFirmwareSHA256": "53b4b741a9212ffb3c8a89dcb9aef282b4b3643bbf2a11696f8c23e5e97a6e70",
+        "firmwareBytes": 28524,
+        "diagnosticELFMatchesFirmware": true,
+        "mainLoopAdvancing": true,
+        "previousUnalignedMemcmpTrapReproduced": false,
+        "usbDevEnablePulse": {
+          "completed": true,
+          "cpuRestored": true,
+          "bookEnumerated": false
+        },
+        "temporaryLpmDisabled": {
+          "completed": true,
+          "cpuRestored": true,
+          "bookEnumerated": false,
+          "revertedByReset": true,
+          "restoredControl": [
+            184,
+            184
+          ]
+        },
+        "controllerStarted": false,
+        "rootCauseConfirmed": false,
+        "nextCheck": "full power removal, USB1 only"
+      }
+    },
+    {
+      "path": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/diagnosis-20261105/control-restored-confirmed-124810.json",
+      "sha256": "1fc0e4aa87bb071f713313a8157367197bdeac7404975155d861b8f0e58e8eee",
+      "role": "historical_evidence_not_live_state",
+      "snapshot": {
+        "time": "2026-11-05T12:48:10.213389+08:00",
+        "wiring": "USB1 -> Book; USB2 -> mini; DBG empty",
+        "cold_boot_host": {
+          "vid": "1a86",
+          "pid": "4070",
+          "location": "02100000",
+          "control_port": "/dev/cu.usbmodem2101",
+          "probe": "PASS",
+          "soak_cycles": 160,
+          "soak_frames": 320
+        },
+        "target_after_wake": "CPP_USB_HID_READY",
+        "native_pid_at_start": 64199,
+        "capture_pid_at_start": 64200,
+        "log": "control-restored-124558.log",
+        "capture": "GESTURE_CAPTURE_READY ready=1",
+        "user_confirmation": "能进入，也能自动返回",
+        "clipboard_sync_enabled": false,
+        "firmware_changed": false,
+        "root_cause_confirmed": false,
+        "limitations": "Cold power removal and mini wake restored current operation. Reconnect robustness and wake by forwarded HID not proven. Do not claim firmware fix."
+      }
+    }
+  ],
+  "local_records": [
+    {
+      "path": "README.md",
+      "sha256": "3c04ea707f0743c5644da472d3ecbfeb3142098b06fb912ceb7d85fd71da5187"
+    },
+    {
+      "path": "RESTORE_MANIFEST_20261104.json",
+      "sha256": "91205ec509fdb2edb9e7e15c7c759bb751d6b4361411cef309021b6aaacfcc92"
+    },
+    {
+      "path": "RECOVERY_VALIDATION_20261104.json",
+      "sha256": "6b6ebf95ec004c2f43f5aab50b0ed1c259fb69b9fa86bd307b3dd48762f15ada"
+    }
+  ],
+  "proof_boundaries": [
+    "Deletion stack not captured; unsafe cleanup and timing are confirmed, direct deletion causality remains incomplete.",
+    "2026-11-05 recovery is user-confirmed input/edge return, not a root-cause fix.",
+    "160 queries in approximately 32 ms are short communication probes, not a long soak.",
+    "Prior ESP32 clipboard success is not CH32 recovery acceptance.",
+    "No firmware, running controller, permissions, real clipboard or mini files changed by this documentation task."
+  ]
+}

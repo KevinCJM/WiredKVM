@@ -1,0 +1,127 @@
+{
+  "date": "2026-11-05",
+  "timezone": "Asia/Singapore",
+  "status": "passed",
+  "initial_validation_failure": "Default Git-index reproducibility check is inapplicable in this non-Git workspace. Explicit policy adaptation keeps all other checks enabled.",
+  "coverage": {
+    "exit_code_reason": "ok",
+    "uncovered_files": [],
+    "routing_only_violations": [],
+    "missing_required_files": [],
+    "next_action": null,
+    "exit_code": 0
+  },
+  "route_smokes": [
+    {
+      "route": "R01",
+      "exit_code": 0,
+      "json_valid": true,
+      "error": ""
+    },
+    {
+      "route": "R02",
+      "exit_code": 0,
+      "json_valid": true,
+      "error": ""
+    },
+    {
+      "route": "R03",
+      "exit_code": 0,
+      "json_valid": true,
+      "error": ""
+    },
+    {
+      "route": "R04",
+      "exit_code": 0,
+      "json_valid": true,
+      "error": ""
+    },
+    {
+      "route": "R05",
+      "exit_code": 0,
+      "json_valid": true,
+      "error": ""
+    },
+    {
+      "route": "R06",
+      "exit_code": 0,
+      "json_valid": true,
+      "error": ""
+    },
+    {
+      "route": "R07",
+      "exit_code": 0,
+      "json_valid": true,
+      "error": ""
+    },
+    {
+      "route": "R08",
+      "exit_code": 0,
+      "json_valid": true,
+      "error": ""
+    },
+    {
+      "route": "R09",
+      "exit_code": 0,
+      "json_valid": true,
+      "error": ""
+    }
+  ],
+  "validation": {
+    "exit_code": 0,
+    "stdout": "AI routing validation passed: root",
+    "stderr": ""
+  },
+  "py_compile": {
+    "exit_code": 0,
+    "scripts": 7,
+    "evidence": "Executed successfully immediately before this check."
+  },
+  "runtime_operations": false,
+  "changed_files": [
+    "AGENTS.md",
+    "docs/repo_map.json",
+    "docs/task_routes.json",
+    "docs/pitfalls.json",
+    "docs/ai_routing_evolution_policy.json",
+    "docs/history/SESSION_POSTMORTEM_20261105.md",
+    "docs/history/SESSION_EVIDENCE_20261105.json",
+    "docs/history/ROUTING_VALIDATION_20261105.json",
+    "skills/ai-hermes-routing-init/README.md",
+    "skills/ai-hermes-routing-init/SKILL.md",
+    "skills/ai-hermes-routing-init/agents/openai.yaml",
+    "skills/ai-hermes-routing-init/scripts/evolve_ai_routing.py",
+    "skills/ai-hermes-routing-init/scripts/init_ai_routing.py",
+    "skills/ai-hermes-routing-init/scripts/route_task.py",
+    "skills/ai-hermes-routing-init/scripts/validate_ai_routing.py",
+    "skills/ai-hermes-self-evolve/README.md",
+    "skills/ai-hermes-self-evolve/SKILL.md",
+    "skills/ai-hermes-self-evolve/agents/openai.yaml",
+    "skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py",
+    "skills/ai-hermes-self-evolve/scripts/route_task.py",
+    "skills/ai-hermes-self-evolve/scripts/validate_ai_routing.py"
+  ],
+  "sha256_excluding_this_report": {
+    "AGENTS.md": "4153510fb4dcd95dceac379cf578a2ecb40a294c314faec0a33e057276dcda41",
+    "docs/repo_map.json": "2a265b66ac8758a05d497126c29307d289a818f70c6ce2478d24e0cff1c34529",
+    "docs/task_routes.json": "f588aa564fc2aad15727bb08181c8a6d479c5bf594aa6cfd79af7e401f9ee826",
+    "docs/pitfalls.json": "94ba9f42d1bcf4ef3ebc121a7f934cbc1c644f027072793fcf8394e52e5bfe79",
+    "docs/ai_routing_evolution_policy.json": "043a409862243191fe1316d2998a2e2494ae865e8e788f6e46d0865da371ea8c",
+    "docs/history/SESSION_POSTMORTEM_20261105.md": "5d6d5f84d8acf10d01d439770df7c9798ad0f76d3e92b342a0ae551e29f074c3",
+    "docs/history/SESSION_EVIDENCE_20261105.json": "0e89922ba42c73697e0e30076fb65d01c7c75ff8334c01aea58ae3e6c15467d3",
+    "skills/ai-hermes-routing-init/README.md": "e26d6cbc89596728c4ada6c22e72d849b2cf96bec0910f0269a710390c6dca10",
+    "skills/ai-hermes-routing-init/SKILL.md": "ab20a879365f7ff49abb6f396438ad02a6704e3648a07092cb668e6804bcbbea",
+    "skills/ai-hermes-routing-init/agents/openai.yaml": "f4dc7e2d10377fb3f0c3f6b8599e0f47bda2b2021340f71b4f0271a99de88cd0",
+    "skills/ai-hermes-routing-init/scripts/evolve_ai_routing.py": "e8316babe373a7fb2b84dec3b8ccaf1ae18e33843487b5045307b82e8dce8c98",
+    "skills/ai-hermes-routing-init/scripts/init_ai_routing.py": "4ef2993b0e45923f6661661e947ba384c0cfe61c419c3241ad5ded822af95a61",
+    "skills/ai-hermes-routing-init/scripts/route_task.py": "8fd80e2bc884be34b067720f3b1b706229dfd448db545ffd617ccbe19abd847b",
+    "skills/ai-hermes-routing-init/scripts/validate_ai_routing.py": "9146a3f2542263533282fbaa8eafa9113e7d6c70944e1715d4b2eadce915f143",
+    "skills/ai-hermes-self-evolve/README.md": "e7d010eff0f2f7975006ee6e2bb6099b958e93817a3223de71ba1e1eec21f5f4",
+    "skills/ai-hermes-self-evolve/SKILL.md": "9ad7440d8e0716fbc0128fff06500aedf0d623bc84526b12f6769b5b971c9aac",
+    "skills/ai-hermes-self-evolve/agents/openai.yaml": "16e3c52382aaefbd50be11e755d52c93a097af449ab32d404caf38ff28975f37",
+    "skills/ai-hermes-self-evolve/scripts/evolve_ai_routing.py": "e8316babe373a7fb2b84dec3b8ccaf1ae18e33843487b5045307b82e8dce8c98",
+    "skills/ai-hermes-self-evolve/scripts/route_task.py": "8fd80e2bc884be34b067720f3b1b706229dfd448db545ffd617ccbe19abd847b",
+    "skills/ai-hermes-self-evolve/scripts/validate_ai_routing.py": "9146a3f2542263533282fbaa8eafa9113e7d6c70944e1715d4b2eadce915f143"
+  },
+  "scope": "Only documentation and project-local routing tools; no source code, firmware, runtime controller or device changes."
+}

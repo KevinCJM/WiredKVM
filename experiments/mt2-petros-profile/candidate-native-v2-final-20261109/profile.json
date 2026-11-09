@@ -1,0 +1,88 @@
+{
+  "experiment_only": true,
+  "device_access": false,
+  "target_identity": "05ac:0265 research only; no commercial identity authorization",
+  "host_identity": "1a86:4070 unchanged",
+  "added_interface": 6,
+  "added_endpoint": "0x87 interrupt IN 64 bytes 1ms",
+  "retained_interfaces": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "stage": "live touch candidate; NOT physically accepted",
+  "production_inputs": {
+    "firmware/ch32v407/main.c": "5fcccb9393aa8f4718984c9398ae4bdcf814b3df39f009bfe391a790b53650ec",
+    "firmware/ch32v407/descriptors.c": "8c397fd480b8bc125f8af702b2c47bf2c4168ea5b1894311461c6c3f3625bf46"
+  },
+  "limits": [
+    "Experimental Apple identity",
+    "Touch geometry and gestures not physically verified",
+    "No target clipboard access or runtime"
+  ],
+  "pointer_collections": true,
+  "absolute_no_preferred": false,
+  "absolute_mouse_logical": true,
+  "target_bcd_device": "0x026d",
+  "single_port_probe": false,
+  "live_touch": true,
+  "native_format": true,
+  "wire_protocol_version": 2,
+  "deployable": false,
+  "readiness": "OFFLINE_CANDIDATE_ONLY",
+  "binary": {
+    "path": "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/experiments/mt2-petros-profile/candidate-native-v2-final-20261109/wiredkvm-mt2-stage1.bin",
+    "bytes": 77232,
+    "sha256": "9322b86a3e70b272e71716d1051ec641783afdd33b8d0fc40452608f33d0866b"
+  },
+  "size": "   text\t   data\t    bss\t    dec\t    hex\tfilename\n  76424\t    808\t  90500\t 167732\t  28f34\t/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/experiments/mt2-petros-profile/candidate-native-v2-final-20261109/wiredkvm-mt2-stage1.elf\n",
+  "inputs": {
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/experiments/mt2-petros-profile/candidate-native-v2-final-20261109/generated/main.c": "8bcda1be916ff51ac1282c52ce2208a6658a23093e27636d34eb49e6f49f59f1",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/experiments/mt2-petros-profile/candidate-native-v2-final-20261109/generated/descriptors.c": "b03d53be06b855d138a0360c5e871d0357d6887d7dfd3c2f685d07bd79f698d9",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/experiments/mt2-petros-profile/mt2_glue.c": "be2b173aceb73486c3c7197d07cfc50ba3f0c24675966ca475a0ce14cd27aa4f",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/firmware/ch32v407/bridge.c": "43f04087e5180a1cc6727ec24fa13a6bf299232a1cc93fdcde5f1e60d90a5ce5",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/firmware/ch32v407/newlib_context.c": "03cf936115d6f509769f42339712d55ad233564f2d16360319d9bb21e45cf624",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/firmware/ch32v407/setup_msc.c": "8fa0fa86e86355b8ae4d169dfadbe33376aa6cdc1b7002a199f3daf50fa7a502",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/firmware/ch32v407/alignment_safe_libc.c": "0def1dee82ca9702a51bd9ad180f65a739d03d6ccf51ce2c6cb063a443f97c99",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/firmware/ch32v467_petros/setup_flash_none.c": "709919c89832b9f3427b0222d7652c07650c9ea9648bf1b9713075ac7660a146",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/firmware/main/wire_protocol.c": "019c46c8a2777f24d3dda128ffdab9916794d8ffecbca82fa969402db6bca83d",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/surviving-snapshot/source/build/ch32v407/sdk-patched/EVT/EXAM/SRC/Startup/startup_ch32v4x7.S": "faaf514144a9d1125cc4eccabb50d7db41cbc351dfe8cbeda4cff5b3cd4dcd78",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/surviving-snapshot/source/build/ch32v407/sdk-patched/EVT/EXAM/USBHS/Dual_device/cdc_transfer/board/system_ch32v4x7.c": "8e0ec9786f4814d3819e3bb527a3339e22a892949024d817426801e1cc5ee92c",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/surviving-snapshot/source/build/ch32v407/sdk-patched/EVT/EXAM/USBHS/Dual_device/cdc_transfer/usb_driver/src/usbd_driver_core.c": "a6e72568ba8703656d43a6168d92051927aa1f98ef8f80a7107bf00982bf5f7a",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/surviving-snapshot/source/build/ch32v407/sdk-patched/EVT/EXAM/USBHS/Dual_device/cdc_transfer/usb_driver/port/usbhs1_dcp.c": "e33570523d91fd4a513bbef96f63e41849877eced6a2d69e0446573d790f5068",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/surviving-snapshot/source/build/ch32v407/sdk-patched/EVT/EXAM/USBHS/Dual_device/cdc_transfer/usb_driver/port/usbhs2_dcp.c": "463ef4f68a913f856e248c06d8bc778aec0760191e03097edd318fc3a3271c19",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/surviving-snapshot/source/build/ch32v407/sdk-patched/EVT/EXAM/SRC/Peripheral/src/ch32v4x7_rcc.c": "a16c29d94a8d53930ffe80e95396eaf56c1c00a082c8f986df0fccf27e452f93",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/experiments/mt2-petros-profile/live_touch.c": "aec70377d01858a8f7310965ab8cc5e638cee3a7290a01f8edf28571c1789fdd",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/experiments/mt2-petros-profile/live_abort.c": "4904c535f996a0d3bd286728365021a2733116efdb022b846af5c9b4e4c829e2",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM-recovery-20261104/surviving-snapshot/source/build/ch32v407/sdk-patched/EVT/EXAM/SRC/Ld/Link.ld": "d2d94c3c795620861959581f544d231a1f2dcb85da7360b7acafbfb28c22bc4f",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/experiments/mt2-petros-profile/mt2_glue.h": "461dc9e3ecec32dab7c8fc092800e9f07024849cea43d744119d709d041d76d1",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/experiments/mt2-petros-profile/build_profile.py": "17df53e0cfd2be4d8dd8086ae34458eaf4d9c27ffc8536340a7824a0ab9c447f",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/experiments/mt2-usb/Cargo.toml": "10c944b1d8480335c0990e8432a2505d8d932a2fc3d8b662b34e526e99b7496f",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/experiments/mt2-usb/Cargo.lock": "55f7a9bcd6e3b3350f82635b97a227a29112ce64adfecb8b880c4be80a6a55e2",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/experiments/mt2-usb/include/wkmt2.h": "8d680fff553cb5bfa33ad4d869f8a122836c94c1cdc525767c6c9de1dfdbdf86",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/experiments/mt2-usb/src/ffi.rs": "720d3f734f2b6e0cccbe4f4aaee6bc2138dcd2f08cf8086243f09263375aa263",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/experiments/mt2-usb/src/fixture.rs": "4aa3f96c806c29e2c0e4b538ff635369c9bc5a64b2d123a7e07002793c6d90ac",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/experiments/mt2-usb/src/lib.rs": "46a3422a581a9544c452594609eea3a3bdfcb35d23f0ddb0f7d28adab1a23b73",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/experiments/mt2-usb/src/live.rs": "156177d1eb5540884fa59a0c92a1c8685b92e90c66f161cde4f4f6e75dcb59f8",
+    "/Users/chenjunming/Desktop/KevinGit/ESP32/WiredKVM/experiments/mt2-usb/src/native_format.rs": "5102d2b586d50d0a7e57417ccdd4b04f7ee6300800bcccc52c5147790ca232b4"
+  },
+  "rust_archive_sha256": "38f8f6060ace2381e6625a2f9358d2c7769ac3f467f22ed5d1910beef09ec206",
+  "rust_archive_audit": {
+    "native_rv32_members": 400,
+    "lto_bitcode_members": 0
+  },
+  "map_audit": {
+    "required_symbols": [
+      "wkmt2_live_offer",
+      "wkmt2_live_input",
+      "wkmt2_live_submitted",
+      "wkmt2_live_done",
+      "wkmt2_live_abort_usb",
+      "wk407_hid_done"
+    ],
+    "sha256": "3f87a5f19d77a1c0cae50c4c2230da6e80743e151e868d026e358e6d1cdcdad8"
+  }
+}

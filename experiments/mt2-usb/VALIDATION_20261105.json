@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-05",
+  "scope": "OFFLINE_PROTOCOL_DRAFT_NOT_HARDWARE",
+  "third_party_dependencies": 0,
+  "tests": {
+    "command": "cargo test --offline --manifest-path experiments/mt2-usb/Cargo.toml",
+    "passed": 12,
+    "failed": 0
+  },
+  "device_operations": false,
+  "production_files_changed": false,
+  "files": {
+    "Cargo.toml": "e0a24205c43d05bc7fe5efa51b8f94525c3ab95d8cfeeb05f9e7c4fa8ae0ace1",
+    "Cargo.lock": "55f7a9bcd6e3b3350f82635b97a227a29112ce64adfecb8b880c4be80a6a55e2",
+    "README.md": "c26b28ff3631439d9bdff3d83f6548315fcc72153079a33b8a0738366b7a0e76",
+    "SOURCES.md": "5ca72aec45b60bd31723a00290e6daf202582171bfd2b4658b0663c2394926e7",
+    ".gitignore": "306fd52e74fca6746e12acc750f232de15e71da917756a1270d74c91f5eb7368",
+    "src/lib.rs": "dd459ce608bb8762f746c303e9b75f7e96decefae399aa7ffeb470e1f7598074",
+    "tests/protocol.rs": "30031f57da4c51d212056b63cc8c768c2ffe22e41be4258782e0043103056395"
+  }
+}

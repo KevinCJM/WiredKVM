@@ -1,0 +1,24 @@
+[package]
+name = "wiredkvm-single-port-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["rlib", "staticlib"]
+
+[dependencies]
+wiredkvm-mt2-protocol-draft = { path = "../../mt2-usb", features = ["c-abi"] }
+
+[features]
+default = ["c-abi"]
+c-abi = []
+
+[profile.release]
+panic = "abort"
+opt-level = "s"
+lto = false
+codegen-units = 1
+
+[workspace]
