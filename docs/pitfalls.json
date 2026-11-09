@@ -1357,6 +1357,46 @@
       "safe_observation_methods": [
         "模拟主循环下交错触点、键鼠、双向 Bulk 和分片上传；核对旧会话、半成品、重复格和重试"
       ]
+    },
+    {
+      "id": "P37",
+      "title": "少量 PSRAM 探测和 memcpy 模拟不能证明真实连续上传",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p37_guard"
+      ],
+      "symptoms": [
+        "少量启动探测通过但完整镜像返回 Storage",
+        "故障回复清空会话后丢失失败偏移"
+      ],
+      "trigger_actions": [
+        "修改 V467 PSRAM 程序盘适配层或诊断内存写后读回失败"
+      ],
+      "related_paths": [
+        "firmware/ch32v467_petros/setup_ram.c",
+        "native/cable-image/src/lib.rs",
+        "native/cable-loader/src/main.rs",
+        "tests/setup_ram_test.c",
+        "docs/research/DIRECT_CABLE_RUNTIME_20261109.md"
+      ],
+      "affected_modules": [
+        "portable_cable_runtime",
+        "firmware_ch32"
+      ],
+      "blast_radius": [
+        "Program source media; failed storage must preserve existing input"
+      ],
+      "check_before_edit": [
+        "检查完整官方示例 main 的前置条件，不能仅照抄 PSRAM_INIT；其在初始化前设置 PWR_VDD18_Level1。保持原 USB 和系统时钟配置，不能以未经验证的硬件推测替代证据。",
+        "用真实内存适配层模型检查写入顺序、FIFO、未对齐边界、失败闭锁和有界等待；它仍不能证明物理时序或供电。",
+        "故障先保存会话和失败偏移，再丢弃未发布镜像；状态接口只返回固定诊断字段，不开放任意内存或剪贴板读取。",
+        "完整镜像实机上传和从物理 PSRAM 读取的完整 CRC 必须通过后才能发布；任何 Storage 故障不可跳过或伪装成成功。"
+      ],
+      "safe_observation_methods": [
+        "在独立文件 CDC 读取固定状态；保持输入服务运行，不用 DBG 暂停正在控制的 MCU",
+        "记录芯片身份、候选哈希、故障地址、预期/实际值及完整物理读回结果"
+      ]
     }
   ]
 }

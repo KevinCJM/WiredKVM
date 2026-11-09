@@ -47,7 +47,7 @@ mini 从线内只读卷打开应用，由 mini CPU 执行。不复制到 Applica
 
 - 目标应用：`build/portable-direct-cable-20261109-v4/`
 - 程序盘：`build/portable-media-20261109-final/`
-- Book 协调器与固定哈希配置：`build/portable-book-20261109-v2/`
+- Book 协调器与固定哈希配置：`build/portable-book-20261109-ram-power-v4/`
 - RAM 程序盘固件：`experiments/mt2-petros-profile/candidate-ram-setup-20261109-final/`
 - 原生输入已验收固件继续保留在 `candidate-native-v2-final-20261109/`。
 
@@ -58,6 +58,8 @@ Book 协调器先等待输入捕获就绪，再异步上传程序盘；上传失
 ## 验证要求
 
 离线证据在 `results/portable-direct-cable-20261109/`。它们覆盖模拟双向文件、图片、文件夹、取消重试、本机复制优先、原生输入共存和实际主循环调度。模拟耗时不能作为真实 USB 速度。
+
+当前实机：补齐官方 PSRAM 供电档位后，84,360 字节修正版刷写/读回通过，完整 3,405,824 字节程序盘上传用时 8.273 秒；Book 从实际 USB 盘读取完整应用并严格验签约 0.446 秒，哈希一致。用户已在 mini 直接打开卷内应用，确认双向新文字、两台内部新文字复制粘贴、键鼠、双指、四指及自动返回正常。Book 新协调器正在临时试运行，原自启服务暂时停止但配置未变。当前文件入口报不可用，图片/文件/文件夹和大文件时延等仍待验收。
 
 实机仍须逐项完成：
 
@@ -71,6 +73,6 @@ Book 协调器先等待输入捕获就绪，再异步上传程序盘；上传失
 
 这些实机项目未完成，目标不能标记为完成。
 
-`scripts/flash_portable_candidate.py --describe` 仅检查文件与哈希；`--flash` 是显式 DBG 刷写入口。它要求只有指定 DBG，先核对芯片身份，再备份完整 576 KiB、确认原可用固件前缀、刷写及独立读回。刷写失败会尝试完整备份回退。它不更改 Book 自动服务，也不启动 mini 程序。
+`scripts/flash_portable_candidate.py --describe` 仅检查文件与哈希；`--flash --expected-current <已验收版本>` 是显式 DBG 刷写入口，必须明确指定当前固件。它要求只有指定 DBG，先核对芯片身份，再备份完整 576 KiB、确认原可用固件前缀、刷写及独立读回。刷写失败会尝试完整备份回退。它不更改 Book 自动服务，也不启动 mini 程序。
 
 参考：[沁恒 PSRAM 应用说明](https://github.com/openwch/ch32_application_notes/blob/main/zh/AN36000/AN36000.md)、[沁恒 SDK 的 200 MHz PSRAM 示例](https://github.com/openwch/ch32v407_ch32v467/tree/main/EVT/EXAM/PSRAM/PSRAM/User)。

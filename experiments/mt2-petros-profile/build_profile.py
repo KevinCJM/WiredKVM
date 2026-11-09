@@ -276,7 +276,7 @@ def build(out,sdk,prefix,manifest):
     if manifest.get("live_touch"):sources.extend([HERE/"live_touch.c",HERE/"live_abort.c"])
     if manifest.get("ram_setup"):
         sources.remove(ROOT/"firmware/ch32v467_petros/setup_flash_none.c")
-        sources.extend([ROOT/"firmware/ch32v467_petros/setup_ram.c",sdk/"EVT/EXAM/SRC/Peripheral/src/ch32v4x7_psram.c"])
+        sources.extend([ROOT/"firmware/ch32v467_petros/setup_ram.c",sdk/"EVT/EXAM/SRC/Peripheral/src/ch32v4x7_psram.c",sdk/"EVT/EXAM/SRC/Peripheral/src/ch32v4x7_pwr.c"])
         includes.append(ROOT/"firmware/ch32v467_petros")
     objects=[]
     for i,source in enumerate(sources):

@@ -11,6 +11,21 @@ pub const BEGIN: u8 = 1;
 pub const DATA: u8 = 2;
 pub const FINISH: u8 = 3;
 pub const ABORT: u8 = 4;
+/// Read-only platform telemetry; handled by the board adapter, never Upload.
+pub const DIAGNOSTIC: u8 = 5;
+pub const DIAGNOSTIC_WORDS: usize = 16;
+
+pub fn diagnostic_reply(words: &[u32; DIAGNOSTIC_WORDS]) -> [u8; CELL] {
+    let mut b = [0; CELL]; b[..4].copy_from_slice(b"WKID"); b[4] = 1;
+    for (i, word) in words.iter().enumerate() { b[8+i*4..12+i*4].copy_from_slice(&word.to_le_bytes()); }
+    let c = crc32(&b[..508]); b[508..].copy_from_slice(&c.to_le_bytes()); b
+}
+pub fn decode_diagnostic(b: &[u8]) -> Option<[u32; DIAGNOSTIC_WORDS]> {
+    if b.len()!=CELL || &b[..4]!=b"WKID" || b[4]!=1 || b[5..8]!=[0;3] ||
+        b[72..508].iter().any(|&v|v!=0) || crc32(&b[..508])!=u32le(&b[508..]) { return None; }
+    let mut words=[0;DIAGNOSTIC_WORDS];
+    for (i,word) in words.iter_mut().enumerate() { *word=u32le(&b[8+i*4..]); } Some(words)
+}
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,7 +72,7 @@ pub struct Frame<'a> {
 }
 impl Frame<'_> {
     pub fn encode(&self) -> Option<[u8; CELL]> {
-        if self.body.len() > BODY || self.operation > ABORT { return None; }
+        if self.body.len() > BODY || self.operation > DIAGNOSTIC { return None; }
         let mut b = [0u8; CELL]; b[..4].copy_from_slice(b"WKIM"); b[4] = 1; b[5] = self.operation;
         b[8..16].copy_from_slice(&self.session.to_le_bytes());
         b[16..20].copy_from_slice(&self.offset.to_le_bytes());
@@ -68,7 +83,7 @@ impl Frame<'_> {
         let checksum = crc32(&b[..508]); b[508..].copy_from_slice(&checksum.to_le_bytes()); Some(b)
     }
     pub fn decode(b: &[u8]) -> Option<Frame<'_>> {
-        if b.len() != CELL || &b[..4] != b"WKIM" || b[4] != 1 || b[5] > ABORT ||
+        if b.len() != CELL || &b[..4] != b"WKIM" || b[4] != 1 || b[5] > DIAGNOSTIC ||
             b[6..8] != [0; 2] || b[30..32] != [0; 2] || crc32(&b[..508]) != u32le(&b[508..]) { return None; }
         let n = usize::from(u16::from_le_bytes(b[28..30].try_into().unwrap()));
         if n > BODY || b[32+n..508].iter().any(|&v| v != 0) { return None; }
@@ -126,7 +141,9 @@ impl Upload {
             if f.offset == self.last_offset && tag == self.last_tag { return self.reply(Code::Accepted); }
             if f.offset != self.next || f.body.len() as u32 > self.total-self.next { return self.reply(Code::Invalid); }
             if !memory.write_verified(self.next, f.body) {
-                self.disconnected(); return self.reply(Code::Storage);
+                // Preserve the failing session and start offset in the reply,
+                // while still discarding the incomplete image immediately.
+                let reply=self.reply(Code::Storage); self.disconnected(); return reply;
             }
             if self.next < 24 {
                 let n = core::cmp::min(f.body.len(), 24-self.next as usize);

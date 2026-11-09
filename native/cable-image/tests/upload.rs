@@ -52,10 +52,25 @@ fn fill(u: &mut Upload, m: &mut Ram, a: &[u8], nonce: u64) {
 #[test] fn disconnect_storage_fault_and_abort_allow_immediate_new_upload() {
     let a=asset();let mut u=Upload::new();let mut m=Ram::new();u.accept(0,&frame(BEGIN,1,0,&a,&[]),&mut m);
     u.disconnected();assert_eq!(u.accept(0,&frame(BEGIN,2,0,&a,&[]),&mut m).code,Code::Accepted);
-    m.fail=true;assert_eq!(u.accept(0,&frame(DATA,2,0,&a,&a[..BODY]),&mut m).code,Code::Storage);m.fail=false;
+    m.fail=true;let fault=u.accept(0,&frame(DATA,2,0,&a,&a[..BODY]),&mut m);
+    assert_eq!(fault.code,Code::Storage);assert_eq!(fault.session,2);assert_eq!(fault.next,0);
+    assert_eq!(u.published_bytes(),None);m.fail=false;
+    u.accept(0,&frame(BEGIN,8,0,&a,&[]),&mut m);
+    u.accept(0,&frame(DATA,8,0,&a,&a[..BODY]),&mut m);m.fail=true;
+    let fault=u.accept(0,&frame(DATA,8,BODY as u32,&a,&a[BODY..BODY*2]),&mut m);
+    assert_eq!(fault.session,8);assert_eq!(fault.next,BODY as u32);assert_eq!(u.published_bytes(),None);m.fail=false;
     assert_eq!(u.accept(0,&frame(BEGIN,3,0,&a,&[]),&mut m).code,Code::Accepted);
     assert_eq!(u.accept(0,&frame(ABORT,3,0,&a,&[]),&mut m).code,Code::Accepted);
     fill(&mut u,&mut m,&a,4);assert_eq!(u.accept(0,&frame(FINISH,4,a.len() as u32,&a,&[]),&mut m).code,Code::Sealed);
+}
+
+#[test] fn diagnostic_metadata_is_crc_protected_and_cannot_publish_or_write() {
+    let mut words=[0;DIAGNOSTIC_WORDS];words[3]=0x12345;words[5]=0xe3;
+    let mut bytes=diagnostic_reply(&words);assert_eq!(decode_diagnostic(&bytes),Some(words));
+    bytes[20]^=1;assert_eq!(decode_diagnostic(&bytes),None);
+    let cell=Frame{operation:DIAGNOSTIC,session:0,offset:0,total:0,checksum:0,body:&[]}.encode().unwrap();
+    let mut m=Ram::new();let mut u=Upload::new();assert_eq!(u.accept(0,&cell,&mut m).code,Code::Invalid);
+    assert_eq!(m.writes,0);assert_eq!(u.published_bytes(),None);
 }
 #[test] fn malformed_inner_image_and_unavailable_ram_never_publish() {
     let mut a=asset();a[IMAGE_OFFSET as usize+2]^=1;

@@ -19,6 +19,7 @@ static uint8_t ram[WK_SETUP_FLASH_BYTES],program_ack[512];
 static unsigned program_acks;
 bool wk_setup_flash_init(void){return true;}
 int32_t wk_cable_platform_ready(void){return 1;}
+void wk_cable_platform_diagnostic(uint32_t *out,size_t n){for(size_t i=0;i<n;i++)out[i]=(uint32_t)i;}
 int32_t wk_cable_platform_write(uint32_t offset,const uint8_t *b,size_t n){assert(offset+n<=sizeof(ram));memcpy(ram+offset,b,n);return 1;}
 bool wk_setup_flash_read(void *ctx,uint32_t at,void *out,size_t n){(void)ctx;uint32_t size=wk_cable_setup_size();if(at>size||n>size-at)return false;memcpy(out,ram+at,n);return true;}
 #endif

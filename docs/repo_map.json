@@ -1190,7 +1190,7 @@
       "name": "portable_cable_runtime",
       "path": "native/cable-image",
       "kind": "implementation_entrypoints",
-      "purpose": "Direct-from-cable macOS runtime candidate: readonly program image, volatile V467 PSRAM upload, native-input-first Book coordinator and Bulk clipboard/tree adaptation. Offline build and simulator evidence only; no new firmware or target runtime physically accepted. Existing live native-v2 input remains separate.",
+      "purpose": "Direct-from-cable macOS runtime: full volatile V467 image upload and readonly volume signature/hash verified on hardware after official PSRAM power prerequisite was restored. User opened mini app from cable and accepted bidirectional text, local text copy/paste, native gestures and edge return. Book file portal is unavailable; binary files/images/collections, cancellation, saturation timing and autostart upgrade remain physically unverified.",
       "module_tags": [
         "portable",
         "ram_setup",
@@ -1252,7 +1252,11 @@
         "tests/test_collection_transfer.py",
         "tests/onboarding_selftest.swift",
         "tests/test_raw_touch_native.py",
-        "tests/test_cable_runtime.py"
+        "tests/test_cable_runtime.py",
+        "tests/setup_ram_test.c",
+        "tests/psram_model/ch32v4x7.h",
+        "tests/psram_model/ch32v4x7_psram.h",
+        "tests/psram_model/ch32v4x7_pwr.h"
       ],
       "related_configs": [
         "native/cable-image/Cargo.toml",
@@ -1274,7 +1278,8 @@
         "P22",
         "P23",
         "P35",
-        "P36"
+        "P36",
+        "P37"
       ],
       "minimum_regression": [
         "python3 tests/test_cable_runtime.py",

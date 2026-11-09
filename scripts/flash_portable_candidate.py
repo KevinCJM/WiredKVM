@@ -17,7 +17,11 @@ PROBE='A47C8F062A1A'
 UID='ad-21-ad-50-6c-54-c6-c6'
 CHIP='0x46740011'
 TOOL_SHA='4f116e0f31a434320c18affecba894028a5873f8fe331382c4448a62feff2c61'
-BASELINE_SHA='9322b86a3e70b272e71716d1051ec641783afdd33b8d0fc40452608f33d0866b'
+ACCEPTED={
+    'native-v2':('candidate-native-v2-final-20261109','9322b86a3e70b272e71716d1051ec641783afdd33b8d0fc40452608f33d0866b'),
+    'ram-setup-v1':('candidate-ram-setup-20261109-final','dde0403eccbade5d6a032dab4659170d8e468393a84d392cc7596c33bffed9e4'),
+    'ram-diag-v2':('candidate-ram-setup-20261109-diag-v2','0d3a5fff3d92a3530de7919a070f3cef05e191cc6dd97c724c54b0dcef2c11fd'),
+}
 BACKUP_BYTES=576*1024
 
 def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -25,14 +29,17 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     action=p.add_mutually_exclusive_group(required=True);action.add_argument('--describe',action='store_true');action.add_argument('--flash',action='store_true')
     p.add_argument('--profile',type=Path,required=True);p.add_argument('--wlink',type=Path,required=True);p.add_argument('--output',type=Path)
+    p.add_argument('--expected-current',choices=ACCEPTED,help='explicit pinned running firmware to back up before writing')
     a=p.parse_args();profile=json.loads(a.profile.read_text());image=Path(profile['binary']['path'])
     if not profile.get('ram_setup') or sha(image)!=profile['binary']['sha256'] or sha(a.wlink)!=TOOL_SHA:raise ValueError('candidate or tool hash mismatch')
     for name,digest in profile['inputs'].items():
         if sha(Path(name))!=digest:raise ValueError('build input changed: '+name)
-    baseline=ROOT/'experiments/mt2-petros-profile/candidate-native-v2-final-20261109/wiredkvm-mt2-stage1.bin'
-    if sha(baseline)!=BASELINE_SHA:raise ValueError('known input firmware backup missing or changed')
     if a.describe:
         print(json.dumps({'candidateSHA256':sha(image),'bytes':image.stat().st_size,'probe':PROBE,'chip':CHIP,'uid':UID,'deviceAccess':False}));return
+    if not a.expected_current:raise ValueError('--flash requires --expected-current; never guess the active firmware')
+    folder,digest=ACCEPTED[a.expected_current]
+    baseline=ROOT/'experiments/mt2-petros-profile'/folder/'wiredkvm-mt2-stage1.bin'
+    if sha(baseline)!=digest:raise ValueError('known input firmware backup missing or changed')
     if not a.output:raise ValueError('--flash requires a fresh results directory')
     out=a.output.resolve()
     if not out.is_relative_to(ROOT/'results'):raise ValueError('output must be under project results')
