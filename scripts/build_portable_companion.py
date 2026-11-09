@@ -25,6 +25,10 @@ def build(out: Path, arches: list[str]) -> dict:
         raise ValueError("output must be a new directory under project/build")
     out.mkdir(parents=True, exist_ok=False)
     sources = [ROOT / "host/clipboard" / (s + ".swift") for s in SOURCES]
+    crate = ROOT / "native/transfer-tree"
+    inputs = sources + [ROOT/"host/gui/Companion-Info.plist"] + [crate / p for p in ["Cargo.toml", "Cargo.lock", "build.rs", "src/lib.rs", "src/dir_list.c",
+                                           "include/transfer_tree.h", "include/module.modulemap"]]
+    before={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}
     commands = []
 
     def run(argv):
@@ -42,7 +46,6 @@ def build(out: Path, arches: list[str]) -> dict:
     app = out / "WiredKVM 临时连接.app"
     exe = app / "Contents/MacOS/WiredKVMPortable"
     exe.parent.mkdir(parents=True)
-    crate = ROOT / "native/transfer-tree"
     rust_targets = {"arm64": "aarch64-apple-darwin", "x86_64": "x86_64-apple-darwin"}
     for arch in arches:
         target = rust_targets[arch]
@@ -66,18 +69,18 @@ def build(out: Path, arches: list[str]) -> dict:
     for forbidden in ["WKCompanionInstall", "WKLoginItem", "WKFirstRunWindow", "SMAppService"]:
         if forbidden in symbols:
             raise RuntimeError("portable binary contains installed-only symbol: " + forbidden)
-    inputs = sources + [crate / p for p in ["Cargo.toml", "Cargo.lock", "build.rs", "src/lib.rs", "src/dir_list.c",
-                                           "include/transfer_tree.h", "include/module.modulemap"]]
+    if before!={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}:
+        raise RuntimeError("build inputs changed during compilation; candidate is not publishable")
     manifest = dict(mode="portable", architectures=arches, collections=True, binaryBulk=True,
                     legacyInputRelay=False, launched=False, installed=False,
                     deviceAccess=False, clipboardAccess=False, firmwareChanged=False,
                     binary=str(exe), bytes=exe.stat().st_size,
                     sha256=hashlib.sha256(exe.read_bytes()).hexdigest(),
-                    sources={str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs},
+                    sources=before,
                     limitations=["physical input and clipboard acceptance pending",
                                  "macOS may require normal execution and network-volume access permission",
                                  "temporary transfer data and OS-managed caches are not an installation",
-                                 "Petros currently has no setup medium; delivery over USB not implemented"])
+                                 "physical USB delivery and file integrity require separate acceptance"])
     (out / "commands.json").write_text(json.dumps(commands, indent=2) + "\n")
     (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
     return manifest

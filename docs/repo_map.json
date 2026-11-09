@@ -423,7 +423,7 @@
       "name": "clipboard_bulk",
       "path": "host/clipboard",
       "kind": "implementation_entrypoints",
-      "purpose": "Current user accepts a receiver application stored on the cable and temporarily executed by the target CPU, without copying it into Applications or registering persistence. Historical clipboard/stream sources can now be audited for that portable path. Live input baseline is preserved; complete bidirectional text/images/files/folders and high-speed end-to-end acceptance remain pending.",
+      "purpose": "Portable target app runs directly from cable, without installation/persistence. Premount canonical portal directory fix and offline pipeline regressions pass. Bidirectional fresh text, local fresh text and one actual 8 MiB file round trip with matching SHA-256 pass. Earlier Finder 100004 zero-byte return remains an unrooted failure. High speed, images/collections, physical cancel timing and saturated input latency remain pending.",
       "module_tags": [
         "clipboard_bulk",
         "needs_code_confirmation"
@@ -485,7 +485,8 @@
         "P14",
         "P15",
         "P16",
-        "P23"
+        "P23",
+        "P38"
       ],
       "minimum_regression": [],
       "routing_confidence": "medium",
@@ -949,7 +950,7 @@
       "name": "host_autostart",
       "path": "native/control-service",
       "kind": "implementation_entrypoints",
-      "purpose": "Book-only Rust LaunchAgent supervisor: discovers CH32 host control CDC identity and manages input-only runtime. LaunchAgent restart, controller exit and Book-first cold start passed; user confirmed control and edge return after automatic startup. USB1-only hotplug and mini-first order still fail before OS enumeration. Actual Book reboot not tested. Restored after the Book-only test, reconnected automatically; user reconfirmed control and edge return.",
+      "purpose": "Book Rust supervisor preserves the legacy input-only mode and adds optional pinned portable_host/portable_runtime mode. Portable v8 is temporarily running with original authorized capture; old LaunchAgent is session-bootout only and unchanged on disk. Portable login/reboot/hotplug acceptance remains pending; USB1-only/mini-first electrical enumeration limitation is not fixed.",
       "module_tags": [
         "host_autostart",
         "host_input",
@@ -1002,7 +1003,7 @@
       ],
       "edit_risk": "high",
       "blast_radius": [
-        "Book input control autostart"
+        "Book input and optional portable clipboard startup"
       ],
       "pitfall_ids": [
         "P05",
@@ -1020,7 +1021,7 @@
       "routing_confidence": "high",
       "scope_flags": [
         "Book_only",
-        "no_target_runtime"
+        "no_persistent_target_install"
       ],
       "grounding": {
         "fact_status": "grounded",
@@ -1190,7 +1191,7 @@
       "name": "portable_cable_runtime",
       "path": "native/cable-image",
       "kind": "implementation_entrypoints",
-      "purpose": "Direct-from-cable macOS runtime: full volatile V467 image upload and readonly volume signature/hash verified on hardware after official PSRAM power prerequisite was restored. User opened mini app from cable and accepted bidirectional text, local text copy/paste, native gestures and edge return. Book file portal is unavailable; binary files/images/collections, cancellation, saturation timing and autostart upgrade remain physically unverified.",
+      "purpose": "Direct-from-cable macOS runtime: V467 PSRAM readonly image and portable target startup verified. User accepted local/cross-machine new text plus native input/gestures/edge return. Premount realpath fixes the file portal alias. Book v8 retry completed one 8 MiB round trip with matching SHA-256; earlier Finder 100004/zero-byte result remains a failure with unknown root cause. About 0.81 MB/s measured on return; images/collections, physical cancellation, saturation latency and permanent autostart upgrade remain unaccepted.",
       "module_tags": [
         "portable",
         "ram_setup",
@@ -1230,7 +1231,9 @@
         "scripts/build_portable_companion.py",
         "scripts/build_portable_media.py",
         "scripts/build_portable_host.py",
-        "scripts/flash_portable_candidate.py"
+        "scripts/flash_portable_candidate.py",
+        "native/control-service/src/main.rs",
+        "native/control-service/README.md"
       ],
       "upstream_dependencies": [
         "firmware_ch32",
@@ -1279,7 +1282,9 @@
         "P23",
         "P35",
         "P36",
-        "P37"
+        "P37",
+        "P38",
+        "P39"
       ],
       "minimum_regression": [
         "python3 tests/test_cable_runtime.py",

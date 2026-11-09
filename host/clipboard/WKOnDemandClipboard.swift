@@ -148,14 +148,14 @@ final class WKCompanion: NSObject, NSMenuDelegate {
             else { _ = self.transport.send(data) }
         }
         stream?.onProgress = { [weak self] id, done, total in
-            guard let self, let p = self.paste,
-                  let offer = self.streamSources[id]?.offer ?? self.streamIncoming[id], offer.nonce == p.id else { return }
+            guard let self, let offer = self.streamSources[id]?.offer ?? self.streamIncoming[id] else { return }
             let event = self.streamSources[id] != nil ? "BULK_TX" : "BULK_RX"
             if let line = WKMetadata.line(role: self.role, event: event, fields: ["phase":"PROGRESS", "transfer":String(offer.generation),
-                "acked":String(done), "total":String(total), "token":p.token]) { self.log(line) }
+                "acked":String(done), "total":String(total), "nonce":offer.nonce]) { self.log(line) }
         }
         stream?.onFile = { [weak self] id, file in
             guard let self, let offer = self.streamIncoming.removeValue(forKey: id) else { return }
+            if let line=WKMetadata.line(role:self.role,event:"BULK_RX",fields:["phase":"COMPLETE","acked":String(file.size),"total":String(file.size),"transfer":String(offer.generation),"nonce":offer.nonce]){self.log(line)}
             if offer.kind == "png" {
                 guard self.lease?.id == offer.nonce, self.lease?.fileID == id else { return }
                 self.imageJob = self.stream?.decodeImage(file: file) { [weak self] result in
@@ -202,6 +202,8 @@ final class WKCompanion: NSObject, NSMenuDelegate {
         }
         stream?.onComplete = { [weak self] id in
             guard let self else { return }
+            if let offer=self.streamSources[id]?.offer,
+               let line=WKMetadata.line(role:self.role,event:"BULK_TX",fields:["phase":"COMPLETE","acked":String(offer.size),"total":String(offer.size),"transfer":String(offer.generation),"nonce":offer.nonce]){self.log(line)}
 #if WK_TREE
             if self.role == "host", self.streamSources[id]?.offer.kind == "collection" {
                 if self.collectionReady.remove(id) != nil { self.streamSources.removeValue(forKey: id) }
@@ -513,7 +515,8 @@ final class WKCompanion: NSObject, NSMenuDelegate {
     private func finishPaste(_ p: Paste) {
         guard paste?.token == p.token else { return }
         paste = nil; lastFinishedToken = p.token; reply("WKCLIP_PASTE READY \(p.token)")
-        status("TRANSFER complete \(p.id)")
+        let pending=streamSources.values.contains{$0.offer.nonce==p.id&&$0.offer.kind != "png"} || streamIncoming.values.contains{$0.nonce==p.id&&$0.kind != "png"}
+        status("TRANSFER \(pending ? "file-in-progress" : "complete") \(p.id)")
     }
     private func cancelTransaction(_ nonce: String) {
         if lease?.id == nonce { discardLease() }

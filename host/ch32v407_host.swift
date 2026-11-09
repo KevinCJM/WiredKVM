@@ -6,12 +6,25 @@ import CryptoKit
 struct CH32PortableRuntime: Decodable {
     let native, capture, companion, touch, loader, asset: String
     let hashes: [String: String]
-    func verify() throws {
-        for path in [native,capture,companion,touch,loader,asset] {
+    private func verify(_ paths: [String]) throws {
+        for path in paths {
             guard path.hasPrefix("/"), let expected=hashes[path] else { throw WKStreamError.invalid }
             let hash=SHA256.hash(data:try Data(contentsOf:URL(fileURLWithPath:path))).map{String(format:"%02x",$0)}.joined()
             guard hash==expected else { throw WKStreamError.invalid }
         }
+    }
+    func verifyInput() throws { try verify([native,capture,touch]) }
+    func verifyProgram() throws { try verify([companion,loader,asset]) }
+    static func selfTest() throws {
+        let root=FileManager.default.temporaryDirectory.appendingPathComponent("wk-portable-preflight-"+UUID().uuidString)
+        try FileManager.default.createDirectory(at:root,withIntermediateDirectories:false)
+        let input=root.appendingPathComponent("input");let body=Data("input-fixture".utf8);try body.write(to:input)
+        defer {try? FileManager.default.removeItem(at:input);try? FileManager.default.removeItem(at:root)}
+        let digest=SHA256.hash(data:body).map{String(format:"%02x",$0)}.joined()
+        let r=CH32PortableRuntime(native:input.path,capture:input.path,companion:root.appendingPathComponent("missing-component").path,
+            touch:input.path,loader:root.appendingPathComponent("missing-loader").path,asset:root.appendingPathComponent("missing-image").path,hashes:[input.path:digest])
+        try r.verifyInput();var rejected=false;do{try r.verifyProgram()}catch{rejected=true};precondition(rejected)
+        wkLog("PORTABLE_PREFLIGHT_PASS unavailable_program_keeps_input_valid=true")
     }
 }
 
@@ -21,6 +34,7 @@ struct CH32PortableRuntime: Decodable {
 @MainActor
 final class CH32Host {
     let clipboard = WKClipboardProcess()
+    let diagnostics = WKClipboardDiagnostics()
     let pasteHUD = WKPasteProgressHUD()
     let native = Process(), input = Pipe(), output = Pipe()
     var buffer = "", stopping = false
@@ -36,7 +50,7 @@ final class CH32Host {
         guard WKCH32Device.matches(path: control, role: "host", files: false),
               WKCH32Device.matches(path: files, role: "host") else { throw WKStreamError.invalid }
         let runtime = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent()
-        try portable?.verify(); self.portable=portable;filePort=files
+        try portable?.verifyInput(); self.portable=portable;filePort=files
         let socket = try clipboard.prepare()
         socketURL=socket
         native.executableURL = portable.map{URL(fileURLWithPath:$0.native)} ?? runtime.appendingPathComponent("wiredkvm-native")
@@ -54,6 +68,7 @@ final class CH32Host {
             guard let self, self.native.isRunning else { return }; _ = WKClipboardProcess.writeLine(line, to: self.input)
         }
         clipboard.onStatus = { wkLog($0) }
+        clipboard.onDiagnostic = { [weak self] line in self?.diagnostics.record(line) }
         clipboard.onPasteProgress = { [weak self] in self?.pasteHUD.update($0) }
         output.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
@@ -80,6 +95,7 @@ final class CH32Host {
     }
     private func startProgramLoader() {
         guard let portable, !stopping, native.isRunning, !clipboardStarted, programLoader == nil else { return }
+        do {try portable.verifyProgram()}catch{retryProgramLoader();return}
         let process=Process();process.executableURL=URL(fileURLWithPath:portable.loader)
         process.arguments=["--load",portable.asset,"--port",filePort]
         process.standardInput=FileHandle.nullDevice;process.standardOutput=FileHandle.standardError;process.standardError=FileHandle.standardError
@@ -106,8 +122,9 @@ final class CH32Host {
         buffer += text
         while let end = buffer.firstIndex(of: "\n") {
             let line = String(buffer[..<end]); buffer.removeSubrange(...end)
+            diagnostics.record(line)
             let prefix = "CPP_CLIPBOARD_INTENT "
-            if line.contains("GESTURE_CAPTURE_READY ready=1") { startProgramLoader() }
+            if line.contains("GESTURE_CAPTURE_READY ready=1") { wkLog("CH32_INPUT_READY"); startProgramLoader() }
             else if line.hasPrefix(prefix) { clipboard.sendIntent(String(line.dropFirst(prefix.count))) }
             else if line.hasPrefix("CPP_WIREDKVM_FAILURE") || line.hasPrefix("CPP_USB_HID") { wkLog(line) }
         }
@@ -128,7 +145,7 @@ final class CH32Host {
     @MainActor static func main() {
         let args = Array(CommandLine.arguments.dropFirst())
         if args == ["--self-test"] {
-            do { try WKClipboardProcess.selfTest() } catch { wkLog("CH32 GUI test failed: \(error)"); exit(1) }
+            do { try CH32PortableRuntime.selfTest();try WKClipboardProcess.selfTest() } catch { wkLog("CH32 GUI test failed: \(error)"); exit(1) }
             return
         }
         if args.count==2 && args[0]=="--runtime-config" {

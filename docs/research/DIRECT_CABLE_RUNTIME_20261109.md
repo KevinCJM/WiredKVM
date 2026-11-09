@@ -20,8 +20,8 @@ mini 从线内只读卷打开应用，由 mini CPU 执行。不复制到 Applica
 
 ## 程序盘与存储
 
-- 当前完整 arm64/x86_64 便携程序：3,342,112 字节，已链接 Rust 文件夹引擎。
-- 当前完整 WKDUAL01 镜像：3,405,824 字节；4 MiB 区域剩余 788,480 字节。
+- 当前完整 arm64/x86_64 便携程序：3,342,784 字节，已链接 Rust 文件夹引擎。
+- 当前完整 WKDUAL01 镜像：3,407,872 字节；4 MiB 区域剩余 786,432 字节。
 - 镜像已经过挂载、文件哈希、执行权限及严格签名校验。开发版是 ad-hoc 签名，未做 Developer ID 公证。
 - 这个容量不包含 Windows 程序。加入 Windows 或改变签名资源后须重新核算。
 - V467 开发板没有已确认的外部 NOR。本轮使用其 8 MiB PSRAM 的前 4 MiB；断电后由 Book 重新上传。
@@ -45,22 +45,25 @@ mini 从线内只读卷打开应用，由 mini CPU 执行。不复制到 Applica
 
 本地构建结果不进入源码仓库。构建脚本均使用新目录，不替换当前可用控制程序。
 
-- 目标应用：`build/portable-direct-cable-20261109-v4/`
-- 程序盘：`build/portable-media-20261109-final/`
-- Book 协调器与固定哈希配置：`build/portable-book-20261109-ram-power-v4/`
-- RAM 程序盘固件：`experiments/mt2-petros-profile/candidate-ram-setup-20261109-final/`
+- 目标应用：`build/portable-direct-cable-20261109-portal-v5/`
+- 程序盘：`build/portable-media-20261109-portal-v5/`
+- Book 协调器与固定哈希配置：`build/portable-book-20261109-diag-v8/`
+- RAM 程序盘固件：`experiments/mt2-petros-profile/candidate-ram-setup-20261109-power-v3/`
 - 原生输入已验收固件继续保留在 `candidate-native-v2-final-20261109/`。
 
 Book 协调器先等待输入捕获就绪，再异步上传程序盘；上传失败保留输入并重试。装载工具退出并释放文件 CDC 后才启动剪贴板组件。组件与装载工具使用同一独占文件锁。剪贴板子进程退出后可重试，不能删除仍被输入控制器使用的私有 socket 目录。
 
-当前自动启动服务尚未切换到这个新协调器，避免未经实机验证就改变用户可用输入。构建成功不能当作自动启动或真实剪贴板通过。
+Rust 监督服务已支持可选的便携协调器及固定哈希配置；保留旧 input-only 模式。当前 v8 在 Book 临时运行，尚未安装为 LaunchAgent。原 LaunchAgent 仅在本次会话中 bootout，plist、旧二进制及授权保留；不能称为新版登录自启已通过。
 
 ## 验证要求
 
 离线证据在 `results/portable-direct-cable-20261109/`。它们覆盖模拟双向文件、图片、文件夹、取消重试、本机复制优先、原生输入共存和实际主循环调度。模拟耗时不能作为真实 USB 速度。
 
-当前实机：补齐官方 PSRAM 供电档位后，84,360 字节修正版刷写/读回通过，完整 3,405,824 字节程序盘上传用时 8.273 秒；Book 从实际 USB 盘读取完整应用并严格验签约 0.446 秒，哈希一致。用户已在 mini 直接打开卷内应用，确认双向新文字、两台内部新文字复制粘贴、键鼠、双指、四指及自动返回正常。Book 新协调器正在临时试运行，原自启服务暂时停止但配置未变。当前文件入口报不可用，图片/文件/文件夹和大文件时延等仍待验收。
+当前实机：PSRAM 供电修正版的刷写/独立读回通过。当前 v5 只读程序盘上传 8.228 秒；用户已在 mini 直接打开卷内应用，双向新文字、两台内部新文字复制粘贴、键鼠、双指、四指及自动返回均确认正常。
 
+文件入口的 `/var` 与 `/private/var` 别名问题已修复：必须在挂载前用 realpath 固定本地目录。隔离实测挂载入口可用，v5 已应用到两端。原来的 mini→Book 首轮粘贴出现 Finder 100004、Book 文件 0 字节，明确判为失败。切换 Book v8 诊断版后重试，完整接收 8,388,608 字节，整体 SHA-256 和 Book 原文件/回传文件均为 `1b56cc59b9da209542f3bda071bb65f1bddca2c7ee9f5aeac90e4cd7b5716b4e`，实现一次真实往返内容校验。该次 USB 正文约 10.303 秒、约 0.81 MB/s；这不满足“高速已交付”的结论。首轮错误的根因尚未确定，不能把诊断版重试通过写成根因修复。
+
+当前证据：`autostart-trial-v8/return-integrity-check.json`、`clipboard-metadata-after-retry.log`；它们位于上述 results 目录，未公开提交。图片、多文件/文件夹、物理取消、新粘贴时延、饱和输入延迟和真实重启尚待验收。
 实机仍须逐项完成：
 
 1. DBG 核对芯片 `0x46740011`、UID `ad21ad506c54c6c6`、调试器序列号 `A47C8F062A1A`，备份并逐字节读回新固件。

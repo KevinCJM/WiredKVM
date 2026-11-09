@@ -28,6 +28,14 @@ def main():
             raise RuntimeError(f'{result.returncode}: see {out / log}')
 
     crate = ROOT / 'native/transfer-tree'
+    names=['WKClipboardProtocol','WKOnboarding','WKFnKey','WKScrollRelay','WKGestureRelay','WKInputRelay',
+           'WKClipboardContent','WKClipboardTransport','WKFilePortal','WKStreamFiles','WKTransferTree',
+           'WKFilePipelineSelfTest','WKFilePortalSelfTest','WKOnDemandClipboard','WiredKVMCompanion']
+    sources=[ROOT/'host/clipboard'/(name+'.swift') for name in names]
+    sources += [ROOT/'tests/ch32v407_stream_test.swift',ROOT/'tests/collection_transfer_selftest.swift']
+    inputs=sources+list((crate/'src').glob('*'))+list((crate/'include').glob('*'))+[crate/'build.rs',crate/'Cargo.toml',crate/'Cargo.lock']
+    inputs += [ROOT/p for p in ['firmware/ch32v407/bridge.c','firmware/ch32v407/bridge.h','firmware/main/wire_protocol.c','firmware/main/wire_protocol.h','tests/ch32v407_sim.c','tests/ch32v407_sim.h']]
+    before={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}
     rust_target = out/'rust-target'
     run(['cargo', 'test', '--manifest-path', crate/'Cargo.toml', '--offline', '--locked', '--target-dir', rust_target], 'rust-tests.log')
     run(['cargo', 'build', '--manifest-path', crate/'Cargo.toml', '--offline', '--locked', '--release', '--target-dir', rust_target], 'rust-build.log')
@@ -35,11 +43,6 @@ def main():
     for name, src in [('bridge','firmware/ch32v407/bridge.c'),('wire','firmware/main/wire_protocol.c'),('sim','tests/ch32v407_sim.c')]:
         obj=out/(name+'.o');objects.append(obj)
         run(['/usr/bin/clang','-std=c11','-O2','-Wall','-Wextra','-Werror','-Ifirmware/ch32v407','-Ifirmware/main','-c',src,'-o',obj],name+'.log')
-    names=['WKClipboardProtocol','WKOnboarding','WKFnKey','WKScrollRelay','WKGestureRelay','WKInputRelay',
-           'WKClipboardContent','WKClipboardTransport','WKFilePortal','WKStreamFiles','WKTransferTree',
-           'WKFilePipelineSelfTest','WKFilePortalSelfTest','WKOnDemandClipboard','WiredKVMCompanion']
-    sources=[ROOT/'host/clipboard'/(name+'.swift') for name in names]
-    sources += [ROOT/'tests/ch32v407_stream_test.swift',ROOT/'tests/collection_transfer_selftest.swift']
     binary=out/'collection-test'
     run(['/usr/bin/swiftc','-D','WK_PORTABLE','-D','WK_CH32_TEST','-D','WK_TREE','-O','-parse-as-library',
          '-module-cache-path',out/'swift-cache','-I',crate/'include','-framework','AppKit','-framework','IOKit',
@@ -51,10 +54,11 @@ def main():
     run([binary,'--images'],'images.log')
     run([binary,'--pipeline'],'clipboard-pipeline.log')
     run([binary,'--collection-pipeline'],'collection-pipeline.log')
-    inputs=sources+list((crate/'src').glob('*'))+list((crate/'include').glob('*'))+[crate/'build.rs',crate/'Cargo.toml',crate/'Cargo.lock']
+    if before!={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}:
+        raise RuntimeError('test inputs changed after compilation; passing output is not acceptance')
     manifest={'physicalUSB':False,'generalClipboardAccess':False,'firmwareChanged':False,
               'binary':str(binary),'binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),
-              'sources':{str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}}
+              'sources':before}
     (out/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n')
     print(out)
 

@@ -645,7 +645,17 @@ final class WKFilePortal: @unchecked Sendable {
         guard mkdir(directory.appendingPathComponent("mount").path, 0o700) == 0 else {
             _ = rmdir(directory.path); throw WKFilePortalError.system(errno)
         }
-        return directory
+        return try Self.canonicalLocalDirectory(directory)
+    }
+    // Resolve while this is still a local, unmounted directory. Resolving the
+    // mounted WebDAV URL can block or fail before network-volume permission;
+    // Foundation then leaves /var unchanged while getfsstat reports /private/var.
+    static func canonicalLocalDirectory(_ directory: URL) throws -> URL {
+        guard let path = directory.path.withCString({ realpath($0, nil) }) else {
+            throw WKFilePortalError.system(errno)
+        }
+        defer { free(path) }
+        return URL(fileURLWithPath: String(cString: path), isDirectory: true)
     }
     private static func mountRecord(_ url: URL) -> statfs? {
         let capacity = getfsstat(nil, 0, MNT_NOWAIT)

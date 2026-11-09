@@ -141,6 +141,7 @@ struct Config {
     capture: String,
     state: PathBuf,
     hashes: BTreeMap<String, String>,
+    portable: Option<(String, String)>, // coordinator executable, pinned runtime JSON
 }
 impl Config {
     fn load(path: &Path) -> Result<Self> {
@@ -165,8 +166,15 @@ impl Config {
             capture: get("capture")?,
             state: PathBuf::from(get("state_dir")?),
             hashes: map.clone(),
+            portable: match (map.get("portable_host"),map.get("portable_runtime")) {
+                (None,None)=>None,
+                (Some(host),Some(runtime))=>Some((host.clone(),runtime.clone())),
+                _=>return Err("Portable host and runtime must be configured together".into()),
+            },
         };
-        for p in [&c.native, &c.relay, &c.capture] {
+        let mut paths=vec![&c.native,&c.relay,&c.capture];
+        if let Some((host,runtime))=&c.portable { paths.extend([host,runtime]); }
+        for p in paths {
             if !Path::new(p).is_absolute() || p.contains(['\n', '\t']) {
                 return Err("Invalid executable path".into());
             }
@@ -179,14 +187,22 @@ impl Config {
         Ok(c)
     }
     fn allowed(&self, p: &str) -> bool {
-        p == self.native || p == self.relay || p == self.capture
+        p == self.native || p == self.relay || p == self.capture || self.portable.as_ref().is_some_and(|(host,_)|p==host)
+    }
+    fn required_paths(&self) -> Vec<&str> {
+        match &self.portable {
+            Some((host,_))=>vec![host.as_str(),self.native.as_str(),self.capture.as_str()],
+            None=>vec![self.native.as_str(),self.relay.as_str(),self.capture.as_str()],
+        }
     }
     fn verify(&self) -> Result<()> {
-        for (key, path) in [
+        let mut entries=vec![
             ("native_sha256", &self.native),
-            ("relay_sha256", &self.relay),
             ("capture_sha256", &self.capture),
-        ] {
+        ];
+        if let Some((host,runtime))=&self.portable { entries.extend([("portable_host_sha256",host),("portable_runtime_sha256",runtime)]); }
+        else {entries.push(("relay_sha256",&self.relay));}
+        for (key,path) in entries {
             let (ok, out) = bounded(self, "/usr/bin/shasum", &["-a", "256", path], 5)?;
             if !ok || out.split_whitespace().next() != self.hashes.get(key).map(String::as_str) {
                 return Err(format!("Binary hash mismatch: {key}").into());
@@ -224,24 +240,18 @@ fn bounded(c: &Config, exe: &str, args: &[&str], seconds: u64) -> Result<(bool, 
     }
 }
 fn processes(c: &Config) -> Result<Vec<(Identity, i32)>> {
-    let (ok, text) = bounded(c, "/bin/ps", &["-axo", "pid=,comm="], 3)?;
+    // comm can be truncated to 15 bytes. Read only PIDs from ps, then use the
+    // existing kernel ABI for full paths and birth times; never infer identity
+    // from a displayed command or a basename.
+    let (ok, text) = bounded(c, "/bin/ps", &["-axo", "pid="], 3)?;
     if !ok {
         return Err("Process inventory failed".into());
     }
     let mut found = Vec::new();
     for l in text.lines() {
-        let Some((p, cmd)) = l.trim().split_once(char::is_whitespace) else {
-            continue;
-        };
-        let name = Path::new(cmd.trim())
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("");
-        if ["wiredkvm-native", "wiredkvm-companion", "macos-capture"].contains(&name) {
-            if let Ok(pid) = p.parse() {
-                if let Some(i) = identity(pid) {
-                    found.push(i)
-                }
+        if let Ok(pid)=l.trim().parse() {
+            if let Some(i)=identity(pid) {
+                if c.allowed(&i.0.path) { found.push(i); }
             }
         }
     }
@@ -308,9 +318,20 @@ impl Session {
         for p in &mut self.children {
             let _ = p.try_wait();
         }
-        [&c.native, &c.relay, &c.capture]
-            .iter()
-            .all(|path| self.members.iter().any(|p| &p.path == *path && alive(p)))
+        if let Some((host,_))=&c.portable {
+            let Some(root)=self.members.iter().find(|p|p.path==*host&&alive(p)).cloned() else{return false;};
+            let mut changed=false;
+            for (p,parent) in processes(c).unwrap_or_default() {
+                if p.pid==root.pid||self.members.iter().any(|old|old==&p){continue;}
+                let direct=(p.path==c.native||p.path==c.relay)&&parent==root.pid;
+                let capture=p.path==c.capture&&self.members.iter().any(|old|old.path==c.native&&old.pid==parent&&alive(old));
+                if direct||capture {
+                    self.members.push(p);changed=true;
+                }
+            }
+            if changed && self.save(c).is_err(){return false;}
+        }
+        c.required_paths().iter().all(|path|self.members.iter().any(|p|p.path==*path&&alive(p)))
     }
     fn stop(&mut self, c: &Config) {
         // Capture's SIGTERM handler restores the local pointer. Do not KILL it first.
@@ -362,6 +383,7 @@ fn start(c: &Config, d: &Device) -> Result<Session> {
     if devices()?.as_slice() != [d.clone()] || unsafe { wk_console_active() } == 0 {
         return Err("USB or login changed during probe".into());
     }
+    if c.portable.is_some(){return start_portable(c,d);}
     // A new path isolates reconnects from stale local sockets and pending messages.
     let ipc = PathBuf::from(format!(
         "/private/tmp/wk-auto-{}-{}",
@@ -460,6 +482,26 @@ fn start(c: &Config, d: &Device) -> Result<Session> {
     }
     Ok(s)
 }
+fn start_portable(c:&Config,d:&Device)->Result<Session> {
+    let (host,runtime)=c.portable.as_ref().ok_or("Portable configuration missing")?;
+    let path=c.state.join("control.log");
+    if path.exists(){fs::rename(&path,c.state.join("control.log.previous"))?;}
+    let log=OpenOptions::new().create_new(true).write(true).mode(0o600).open(path)?;
+    let mut child=Command::new(host).args(["--runtime-config",runtime]).stdin(Stdio::null())
+        .stdout(log.try_clone()?).stderr(log).spawn()?;
+    let id=match stamp(child.id() as i32,host){Ok(id)=>id,Err(e)=>{let _=child.kill();let _=child.wait();return Err(e);}};
+    let mut s=Session{device:d.clone(),members:vec![id],children:vec![child]};
+    let result=(||->Result<()> {
+        s.save(c)?;let deadline=Instant::now()+Duration::from_secs(8);
+        while Instant::now()<deadline&&!STOP.load(Ordering::Relaxed) {
+            if s.children.iter_mut().any(|p|!matches!(p.try_wait(),Ok(None))){return Err("Portable coordinator exited".into());}
+            if tail(&c.state.join("control.log"),16384).lines().any(|l|l=="CH32_INPUT_READY")&&s.healthy(c){return Ok(());}
+            thread::sleep(Duration::from_millis(100));
+        }
+        Err("Portable input capture did not become ready".into())
+    })();
+    if let Err(e)=result{s.stop(c);return Err(e);}Ok(s)
+}
 fn state(c: &Config, status: &str, detail: &str) {
     let message = format!(
         "time_ms={}\nstatus={}\ndetail={}\n",
@@ -487,7 +529,7 @@ fn run(c: Config) -> Result<()> {
     c.verify()?;
     let mut session = Session::load(&c)?;
     if session.is_some() {
-        state(&c, "adopted", "Existing input-only runtime retained")
+        state(&c, "adopted", "Existing authorized runtime retained")
     }
     let mut last = String::new();
     let mut next_start = Instant::now();
@@ -569,8 +611,27 @@ fn main() -> Result<()> {
     match args.get(1).map(String::as_str) {
         Some("inventory")=>{println!("console_active={}",unsafe{wk_console_active()});for d in devices()?{println!("{}\t{}\t{}",d.entry,d.location,d.port)}Ok(())},
         Some("run") if args.len()==3=>run(Config::load(Path::new(&args[2]))?),
+        Some("seed-portable") if args.len()==4=>{
+            let c=Config::load(Path::new(&args[2]))?;c.verify()?;
+            let lock=OpenOptions::new().create(true).truncate(false).write(true).mode(0o600).open(c.state.join("service.lock"))?;
+            if unsafe{wk_lock(lock.as_raw_fd())}!=0{return Err("Stop the supervisor before adopting a runtime".into());}
+            let host=&c.portable.as_ref().ok_or("Portable mode required")?.0;
+            if c.state.join("session.tsv").exists(){return Err("Existing session must not be overwritten".into());}
+            let ds=devices()?;if ds.len()!=1{return Err("Expected one host interface".into());}
+            let root=stamp(args[3].parse()?,host)?;
+            let mut session=Session{device:ds[0].clone(),members:vec![root],children:vec![]};
+            if !session.healthy(&c){let _=fs::remove_file(c.state.join("session.tsv"));return Err("Portable input process tree is incomplete".into());}
+            let (ok,held)=bounded(&c,"/usr/sbin/lsof",&["-t",&ds[0].port],3)?;
+            let holders:Vec<i32>=held.lines().filter_map(|s|s.parse().ok()).collect();
+            if !ok||holders.is_empty()||holders.iter().any(|pid|!session.members.iter().any(|p|p.pid==*pid)){
+                let _=fs::remove_file(c.state.join("session.tsv"));
+                return Err("Selected USB port is not exclusively held by the verified runtime".into());
+            }
+            session.save(&c)?;println!("Portable runtime adoption recorded");Ok(())
+        },
         Some("seed") if args.len()==6=>{
             let c=Config::load(Path::new(&args[2]))?; c.verify()?;
+            if c.portable.is_some(){return Err("Use seed-portable for a portable coordinator".into());}
             if c.state.join("session.tsv").exists(){return Err("Existing session record must not be overwritten".into())}
             let ds=devices()?; if ds.len()!=1{return Err("Expected one host control interface".into())}
             let mut members=vec![];
@@ -604,6 +665,7 @@ mod platform_tests {
             capture: "/bin/sleep".into(),
             state,
             hashes: BTreeMap::new(),
+            portable: None,
         }
     }
     #[test]
@@ -677,5 +739,40 @@ mod platform_tests {
         s.stop(&c);
         assert!(!alive(&id));
         assert!(!c.state.join("session.tsv").exists());
+    }
+    #[test]
+    fn portable_config_is_explicit_and_requires_both_pinned_paths() {
+        let c=config("portable-config");let path=c.state.join("config.txt");
+        let base=format!("native=/usr/bin/true\nrelay=/usr/bin/false\ncapture=/bin/sleep\nstate_dir={}\n",c.state.display());
+        fs::write(&path,format!("{base}portable_host=/bin/cat\n")).unwrap();assert!(Config::load(&path).is_err());
+        fs::write(&path,format!("{base}portable_host=/bin/cat\nportable_runtime=/tmp/wk-test-runtime.json\n")).unwrap();
+        let parsed=Config::load(&path).unwrap();assert!(parsed.allowed("/bin/cat"));assert!(!parsed.allowed("/tmp/wk-test-runtime.json"));
+        assert_eq!(parsed.required_paths(),vec!["/bin/cat","/usr/bin/true","/bin/sleep"]);
+        fs::write(&path,format!("{base}portable_host=relative\nportable_runtime=/tmp/wk-test-runtime.json\n")).unwrap();assert!(Config::load(&path).is_err());
+    }
+    #[test]
+    fn portable_adoption_tracks_exact_parent_roles_and_keeps_foreign_children() {
+        let mut c=config("portable-tree");let me=identity(std::process::id() as i32).unwrap().0;
+        c.portable=Some((me.path.clone(),"/tmp/wk-fixture.json".into()));c.native="/bin/zsh".into();c.capture="/bin/sleep".into();
+        let foreign=Command::new("/bin/sleep").arg("30").spawn().unwrap();let foreign_id=stamp(foreign.id() as i32,"/bin/sleep").unwrap();
+        let native=Command::new("/bin/zsh").args(["-c","/bin/sleep 30 & wait"]).spawn().unwrap();
+        let mut s=Session{device:Device{entry:1,location:1,port:"/dev/cu.test".into()},members:vec![me.clone()],children:vec![native]};
+        let deadline=Instant::now()+Duration::from_secs(3);let mut ready=false;
+        while Instant::now()<deadline{if s.healthy(&c){ready=true;break;}thread::sleep(Duration::from_millis(30));}
+        let foreign_was_excluded=!s.members.iter().any(|p|p==&foreign_id);
+        s.members.retain(|p|p!=&me);s.stop(&c);let foreign_survived=alive(&foreign_id);
+        let mut foreign=foreign;let _=foreign.kill();let _=foreign.wait();
+        assert!(ready);assert!(foreign_was_excluded);assert!(foreign_survived);
+    }
+    #[test]
+    fn unavailable_portable_clipboard_does_not_block_verified_input_startup() {
+        let mut c=config("portable-input-priority");let runtime=c.state.join("runtime.json");fs::write(&runtime,"{}").unwrap();
+        c.relay="/private/tmp/wk-no-such-component".into();c.portable=Some((std::env::current_exe().unwrap().to_str().unwrap().into(),runtime.to_str().unwrap().into()));
+        let (host,json)=c.portable.as_ref().unwrap();
+        for (key,path) in [("native_sha256",&c.native),("capture_sha256",&c.capture),("portable_host_sha256",host),("portable_runtime_sha256",json)] {
+            let output=Command::new("/usr/bin/shasum").args(["-a","256",path]).output().unwrap();assert!(output.status.success());
+            c.hashes.insert(key.into(),String::from_utf8(output.stdout).unwrap().split_whitespace().next().unwrap().into());
+        }
+        assert!(c.verify().is_ok());c.portable=None;assert!(c.verify().is_err());
     }
 }

@@ -71,6 +71,18 @@ struct WKBulkControl {
     }
 }
 enum WKStreamError: Error { case invalid, disconnected, integrity, changed, capacity, timeout, system(Int32) }
+private func streamErrorCode(_ error: Error) -> String {
+    guard let e=error as? WKStreamError else{return "stream-io"}
+    switch e {
+    case .invalid:return "stream-invalid"
+    case .disconnected:return "stream-disconnected"
+    case .integrity:return "stream-integrity"
+    case .changed:return "stream-source-changed"
+    case .capacity:return "stream-capacity"
+    case .timeout:return "stream-timeout"
+    case .system(let code):return "posix-"+String(code)
+    }
+}
 
 // Only the receiver creates this after length and whole-file SHA-256 pass.
 // The unlinked file is pinned by its descriptor; no later pathname substitution.
@@ -310,6 +322,11 @@ final class WKStreamEngine {
     var onComplete: (String) -> Void = { _ in }
     var onFailure: (String) -> Void = { _ in }
     var onFault: (Error) -> Void = { _ in }
+    var onDiagnostic: (String) -> Void = { _ in }
+    private func diagnostic(_ error: Error, phase: String = "REJECT") {
+        // Fixed enums/numbers only: no path, UUID, frame bytes or error description.
+        onDiagnostic("WKCLIP_DIAG role=\(io.port == 0 ? "host" : "target") event=ERROR code=\(streamErrorCode(error)) phase=\(phase)")
+    }
     init(io: WKStreamIO, directory: URL, inlineDisk: Bool = false) { self.io = io; self.directory = directory; self.inlineDisk = inlineDisk }
     func setEpoch(_ value: UInt64) {
         guard value != epoch else { return }; cancelAll(); epoch = value; input.removeAll(); output.removeAll()
@@ -333,6 +350,7 @@ final class WKStreamEngine {
         let available = UInt64(fs.f_bavail) * UInt64(fs.f_bsize)
         guard available > 256 * 1024 * 1024, offer.size + promised <= available - 256 * 1024 * 1024 else { throw WKStreamError.capacity }
         incoming[offer.id] = try Incoming(offer, now, directory: directory)
+        onDiagnostic("WKCLIP_DIAG role=\(io.port == 0 ? "host" : "target") event=BULK_RX phase=REQUEST transfer=\(offer.generation) acked=0 total=\(offer.size)")
         let control = WKBulkControl(kind: .grant, origin: 1-io.port, epoch: epoch, id: offer.id, generation: offer.generation)
         pendingControls[offer.id] = PendingControl(control: control)
 
@@ -366,6 +384,7 @@ final class WKStreamEngine {
             emitControl(WKBulkControl(kind: .accepted, origin: c.origin, epoch: epoch, id: c.id, generation: c.generation).encode())
         case .accepted:
             if pendingControls[c.id]?.control.kind == .grant && incoming[c.id]?.offer.generation == c.generation {
+                onDiagnostic("WKCLIP_DIAG role=\(io.port == 0 ? "host" : "target") event=BULK_RX phase=START transfer=\(c.generation) acked=0 total=\(incoming[c.id]!.offer.size)")
                 pendingControls.removeValue(forKey: c.id); onAccepted(c.id)
             }
         case .cancel:
@@ -460,7 +479,7 @@ final class WKStreamEngine {
                         guard n == bytes.count else { throw WKStreamError.system(errno) }; return n
                     }
                 }
-            } catch { cancel(id); onFailure(id) }
+            } catch { diagnostic(error);cancel(id); onFailure(id) }
         }
         for (id, item) in outgoing where item.granted {
             do {
@@ -474,7 +493,7 @@ final class WKStreamEngine {
                         }
                     }
                 }
-            } catch { cancel(id); onFailure(id) }
+            } catch { diagnostic(error);cancel(id); onFailure(id) }
         }
     }
     func step(now: Double) {
@@ -502,6 +521,7 @@ final class WKStreamEngine {
                 consumed += Self.cell
                 do { let frame = try Frame.decode(bytes); try receive(frame, now: now) }
                 catch {
+                    diagnostic(error)
                     // The fixed boundary is intact. Reject only the named
                     // transaction, preserving unrelated verified snapshots.
                     let raw = Array(bytes[20..<36])
@@ -528,7 +548,7 @@ final class WKStreamEngine {
                     } else if item.offset == item.source.offer.size && item.acked == item.offset && !item.finished {
                         if item.finalCheck == nil { item.finalCheck = WKDiskTask(inline: inlineDisk, gate: diskGate) { [source = item.source] in source.unchanged() } }
                         guard let result = item.finalCheck?.result() else { continue }
-                        guard (try? result.get()) == true else { cancel(id); onFailure(id); continue }
+                        guard (try? result.get()) == true else { diagnostic(WKStreamError.changed);cancel(id); onFailure(id); continue }
                         try enqueue(Frame(kind: 2, epoch: epoch, id: id, offset: item.offset, body: Data(item.hash.finalize())))
                         item.finished = true
                     }
@@ -545,7 +565,7 @@ final class WKStreamEngine {
                 }
             }
             maxBuffered = max(maxBuffered, input.count+outputBytes+incoming.values.reduce(0) { $0+$1.staged.count }+outgoing.values.reduce(0) { $0+$1.prefetched.count })
-        } catch { onFault(error); stop() }
+        } catch { diagnostic(error);onFault(error); stop() }
     }
 
 }
@@ -613,6 +633,7 @@ final class WKStreamFiles {
             do {
                 let e = WKStreamEngine(io: try connect(), directory: directory); engine = e; e.setEpoch(desiredEpoch)
                 e.onControl = { [weak self] data in DispatchQueue.main.async { self?.onControl(data) } }
+                e.onDiagnostic = { wkLog($0) }
                 e.onAccepted = { [weak self] id in DispatchQueue.main.async { self?.onAccepted(id) } }
                 // UI progress is throttled; no per-cell main-thread flood.
                 var lastProgress: [String: Double] = [:]

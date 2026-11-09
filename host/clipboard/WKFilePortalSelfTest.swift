@@ -25,6 +25,21 @@ struct WKFilePortalSelfTest {
     }
     static func digest(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
 
+    static func canonicalDirectoryTests() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("wk-portal-path-" + UUID().uuidString)
+        let real = root.appendingPathComponent("real"), alias = root.appendingPathComponent("alias")
+        let mount = real.appendingPathComponent("mount")
+        try FileManager.default.createDirectory(at: mount, withIntermediateDirectories: true)
+        defer { _ = unlink(alias.path); _ = rmdir(mount.path); _ = rmdir(real.path); _ = rmdir(root.path) }
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: real)
+        let canonical = try WKFilePortal.canonicalLocalDirectory(alias.appendingPathComponent("mount"))
+        check(canonical.lastPathComponent == "mount" && canonical.deletingLastPathComponent().lastPathComponent == "real", "resolve before mounting")
+        var a = stat(), b = stat()
+        check(stat(mount.path, &a) == 0 && stat(canonical.path, &b) == 0 && a.st_ino == b.st_ino && a.st_dev == b.st_dev, "same local directory")
+        mustThrow("missing path cannot silently retain an alias") { _ = try WKFilePortal.canonicalLocalDirectory(root.appendingPathComponent("missing")) }
+        print("PORTAL_CANONICAL_DIRECTORY_PASS before_mount=true symlink_parent=true no_mount=true")
+    }
+
     struct Response: Sendable { let status: Int, headers: [String: String], body: Data }
     static func request(_ url: URL, _ method: String = "GET", headers: [String: String] = [:], target: String? = nil) throws -> Response {
         let fd = socket(AF_INET, SOCK_STREAM, 0)
@@ -174,7 +189,7 @@ struct WKFilePortalSelfTest {
         refused.stop()
     }
     static func main() throws {
-        try storeTests(); try httpTests()
+        try canonicalDirectoryTests(); try storeTests(); try httpTests()
         let portal = WKFilePortal(), stopped = PortalTestBox(false)
         portal.stop { check(Thread.isMainThread, "stop completion main thread"); stopped.put(true) }
         let deadline = Date().addingTimeInterval(2)

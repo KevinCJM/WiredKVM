@@ -20,7 +20,9 @@ enum WKMetadata {
         "peer-timeout", "receive-timeout", "send-timeout", "invalid-command-stream", "unsupported-or-unavailable-clipboard",
         "paste-not-ready-copy-again-or-wait", "destination-clipboard-changed-or-unavailable", "transfer-rejected-or-interrupted",
         "invalid-private-socket-path", "socket-create-failed", "socket-nonblocking-failed", "local-install-failed",
-        "file-portal-unavailable", "file-portal-access-denied", "file-transfer-queue-full", "file-offer-mismatch", "invalid-file-offer"
+        "file-portal-unavailable", "file-portal-access-denied", "file-transfer-queue-full", "file-offer-mismatch", "invalid-file-offer",
+        "stream-file-interrupted", "stream-file-publish-failed", "stream-invalid", "stream-disconnected", "stream-integrity",
+        "stream-source-changed", "stream-capacity", "stream-timeout", "stream-io", "bulk-image-decode-failed", "collection-publish-failed"
     ]
     private static let booleans: Set<String> = ["accepted", "ready", "linkReady", "completedNonceMatches", "completedDirectionMatches",
         "latestNonceMatches", "latestDirectionMatches", "notCancelled", "revisionMatches", "notTransmitting", "noPending",

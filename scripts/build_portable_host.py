@@ -24,10 +24,14 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     for name in ['output','companion-build','media-build','capture','touch','loader']:
         parser.add_argument('--'+name,type=Path,required=True)
+    parser.add_argument('--media-companion-build',type=Path,
+        help='explicit older target artifact, when only the Book companion is updated')
     args=parser.parse_args();out=args.output.resolve()
     if not out.is_relative_to(ROOT/'build'):
         raise ValueError('output must be a fresh project build directory')
     companion=json.loads((args.companion_build/'manifest.json').read_text())
+    target_build=args.media_companion_build or args.companion_build
+    target=json.loads((target_build/'manifest.json').read_text())
     media=json.loads((args.media_build/'manifest.json').read_text())
     asset=(args.media_build/'cable-program.bin').resolve()
     if sha(asset)!=media['assetSHA256'] or not media['mountedReadOnlyVerified']:
@@ -35,11 +39,18 @@ def main():
     binary=Path(companion['binary'])
     if sha(binary)!=companion['sha256']:
         raise ValueError('companion hash mismatch')
-    if not any(p.endswith('/Contents/MacOS/WiredKVMPortable') and row['sha256']==companion['sha256']
+    target_binary=Path(target['binary'])
+    if sha(target_binary)!=target['sha256']:
+        raise ValueError('target artifact hash mismatch')
+    subprocess.run(['/usr/bin/codesign','--verify','--deep','--strict',str(target_binary.parents[2])],check=True)
+    if not any(p.endswith('/Contents/MacOS/WiredKVMPortable') and row['sha256']==target['sha256']
                for p,row in media['files'].items()):
         raise ValueError('program disk contains a different companion build')
     for p,digest in companion['sources'].items():
         if sha(ROOT/p)!=digest:raise ValueError('companion source changed: '+p)
+    sources=[ROOT/'host/clipboard'/(p+'.swift') for p in SOURCES]+[ROOT/'host/gui/WiredKVMClipboard.swift',ROOT/'host/ch32v407_host.swift']
+    tracked=sources+sorted((ROOT/'native').glob('*.hpp'))+[ROOT/'native/wiredkvm.cpp']
+    source_hashes={str(p.relative_to(ROOT)):sha(p) for p in tracked}
     out.mkdir(parents=True,exist_ok=False);commands=[]
     def run(argv):
         argv=list(map(str,argv));commands.append(argv)
@@ -52,7 +63,6 @@ def main():
     crate=ROOT/'native/transfer-tree'
     arch={'arm64':'aarch64-apple-darwin','x86_64':'x86_64-apple-darwin'}[platform.machine()]
     archive=args.companion_build/'rust-target'/arch/'release/libwiredkvm_transfer_tree.a'
-    sources=[ROOT/'host/clipboard'/(p+'.swift') for p in SOURCES]+[ROOT/'host/gui/WiredKVMClipboard.swift',ROOT/'host/ch32v407_host.swift']
     host=out/'wiredkvm-ch32-host'
     run(['/usr/bin/swiftc','-D','WK_PORTABLE','-D','WK_TREE','-D','WK_CH32_TEST','-O','-parse-as-library',
          '-target',platform.machine()+'-apple-macosx13.0',
@@ -63,9 +73,13 @@ def main():
             'touch':str(args.touch.resolve()),'loader':str(loader),'asset':str(asset)}
     config['hashes']={p:sha(Path(p)) for p in config.values()}
     (out/'runtime.json').write_text(json.dumps(config,ensure_ascii=False,indent=2)+'\n')
+    for path,digest in source_hashes.items():
+        if sha(ROOT/path)!=digest:raise ValueError('source changed during build: '+path)
     manifest={'host':str(host),'hostSHA256':sha(host),'runtime':config,'launched':False,'autostartChanged':False,
               'inputFirst':True,'programUploadUsesSeparateCDC':True,
-              'sources':{str(p.relative_to(ROOT)):sha(p) for p in sources+[ROOT/'native/wiredkvm.cpp']}}
+              'targetArtifact':str(target_binary),'targetArtifactSHA256':target['sha256'],
+              'targetSourceHashesCheckedAgainstCurrentTree':args.media_companion_build is None,
+              'sources':source_hashes}
     (out/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n')
     (out/'commands.json').write_text(json.dumps(commands,indent=2)+'\n')
     print(json.dumps({'host':str(host),'launched':False,'autostartChanged':False}))

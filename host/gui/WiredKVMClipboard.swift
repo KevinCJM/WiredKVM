@@ -429,11 +429,12 @@ final class WKClipboardProcess {
     }
 
     static func statusText(_ value: String) -> String {
-        if value.hasPrefix("READY") { return "已连接：支持文字、PNG 和单个普通文件，每项 ≤1 MiB。" }
+        if value.hasPrefix("READY") { return "有线剪贴板已连接。" }
         if value.hasPrefix("TRANSFER offered") || value.hasPrefix("TRANSFER file-sending") {
             return "文件入口已就绪，可以按 ⌘V 开始 Finder 拷贝。"
         }
-        if value.hasPrefix("TRANSFER complete") { return "内容已完整送达，可以按 ⌘V 粘贴。" }
+        if value.hasPrefix("TRANSFER file-in-progress") { return "文件复制已开始，请以 Finder 进度为准。" }
+        if value.hasPrefix("TRANSFER complete") { return "粘贴内容已就绪。" }
         if value.hasPrefix("TRANSFER") { return "正在通过 USB 传输，请稍候…" }
         if value.contains("paste-not-ready") { return "本次跨机粘贴已取消；本机复制粘贴仍可使用。" }
         if value.contains("over-1MiB") || value.contains("item-too-large") { return "内容超过首版 1 MiB 限制，本次未传输。" }

@@ -1397,6 +1397,78 @@
         "在独立文件 CDC 读取固定状态；保持输入服务运行，不用 DBG 暂停正在控制的 MCU",
         "记录芯片身份、候选哈希、故障地址、预期/实际值及完整物理读回结果"
       ]
+    },
+    {
+      "id": "P38",
+      "title": "本地挂载目录须在挂载前规范化，文件出现不能代替完整性验收",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p38_guard"
+      ],
+      "symptoms": [
+        "mount_webdav 返回成功但入口误判不可用",
+        "Finder 文件出现后报 100004，目标只有零字节"
+      ],
+      "trigger_actions": [
+        "修改便携文件入口、接收发布或文件验收"
+      ],
+      "related_paths": [
+        "host/clipboard/WKFilePortal.swift",
+        "host/clipboard/WKFilePortalSelfTest.swift",
+        "host/clipboard/WKOnDemandClipboard.swift",
+        "docs/research/DIRECT_CABLE_RUNTIME_20261109.md"
+      ],
+      "affected_modules": [
+        "portable_cable_runtime",
+        "clipboard_bulk"
+      ],
+      "blast_radius": [
+        "Finder source portal and integrity acceptance"
+      ],
+      "check_before_edit": [
+        "本地目录须在 mount_webdav 前 realpath；挂载后 URL 解析可能保留 /var，与内核 /private/var 记录不一致",
+        "收到元数据/返回 READY/出现目标文件不能称为正文完成；只有完整长度、整体 SHA 校验和目标实际文件哈希通过才算完整性验收",
+        "首轮 100004 根因未知，不能把之后重试通过归因于未证实的租约或传输超时"
+      ],
+      "safe_observation_methods": [
+        "只在自建测试入口检查只读挂载和延迟 GET；记录匿名传输代次、总长度、完成和固定错误码；核对自建测试文件哈希"
+      ]
+    },
+    {
+      "id": "P39",
+      "title": "构建前后冻结输入，不能用结束时哈希冒充编译输入",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p39_guard"
+      ],
+      "symptoms": [
+        "测试编译期间输入被修改，manifest 却记录结束时的新哈希"
+      ],
+      "trigger_actions": [
+        "构建候选程序或运行源码绑定的回归"
+      ],
+      "related_paths": [
+        "scripts/build_portable_companion.py",
+        "scripts/build_portable_host.py",
+        "tests/test_collection_transfer.py",
+        "docs/history/DIRECT_CABLE_DEVELOPMENT_20261109.md"
+      ],
+      "affected_modules": [
+        "portable_cable_runtime"
+      ],
+      "blast_radius": [
+        "candidate artifact provenance and regression evidence"
+      ],
+      "check_before_edit": [
+        "编译/测试开始前快照所有相关输入，结束时复核不变；运行期间不修改这些输入",
+        "旧目标介质和新 Book 程序允许显式版本不同，但必须独立核对二者的固定二进制及介质哈希，不声称旧目标来自当前源码",
+        "失效证据须标记 INVALIDATED，不部署该批输出"
+      ],
+      "safe_observation_methods": [
+        "新目录构建，比较开始/结束快照及最终二进制哈希，禁止覆盖活动运行路径"
+      ]
     }
   ]
 }
