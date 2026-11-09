@@ -208,20 +208,30 @@ final class WKHIDTransport: WKTransport {
     private let queueLock = NSLock()
     private var queued = 0
     private var generation: UInt64 = 0
-    private let vendor: Int
-    private let product: Int
+    private let identities: [(vendor: Int, product: Int)]
     private let serial: String
     private var nextAttach: Double = 0
 
-    init(vendor: Int = 0x303a, product: Int = 0x700c, serial: String = "Prototype-DoNotShip") { self.vendor = vendor; self.product = product; self.serial = serial }
+    init(vendor: Int = 0x303a, product: Int = 0x700c, serial: String = "Prototype-DoNotShip") {
+        self.identities = [(vendor, product)]; self.serial = serial
+    }
+    private init(identities: [(vendor: Int, product: Int)], serial: String) {
+        self.identities = identities; self.serial = serial
+    }
+    static func ch32Target() -> WKHIDTransport {
+        WKHIDTransport(identities: WKUSBDiscovery.targetIdentities, serial: "CH32V407-DoNotShip")
+    }
     deinit { buffer.deallocate() }
 
     func start() {
         let m = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
         manager = m
-        let matching: [String: Any] = [kIOHIDVendorIDKey: vendor, kIOHIDProductIDKey: product,
-            kIOHIDPrimaryUsagePageKey: 0xff60, kIOHIDPrimaryUsageKey: 0x61]
-        IOHIDManagerSetDeviceMatching(m, matching as CFDictionary)
+        let matching: [[String: Any]] = identities.map {
+            [kIOHIDVendorIDKey: $0.vendor, kIOHIDProductIDKey: $0.product,
+             kIOHIDManufacturerKey: "WiredKVM Prototype", kIOHIDSerialNumberKey: serial,
+             kIOHIDPrimaryUsagePageKey: 0xff60, kIOHIDPrimaryUsageKey: 0x61]
+        }
+        IOHIDManagerSetDeviceMatchingMultiple(m, matching as CFArray)
         let context = Unmanaged.passUnretained(self).toOpaque()
         IOHIDManagerRegisterDeviceMatchingCallback(m, { context, result, _, device in
             guard result == kIOReturnSuccess, let context else { return }
@@ -238,6 +248,9 @@ final class WKHIDTransport: WKTransport {
 
     private func attach(_ candidate: IOHIDDevice) {
         guard device == nil,
+              let vendor = IOHIDDeviceGetProperty(candidate, kIOHIDVendorIDKey as CFString) as? Int,
+              let product = IOHIDDeviceGetProperty(candidate, kIOHIDProductIDKey as CFString) as? Int,
+              identities.contains(where: { $0.vendor == vendor && $0.product == product }),
               IOHIDDeviceGetProperty(candidate, kIOHIDManufacturerKey as CFString) as? String == "WiredKVM Prototype",
               IOHIDDeviceGetProperty(candidate, kIOHIDSerialNumberKey as CFString) as? String == serial,
               IOHIDDeviceGetProperty(candidate, kIOHIDPrimaryUsagePageKey as CFString) as? Int == 0xff60,

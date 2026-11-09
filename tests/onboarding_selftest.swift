@@ -9,6 +9,11 @@ import Foundation
         func check(_ name: String, _ test: () -> Void) { test(); count += 1; print("ONBOARDING \(name) PASS") }
         check("role-interface-identity-not-arbitrary-serial") {
             precondition(WKUSBDiscovery.accepts(vendor:0x1a86,product:0x4070,serial:"CH32V407-DoNotShip",interface:0))
+            for interface in [3, 4] {
+                precondition(WKUSBDiscovery.accepts(vendor:0x05ac,product:0x0265,serial:"CH32V407-DoNotShip",interface:interface))
+            }
+            precondition(!WKUSBDiscovery.accepts(vendor:0x05ac,product:0x0265,serial:"genuine-trackpad",interface:3))
+            precondition(!WKUSBDiscovery.accepts(vendor:0x05ac,product:0x0265,serial:"CH32V407-DoNotShip",interface:6))
             for (v,p,s,i) in [(0x303a,0x4070,"CH32V407-DoNotShip",0),(0x1a86,0x4070,"other",0),(0x1a86,0x4070,"CH32V407-DoNotShip",4),(0x1a86,0x4071,"CH32V407-DoNotShip",5)] {
                 precondition(!WKUSBDiscovery.accepts(vendor:v,product:p,serial:s,interface:i))
             }
@@ -17,9 +22,12 @@ import Foundation
             let a=WKUSBDiscovery.Port(path:"/dev/cu.host-control",serial:"fixture",product:0x4070,interface:0)
             let b=WKUSBDiscovery.Port(path:"/dev/cu.host-files",serial:"fixture",product:0x4070,interface:2)
             let c=WKUSBDiscovery.Port(path:"/dev/cu.target-files",serial:"fixture",product:0x4071,interface:3)
+            let native=WKUSBDiscovery.Port(path:"/dev/cu.native-files",serial:"CH32V407-DoNotShip",product:0x0265,interface:3)
             precondition(WKUSBDiscovery.unique(role:"host",files:false,inventory:[a,b])==a.path)
             precondition(WKUSBDiscovery.unique(role:"host",files:true,inventory:[a,b])==b.path)
             precondition(WKUSBDiscovery.unique(role:"target",files:true,inventory:[c])==c.path)
+            precondition(WKUSBDiscovery.unique(role:"target",files:true,inventory:[native])==native.path)
+            precondition(WKUSBDiscovery.unique(role:"target",files:true,inventory:[c,native])==nil)
             let d=WKUSBDiscovery.Port(path:"/dev/cu.other",serial:"fixture2",product:0x4070,interface:0)
             precondition(WKUSBDiscovery.unique(role:"host",files:false,inventory:[a,d])==nil)
         }

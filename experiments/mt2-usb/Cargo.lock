@@ -3,5 +3,12 @@
 version = 4
 
 [[package]]
+name = "wiredkvm-cable-image"
+version = "0.1.0"
+
+[[package]]
 name = "wiredkvm-mt2-protocol-draft"
 version = "0.0.0"
+dependencies = [
+ "wiredkvm-cable-image",
+]

@@ -35,6 +35,13 @@ static void lease(uint8_t *b,unsigned port,bool hide,uint32_t sequence){memset(b
 static bool local(void *context,unsigned p,const uint8_t *b,size_t n){return wk_setup_control(context,p,b,n,2000);}
 int main(void) {
     wk_setup s;uint8_t b[64],out[16384];fixture(&s);
+    /* A newly uploaded image must not wipe an outstanding SCSI reply. */
+    s.valid=false;s.validating=false;
+    cbw(b,0x12,36,true);CHECK(wk_setup_msc_out(&s,1,b,31,2000));
+    wk_setup_port pending=s.ports[1];wk_setup_refresh(&s);
+    CHECK(!memcmp(&pending,&s.ports[1],sizeof(pending))&&s.validating);
+    for(unsigned n=0;n<32;n++)wk_setup_tick(&s,n);
+    CHECK(s.valid);wk_setup_msc_reset(&s,1);
     CHECK(!wk_setup_ready(&s,0,1499));CHECK(wk_setup_ready(&s,0,1500));CHECK(wk_setup_ready(&s,1,1500));
     for(unsigned p=0;p<2;p++) {
         cbw(b,0x12,36,true);b[19]=36;CHECK(transact(&s,p,b,out,sizeof(out),0)==36);CHECK(out[1]==128&&!memcmp(out+8,"WiredKVM",8));

@@ -4,6 +4,8 @@
 
 #[cfg(feature = "c-abi")]
 pub mod ffi;
+#[cfg(all(feature = "c-abi", feature = "ram-setup"))]
+pub mod ram_setup;
 pub mod live;
 pub mod native_format;
 #[cfg(feature = "c-abi")]

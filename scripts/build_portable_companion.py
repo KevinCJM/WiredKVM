@@ -15,7 +15,7 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 SOURCES = ["WKClipboardProtocol", "WKOnboarding", "WKFnKey", "WKScrollRelay",
            "WKGestureRelay", "WKInputRelay", "WKClipboardContent",
-           "WKClipboardTransport", "WKFilePortal", "WKStreamFiles",
+           "WKClipboardTransport", "WKFilePortal", "WKStreamFiles", "WKTransferTree",
            "WKOnDemandClipboard", "WiredKVMCompanion"]
 
 
@@ -29,7 +29,7 @@ def build(out: Path, arches: list[str]) -> dict:
 
     def run(argv):
         argv = list(map(str, argv)); commands.append(argv)
-        env = dict(os.environ, TMPDIR=str(out))
+        env = dict(os.environ, TMPDIR=str(out), MACOSX_DEPLOYMENT_TARGET="13.0")
         for key in ["CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "LIBRARY_PATH", "DYLD_INSERT_LIBRARIES"]:
             env.pop(key, None)
         p = subprocess.run(argv, cwd=ROOT, env=env, capture_output=True, text=True, timeout=180)
@@ -42,11 +42,19 @@ def build(out: Path, arches: list[str]) -> dict:
     app = out / "WiredKVM 临时连接.app"
     exe = app / "Contents/MacOS/WiredKVMPortable"
     exe.parent.mkdir(parents=True)
+    crate = ROOT / "native/transfer-tree"
+    rust_targets = {"arm64": "aarch64-apple-darwin", "x86_64": "x86_64-apple-darwin"}
     for arch in arches:
-        run(["/usr/bin/swiftc", "-D", "WK_PORTABLE", "-O", "-parse-as-library",
+        target = rust_targets[arch]
+        # Keep candidate builds separate from every currently running helper.
+        run(["cargo", "build", "--offline", "--locked", "--release", "--manifest-path", crate / "Cargo.toml",
+             "--target", target, "--target-dir", out / "rust-target"])
+        archive = out / "rust-target" / target / "release/libwiredkvm_transfer_tree.a"
+        run(["/usr/bin/swiftc", "-D", "WK_PORTABLE", "-D", "WK_TREE", "-O", "-parse-as-library",
              "-target", f"{arch}-apple-macosx13.0", "-module-cache-path", out / "swift-cache",
+             "-I", crate / "include", "-Xlinker", "-dead_strip",
              "-framework", "AppKit", "-framework", "IOKit", "-lcompression",
-             *sources, "-o", out / ("portable-" + arch)])
+             *sources, archive, "-o", out / ("portable-" + arch)])
     run(["/usr/bin/lipo", "-create", *[out / ("portable-" + a) for a in arches], "-output", exe])
     info = plistlib.loads((ROOT / "host/gui/Companion-Info.plist").read_bytes())
     info.update(CFBundleIdentifier="com.wiredkvm.portable", CFBundleExecutable="WiredKVMPortable",
@@ -58,13 +66,16 @@ def build(out: Path, arches: list[str]) -> dict:
     for forbidden in ["WKCompanionInstall", "WKLoginItem", "WKFirstRunWindow", "SMAppService"]:
         if forbidden in symbols:
             raise RuntimeError("portable binary contains installed-only symbol: " + forbidden)
-    manifest = dict(mode="portable", architectures=arches, launched=False, installed=False,
+    inputs = sources + [crate / p for p in ["Cargo.toml", "Cargo.lock", "build.rs", "src/lib.rs", "src/dir_list.c",
+                                           "include/transfer_tree.h", "include/module.modulemap"]]
+    manifest = dict(mode="portable", architectures=arches, collections=True, binaryBulk=True,
+                    legacyInputRelay=False, launched=False, installed=False,
                     deviceAccess=False, clipboardAccess=False, firmwareChanged=False,
                     binary=str(exe), bytes=exe.stat().st_size,
                     sha256=hashlib.sha256(exe.read_bytes()).hexdigest(),
-                    sources={str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources},
+                    sources={str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs},
                     limitations=["physical input and clipboard acceptance pending",
-                                 "macOS may require normal execution and event-posting permission",
+                                 "macOS may require normal execution and network-volume access permission",
                                  "temporary transfer data and OS-managed caches are not an installation",
                                  "Petros currently has no setup medium; delivery over USB not implemented"])
     (out / "commands.json").write_text(json.dumps(commands, indent=2) + "\n")

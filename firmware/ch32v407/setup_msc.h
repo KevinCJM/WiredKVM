@@ -19,6 +19,7 @@ typedef struct {
     wk_setup_port ports[2];
 } wk_setup;
 void wk_setup_init(wk_setup *,wk_setup_read_fn,void *);
+void wk_setup_refresh(wk_setup *); /* admit a newly available image without resetting SCSI state */
 void wk_setup_tick(wk_setup *,uint32_t now);
 void wk_setup_connected(wk_setup *,unsigned,bool,uint32_t now);
 bool wk_setup_control(wk_setup *,unsigned,const uint8_t *,size_t,uint32_t now);

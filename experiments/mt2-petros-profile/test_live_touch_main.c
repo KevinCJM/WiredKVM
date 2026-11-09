@@ -14,6 +14,14 @@ typedef struct __attribute__((packed)){signed short x:13; signed short y:13;unsi
 _Static_assert(sizeof(native_finger)==9,"Independent C packed ABI");
 #endif
 static uint8_t touch_bytes[64];
+#ifdef WK_RAM_SETUP
+static uint8_t ram[WK_SETUP_FLASH_BYTES],program_ack[512];
+static unsigned program_acks;
+bool wk_setup_flash_init(void){return true;}
+int32_t wk_cable_platform_ready(void){return 1;}
+int32_t wk_cable_platform_write(uint32_t offset,const uint8_t *b,size_t n){assert(offset+n<=sizeof(ram));memcpy(ram+offset,b,n);return 1;}
+bool wk_setup_flash_read(void *ctx,uint32_t at,void *out,size_t n){(void)ctx;uint32_t size=wk_cable_setup_size();if(at>size||n>size-at)return false;memcpy(out,ram+at,n);return true;}
+#endif
 uint8_t mock_ep87_read(void){return ctrl87;}
 void mock_ep87_write(uint8_t v){ctrl87=(ctrl87&v&0xc0)|(ctrl87&0x0c)|(v&3);}
 void usbd_endp_close(usbd_handle_t *h,unsigned ep){(void)h;(void)ep;assert(0);}
@@ -23,6 +31,9 @@ int usbd_endp_set_response(usbd_handle_t *h,uint8_t ep,int response){
 }
 int usbd_upload(usbd_handle_t *h,uint8_t ep,const void *b,unsigned n){
     const unsigned e=ep&127;assert(!busy[h->port][e]);packets[h->port][e]++;
+#ifdef WK_RAM_SETUP
+    if(h->port==0&&ep==0x84&&n==512&&!memcmp(b,"WKIA",4)){memcpy(program_ack,b,n);program_acks++;}
+#endif
     if(h->port==1&&ep==0x87){assert(n>=12&&n<=57);
 #ifdef WKMT2_NATIVE
         const uint8_t *raw=b;assert((raw[9]&7)==4);
@@ -48,9 +59,46 @@ static void gesture(unsigned epoch,unsigned count){uint8_t b[64]={2,0,0,0,0,0,0,
 #endif
     char row[192];int n=snprintf(row,sizeof(row),"MT2D,%u,",epoch);for(unsigned i=0;i<12+9*count;i++)n+=snprintf(row+n,sizeof(row)-(size_t)n,"%02x",b[i]);row[n++]='\n';row[n]=0;line(row);
 }
+#ifdef WK_RAM_SETUP
+static uint32_t image_crc(const uint8_t *b,size_t n){uint32_t v=~0u;while(n--){v^=*b++;for(unsigned i=0;i<8;i++)v=(v>>1)^((v&1)?0xedb88320u:0);}return ~v;}
+static void put32(uint8_t *b,uint32_t n){for(unsigned i=0;i<4;i++)b[i]=(uint8_t)(n>>(i*8));}
+static void program_cell(uint8_t op,uint32_t at,const uint8_t *b,unsigned n,uint32_t size,uint32_t checksum){
+    uint8_t cell[512]={0};memcpy(cell,"WKIM",4);cell[4]=1;cell[5]=op;cell[8]=91;
+    put32(cell+16,at);put32(cell+20,size);put32(cell+24,checksum);cell[28]=(uint8_t)n;cell[29]=(uint8_t)(n>>8);
+    if(n)memcpy(cell+32,b,n);put32(cell+508,image_crc(cell,508));unsigned before=program_acks;
+    for(unsigned p=0;p<512;){unsigned bytes=512-p;if(bytes>73)bytes=73;data_cb(handles[0],4,cell+p,bytes);p+=bytes;}
+    pass(4,true);assert(program_acks==before+1&&image_crc(program_ack,508)==(uint32_t)(program_ack[508]|(uint32_t)program_ack[509]<<8|(uint32_t)program_ack[510]<<16|(uint32_t)program_ack[511]<<24));
+    assert(program_ack[5]==(op==3?1:0));
+}
+static void program_test(const uint8_t *pressure){
+    static uint8_t asset[4096+16384];memset(asset,0x95,sizeof(asset));memcpy(asset,"WKDUAL01",8);
+    put32(asset+8,1);put32(asset+12,sizeof(asset)-4096);put32(asset+16,image_crc(asset+4096,sizeof(asset)-4096));put32(asset+20,image_crc(asset,20));
+    uint32_t checksum=image_crc(asset,sizeof(asset));unsigned touch=packets[1][7],keys=packets[1][1],files=packets[1][5];
+    program_cell(1,0,NULL,0,sizeof(asset),checksum);assert(!wk_cable_setup_size());
+    for(unsigned at=0;at<sizeof(asset);){unsigned n=sizeof(asset)-at;if(n>476)n=476;
+        for(unsigned p=0;p<2;p++)for(unsigned i=0;i<WK407_BULK_SLOTS&&wk407_bulk_space(&bridge,p);i++)assert(wk407_bulk_accept(&bridge,p,pressure,512));
+        wk(10000+at,'T',4,(at/476)&1);gesture(2,4);program_cell(2,at,asset+at,n,sizeof(asset),checksum);at+=n;assert(!setup.valid);}
+    program_cell(3,sizeof(asset),NULL,0,sizeof(asset),checksum);
+    wk(62000,'T',4,0);
+    for(unsigned i=0;i<40;i++)pass(1,true);
+    assert(setup.valid&&wk_cable_setup_size()==sizeof(asset)&&!memcmp(asset,ram,sizeof(asset)));
+    assert(packets[1][7]>touch+10&&packets[1][1]>keys&&packets[1][5]>files);
+    puts("RAM_SETUP_MAIN_PASS readonly_image_published=true interleaved_touch_keys_bulk=true physicalPSRAM=false");
+}
+#endif
 int main(void){
     handles[0]=&usbhs1d_handle;handles[1]=&usbhs2d_handle;mock_usb2.MIS_ST=USBHS_UDMS_SIE_FREE;
-    wk407_init(&bridge);wk_setup_init(&setup,NULL,NULL);wkmt2_profile_reset();
+    wk407_init(&bridge);
+#ifdef WK_RAM_SETUP
+    wk_setup_init(&setup,wk_setup_flash_read,NULL);
+#else
+    wk_setup_init(&setup,NULL,NULL);
+#endif
+    wkmt2_profile_reset();
+#ifdef WK_RAM_SETUP
+    usbhs2d_handle.enumerated=false;pass(1,true);assert(armed[0][4]);
+    usbhs2d_handle.enumerated=true;pass(1,true);
+#endif
     void *identity;size_t identity_len;usb_req_t identity_request={.wValue=0x0302,.wLength=128};
     assert(!wk407_descriptor(handles[0],&identity_request,&identity,&identity_len));
     const char *expected="WiredKVM Petros V467 Host";const uint16_t *u=identity;
@@ -97,6 +145,9 @@ int main(void){
     assert(touch_release>release_before&&touch_zero>zero_before);
     gesture(1,2);unsigned old=touch_down;pass(4,true);assert(touch_down==old);
     gesture(2,4);pass(4,true);assert(touch_down==old+1);
+#ifdef WK_RAM_SETUP
+    program_test(pressure);
+#endif
     // Long idle and mid-gesture loss, including host reset, release only touch.
     for(unsigned i=0;i<200;i++)pass(1,true);assert(wkmt2_live_faults()>0);
     puts("LIVE_MAIN_RUST_C_CALLBACK_PASS stress=1000 continuous_bulk_both_directions=true stale_epoch_rejected=true no_device_access=true");

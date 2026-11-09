@@ -9,6 +9,9 @@ import Darwin
 // Each USB role is usable before the other computer has any application.
 // Development VID/PIDs are deliberately restricted, not shipping identities.
 enum WKUSBDiscovery {
+    // The native-touch prototype retains our private clipboard collection and
+    // serial. Never match an ordinary Apple trackpad by VID/PID alone.
+    static let targetIdentities: [(vendor: Int, product: Int)] = [(0x1a86, 0x4071), (0x05ac, 0x0265)]
     struct Port: Equatable {
         let path: String, serial: String
         let product: Int, interface: Int
@@ -18,8 +21,9 @@ enum WKUSBDiscovery {
         var function: Int { role == "host" ? interface / 2 * 2 : 3 }
     }
     static func accepts(vendor: Int, product: Int, serial: String, interface: Int) -> Bool {
-        vendor == 0x1a86 && serial == "CH32V407-DoNotShip" &&
-            ((product == 0x4070 && (0...3).contains(interface)) || (product == 0x4071 && [3, 4].contains(interface)))
+        serial == "CH32V407-DoNotShip" &&
+            ((vendor == 0x1a86 && product == 0x4070 && (0...3).contains(interface)) ||
+             (targetIdentities.contains { $0.vendor == vendor && $0.product == product } && [3, 4].contains(interface)))
     }
     static func ports() -> [Port] {
         var iterator: io_iterator_t = 0

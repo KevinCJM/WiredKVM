@@ -231,6 +231,7 @@ struct WKPasteProgress {
 // native controller remains the sole UART owner and prioritizes keyboard input.
 @MainActor
 final class WKClipboardProcess {
+    var isRunning: Bool { process?.isRunning == true }
     private(set) var directory: URL?
     private var process: Process?
     private var input: Pipe?
@@ -306,7 +307,7 @@ final class WKClipboardProcess {
             try child.run(); try? stdin.fileHandleForReading.close()
             onDiagnostic?("WKGUI_EVENT event=START role=HOST pid=\(child.processIdentifier)")
         }
-        catch { stop(); throw error }
+        catch { stop(removeDirectory:false); throw error }
         onStatus?("正在连接另一台 Mac 的有线剪贴板组件…")
     }
 
@@ -458,7 +459,7 @@ final class WKClipboardProcess {
         }
     }
 
-    func stop() {
+    func stop(removeDirectory: Bool = true) {
         finishProgress(completed:false)
         onControl?("CLIPBOARD CANCEL 0")
         onPeerVersion?(0)
@@ -473,8 +474,10 @@ final class WKClipboardProcess {
             old.terminate()
         }
         // Only this randomly-created private runtime directory is removed.
-        if let directory { try? FileManager.default.removeItem(at: directory) }
-        directory = nil
+        if removeDirectory {
+            if let directory { try? FileManager.default.removeItem(at: directory) }
+            directory = nil
+        }
     }
 
     static func selfTest() throws {
@@ -483,6 +486,16 @@ final class WKClipboardProcess {
         precondition(!validToken("12..34") && !validToken("12\n34") && !validToken("-1"))
         let bridge = WKClipboardProcess()
         let socket = try bridge.prepare()
+        // A failed helper launch must preserve the already-bound native socket
+        // directory so a later retry can connect without restarting input.
+        do {
+            try bridge.start(executable:URL(fileURLWithPath:"/private/tmp/wk-no-helper-"+UUID().uuidString),socket:socket)
+            preconditionFailure("nonexistent helper unexpectedly started")
+        } catch {
+            precondition(bridge.directory?.path==socket.deletingLastPathComponent().path)
+            precondition(FileManager.default.fileExists(atPath:socket.deletingLastPathComponent().path))
+            precondition(!bridge.isRunning)
+        }
         let parent = socket.deletingLastPathComponent()
         let mode = try FileManager.default.attributesOfItem(atPath: parent.path)[.posixPermissions] as! NSNumber
         precondition(mode.intValue & 0o777 == 0o700)

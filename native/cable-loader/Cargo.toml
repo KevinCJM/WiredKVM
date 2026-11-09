@@ -1,0 +1,11 @@
+[package]
+name = "wiredkvm-cable-loader"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+wiredkvm-cable-image = { path = "../cable-image" }
+
+[profile.release]
+opt-level = 2

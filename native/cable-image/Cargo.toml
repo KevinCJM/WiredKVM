@@ -1,0 +1,14 @@
+[package]
+name = "wiredkvm-cable-image"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+
+[profile.release]
+panic = "abort"
+opt-level = "s"

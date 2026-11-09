@@ -161,6 +161,8 @@ enum WKCH32Device {
         WKUSBDiscovery.ports().contains { $0.path == path && $0.role == role && $0.function == (role == "host" ? (files ? 2 : 0) : 3) }
     }
 }
+// Darwin imports `struct flock` with the same name as the BSD function.
+@_silgen_name("flock") private func wkStreamFileLock(_ fd: Int32, _ operation: Int32) -> Int32
 final class WKCDCStreamIO: WKStreamIO {
     private var fd: Int32 = -1
     let port: UInt8
@@ -169,6 +171,9 @@ final class WKCDCStreamIO: WKStreamIO {
         guard WKCH32Device.matches(path: path, role: role) else { throw WKStreamError.invalid }
         let f = Darwin.open(path, O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC)
         guard f >= 0 else { throw WKStreamError.system(errno) }
+        // The startup image loader and clipboard stream must never read the
+        // same CDC function concurrently. Releasing the fd releases this lock.
+        guard wkStreamFileLock(f, LOCK_EX | LOCK_NB) == 0 else { Darwin.close(f); throw WKStreamError.system(errno) }
         var config = termios()
         guard tcgetattr(f, &config) == 0 else { Darwin.close(f); throw WKStreamError.system(errno) }
         cfmakeraw(&config); config.c_cflag |= tcflag_t(CLOCAL | CREAD)

@@ -1184,6 +1184,119 @@
         ],
         "unsampled_paths": []
       }
+    },
+    {
+      "id": "portable_cable_runtime",
+      "name": "portable_cable_runtime",
+      "path": "native/cable-image",
+      "kind": "implementation_entrypoints",
+      "purpose": "Direct-from-cable macOS runtime candidate: readonly program image, volatile V467 PSRAM upload, native-input-first Book coordinator and Bulk clipboard/tree adaptation. Offline build and simulator evidence only; no new firmware or target runtime physically accepted. Existing live native-v2 input remains separate.",
+      "module_tags": [
+        "portable",
+        "ram_setup",
+        "bulk",
+        "offline_candidate"
+      ],
+      "entry_files": [
+        "scripts/build_portable_companion.py",
+        "scripts/build_portable_media.py",
+        "scripts/build_portable_host.py",
+        "native/cable-image/src/lib.rs",
+        "native/cable-loader/src/main.rs"
+      ],
+      "key_symbols": [
+        "Upload",
+        "WKTargetAutoRunner",
+        "CH32Host",
+        "wk_cable_setup_input",
+        "wk_setup_refresh"
+      ],
+      "child_modules": [],
+      "first_read_files": [
+        "docs/research/DIRECT_CABLE_RUNTIME_20261109.md",
+        "native/cable-image/src/lib.rs",
+        "native/cable-loader/src/main.rs",
+        "host/ch32v407_host.swift"
+      ],
+      "then_check_files": [
+        "firmware/ch32v467_petros/setup_ram.c",
+        "firmware/ch32v467_petros/setup_ram.h",
+        "experiments/mt2-usb/src/ram_setup.rs",
+        "experiments/mt2-petros-profile/build_profile.py",
+        "host/clipboard/WKOnboarding.swift",
+        "host/clipboard/WKClipboardTransport.swift",
+        "host/clipboard/WKStreamFiles.swift",
+        "host/gui/WiredKVMClipboard.swift",
+        "scripts/build_portable_companion.py",
+        "scripts/build_portable_media.py",
+        "scripts/build_portable_host.py",
+        "scripts/flash_portable_candidate.py"
+      ],
+      "upstream_dependencies": [
+        "firmware_ch32",
+        "clipboard_bulk",
+        "mt2_firmware_experiment"
+      ],
+      "downstream_dependencies": [],
+      "out_of_scope_dependencies": [
+        "Normal macOS launch and volume authorization; physical PSRAM and USB throughput acceptance; future production NOR and Developer ID distribution"
+      ],
+      "related_tests": [
+        "native/cable-image/tests/upload.rs",
+        "native/cable-loader/src/main.rs",
+        "experiments/mt2-usb/tests/ram_setup.rs",
+        "experiments/mt2-petros-profile/test_live_touch.py",
+        "experiments/mt2-petros-profile/test_live_touch_main.c",
+        "tests/setup_msc_test.c",
+        "tests/test_portable_companion.py",
+        "tests/test_collection_transfer.py",
+        "tests/onboarding_selftest.swift",
+        "tests/test_raw_touch_native.py",
+        "tests/test_cable_runtime.py"
+      ],
+      "related_configs": [
+        "native/cable-image/Cargo.toml",
+        "native/cable-loader/Cargo.toml",
+        "experiments/mt2-usb/Cargo.toml"
+      ],
+      "risk_flags": [
+        "must_preserve_live_control",
+        "physical_acceptance_pending",
+        "no_persistent_target_install",
+        "source_volume_must_remain_mounted"
+      ],
+      "edit_risk": "high",
+      "blast_radius": [
+        "Book startup coordinator, experimental V467 RAM image, portable clipboard only"
+      ],
+      "pitfall_ids": [
+        "P19",
+        "P22",
+        "P23",
+        "P35",
+        "P36"
+      ],
+      "minimum_regression": [
+        "python3 tests/test_cable_runtime.py",
+        "python3 experiments/mt2-petros-profile/test_live_touch.py --native-format --ram-setup"
+      ],
+      "routing_confidence": "high",
+      "scope_flags": [
+        "prototype_only",
+        "no_PCB_design"
+      ],
+      "grounding": {
+        "fact_status": "grounded",
+        "evidence": [
+          "native/cable-image/src/lib.rs",
+          "native/cable-image/tests/upload.rs",
+          "native/cable-loader/src/main.rs",
+          "experiments/mt2-usb/src/ram_setup.rs",
+          "firmware/ch32v467_petros/setup_ram.c",
+          "docs/research/DIRECT_CABLE_RUNTIME_20261109.md"
+        ],
+        "unsampled_paths": []
+      }
     }
   ],
   "workspace_status": {

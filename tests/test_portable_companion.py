@@ -36,12 +36,16 @@ class PortableCompanionTests(unittest.TestCase):
         for name in ["WKCompanionInstall", "WKLoginItem", "WKFirstRunWindow", "SMAppService"]:
             self.assertNotIn(name, symbols)
         self.assertFalse(any("Install" in s or "SelfTest" in s for s in self.manifest["sources"]))
+        self.assertIn("host/clipboard/WKTransferTree.swift", self.manifest["sources"])
+        self.assertIn("native/transfer-tree/src/lib.rs", self.manifest["sources"])
+        self.assertIn("wk_tree_create", symbols)
 
     def test_portable_check_returns_without_runtime(self):
         result = subprocess.run([str(self.binary), "--portable-check"], capture_output=True, text=True, timeout=5)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), dict(mode="portable", installer=False, loginItem=False,
-                                                       persistentPreferences=False, automaticSetupEject=False))
+                                                       persistentPreferences=False, automaticSetupEject=False,
+                                                       collections=True, binaryBulk=True, legacyInputRelay=False))
         self.assertEqual(result.stderr, "")
 
     def test_installed_first_run_and_implicit_legacy_host_rejected(self):

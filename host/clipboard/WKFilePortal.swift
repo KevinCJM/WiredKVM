@@ -465,10 +465,12 @@ final class WKPortalHTTPServer: @unchecked Sendable {
 #if WK_TREE
                 if let tree = store.tree(metadata.id) { items += tree.roots.map { .tree(metadata, $0) } }
                 else { items.append(.file(metadata)) }
-            case .tree(let metadata, let entry):
-                if entry.directory, let children = store.tree(metadata.id)?.children[entry.path] { items += children.map { .tree(metadata, $0) } }
 #else
                 items.append(.file(metadata))
+#endif
+#if WK_TREE
+            case .tree(let metadata, let entry):
+                if entry.directory, let children = store.tree(metadata.id)?.children[entry.path] { items += children.map { .tree(metadata, $0) } }
 #endif
             case .file: break
             }

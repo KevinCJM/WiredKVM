@@ -8,11 +8,13 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
+wiredkvm-cable-image = { path = "../../native/cable-image", optional = true }
 
 [features]
 default = []
 c-abi = []
 native-mt2 = []
+ram-setup = ["dep:wiredkvm-cable-image"]
 
 [profile.release]
 panic = "abort"

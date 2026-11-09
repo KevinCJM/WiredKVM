@@ -12,12 +12,16 @@ static uint32_t crc_update(uint32_t v,const uint8_t *p,size_t n) {
 }
 void wk_setup_init(wk_setup *s,wk_setup_read_fn read,void *context) {
     memset(s,0,sizeof(*s));s->read=read;s->context=context;
+    wk_setup_refresh(s);
+}
+void wk_setup_refresh(wk_setup *s) {
+    if(s->valid||s->validating)return;
     uint8_t h[24];
-    if(!read||!read(context,0,h,sizeof(h))||memcmp(h,"WKDUAL01",8)||le32(h+8)!=1||
+    if(!s->read||!s->read(s->context,0,h,sizeof(h))||memcmp(h,"WKDUAL01",8)||le32(h+8)!=1||
        le32(h+20)!=~crc_update(UINT32_MAX,h,20))return;
     s->image_bytes=le32(h+12);s->expected_crc=le32(h+16);
     if(!s->image_bytes||s->image_bytes%512||s->image_bytes>WK_SETUP_FLASH_BYTES-WK_SETUP_IMAGE_OFFSET)return;
-    s->crc=UINT32_MAX;s->validating=true;
+    s->crc=UINT32_MAX;s->checked=0;s->validating=true;
 }
 void wk_setup_tick(wk_setup *s,uint32_t now) {
     if(s->validating) {

@@ -1280,6 +1280,83 @@
       "safe_observation_methods": [
         "默认 dry-run 不加载 framework；inspect 不启动回调；有界 observe 输出聚合数量，零帧如实记录未验证。"
       ]
+    },
+    {
+      "id": "P35",
+      "title": "最终只读介质必须重新验签并保留来源卷",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p35_guard"
+      ],
+      "symptoms": [
+        "源应用验签通过但盘内应用无法启动",
+        "运行中自动推出现有程序来源卷"
+      ],
+      "trigger_actions": [
+        "构建或发布直接从线内运行的程序盘"
+      ],
+      "related_paths": [
+        "scripts/build_portable_media.py",
+        "scripts/build_portable_companion.py",
+        "docs/research/DIRECT_CABLE_RUNTIME_20261109.md"
+      ],
+      "affected_modules": [
+        "portable_cable_runtime",
+        "installer"
+      ],
+      "blast_radius": [
+        "portable program startup and source volume"
+      ],
+      "check_before_edit": [
+        "makehybrid 可在 HFS+ 中生成空 FinderInfo；必须只清理本次新镜像的该元数据，并重新只读挂载核对哈希、执行权限和严格签名",
+        "不能把源目录验签替代成最终介质验签；不得借清理之名删除隔离属性或修改系统安全设置",
+        "程序从卷内运行期间不自动推出来源卷"
+      ],
+      "safe_observation_methods": [
+        "新建隔离镜像，读回文件清单和严格 codesign 结果；不启动应用"
+      ]
+    },
+    {
+      "id": "P36",
+      "title": "程序上传和剪贴板不能同时占用文件 CDC",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p36_guard"
+      ],
+      "symptoms": [
+        "装载工具与文件引擎抢读响应",
+        "启动盘必须等两端在线",
+        "组件重试后再也连接不到本地 socket"
+      ],
+      "trigger_actions": [
+        "修改 Book 便携启动或 V467 RAM 镜像通道"
+      ],
+      "related_paths": [
+        "host/ch32v407_host.swift",
+        "host/clipboard/WKStreamFiles.swift",
+        "host/gui/WiredKVMClipboard.swift",
+        "native/cable-loader/src/main.rs",
+        "experiments/mt2-usb/src/ram_setup.rs",
+        "experiments/mt2-petros-profile/build_profile.py"
+      ],
+      "affected_modules": [
+        "portable_cable_runtime",
+        "clipboard_bulk",
+        "firmware_ch32"
+      ],
+      "blast_radius": [
+        "Book startup and clipboard lifecycle; native input must continue"
+      ],
+      "check_before_edit": [
+        "先启动输入，再上传程序，装载 fd 关闭后才启动剪贴板；两者必须使用同一独占锁",
+        "启动镜像上传不能依赖 mini 在线，已发布镜像不可热覆盖；目标重连不取消尚未完成的独立上传",
+        "组件启动失败和退出时保留仍被控制器绑定的私有 socket 目录，重试不能要求重启键鼠"
+      ],
+      "safe_observation_methods": [
+        "模拟主循环下交错触点、键鼠、双向 Bulk 和分片上传；核对旧会话、半成品、重复格和重试"
+      ]
     }
   ]
 }

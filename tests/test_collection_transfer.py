@@ -28,8 +28,9 @@ def main():
             raise RuntimeError(f'{result.returncode}: see {out / log}')
 
     crate = ROOT / 'native/transfer-tree'
-    run(['cargo', 'test', '--manifest-path', crate/'Cargo.toml', '--offline'], 'rust-tests.log')
-    run(['cargo', 'build', '--manifest-path', crate/'Cargo.toml', '--offline', '--release'], 'rust-build.log')
+    rust_target = out/'rust-target'
+    run(['cargo', 'test', '--manifest-path', crate/'Cargo.toml', '--offline', '--locked', '--target-dir', rust_target], 'rust-tests.log')
+    run(['cargo', 'build', '--manifest-path', crate/'Cargo.toml', '--offline', '--locked', '--release', '--target-dir', rust_target], 'rust-build.log')
     objects=[]
     for name, src in [('bridge','firmware/ch32v407/bridge.c'),('wire','firmware/main/wire_protocol.c'),('sim','tests/ch32v407_sim.c')]:
         obj=out/(name+'.o');objects.append(obj)
@@ -43,10 +44,13 @@ def main():
     run(['/usr/bin/swiftc','-D','WK_PORTABLE','-D','WK_CH32_TEST','-D','WK_TREE','-O','-parse-as-library',
          '-module-cache-path',out/'swift-cache','-I',crate/'include','-framework','AppKit','-framework','IOKit',
          '-lcompression','-import-objc-header','tests/ch32v407_sim.h',*sources,*objects,
-         crate/'target/release/libwiredkvm_transfer_tree.a','-o',binary],'swift-build.log')
+         rust_target/'release/libwiredkvm_transfer_tree.a','-o',binary],'swift-build.log')
     run([binary,'--collections','--json',out/'collections.json'],'collections.log')
     run([binary,'--json',out/'single-file.json'],'single-file.log')
     run([binary,'--cancel'],'cancellation.log')
+    run([binary,'--images'],'images.log')
+    run([binary,'--pipeline'],'clipboard-pipeline.log')
+    run([binary,'--collection-pipeline'],'collection-pipeline.log')
     inputs=sources+list((crate/'src').glob('*'))+list((crate/'include').glob('*'))+[crate/'build.rs',crate/'Cargo.toml',crate/'Cargo.lock']
     manifest={'physicalUSB':False,'generalClipboardAccess':False,'firmwareChanged':False,
               'binary':str(binary),'binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),

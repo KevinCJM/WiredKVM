@@ -189,7 +189,7 @@ def live_overlays(main,descriptors):
     descriptors=once(descriptors,'0xac,0x05,0x65,0x02,0x6b,2,1,2,3,1','0xac,0x05,0x65,0x02,0x6d,2,1,2,3,1')
     return main,descriptors
 
-def generate(out,pointer_collections=False,absolute_no_preferred=False,absolute_mouse_logical=False,single_port_probe=False,live_touch=False,native_format=False):
+def generate(out,pointer_collections=False,absolute_no_preferred=False,absolute_mouse_logical=False,single_port_probe=False,live_touch=False,native_format=False,ram_setup=False):
     main_path=ROOT/"firmware/ch32v407/main.c";descriptor_path=ROOT/"firmware/ch32v407/descriptors.c"
     main,descriptors=overlays(main_path.read_text(),descriptor_path.read_text(),pointer_collections,absolute_no_preferred,absolute_mouse_logical,single_port_probe)
     if live_touch:
@@ -198,6 +198,21 @@ def generate(out,pointer_collections=False,absolute_no_preferred=False,absolute_
     if native_format:
         if not live_touch:raise ValueError("native-format requires live-touch")
         main=once(main,"if(live){uint16_t stamp=(uint16_t)(now*8);touch[9]=(uint8_t)stamp;touch[10]=(uint8_t)(stamp>>8);}","{if(!live){memcpy(touch,frame,(size_t)n);frame=touch;}uint32_t stamp=(now*8)|4u;touch[9]=(uint8_t)stamp;touch[10]=(uint8_t)(stamp>>8);touch[11]=(uint8_t)(stamp>>16);}")
+    if ram_setup:
+        if not native_format:raise ValueError("RAM setup requires the retained native-v2 input profile")
+        main=once(main,'#include "setup_flash.h"','#include "setup_flash.h"\n#include "setup_ram.h"')
+        main=once(main,'static wk_setup setup;','static wk_setup setup;\nvoid wk_cable_forward(const uint8_t *b,size_t n){(void)wk407_bulk_accept(&bridge,0,b,n);}')
+        main=once(main,'reset_pending[p]=true;','if(p==0)wk_cable_setup_reset();else wk_cable_setup_peer_reset();\n    reset_pending[p]=true;')
+        main=once(main,'(void)parameter;unsigned p=wk407_port(h);','(void)parameter;unsigned p=wk407_port(h);\n    if(p==0)wk_cable_setup_reset();else wk_cable_setup_peer_reset();')
+        main=once(main,'else (void)wk407_bulk_accept(&bridge,p,buf,size);','else if(p==0&&e==4)wk_cable_setup_input(buf,size);\n        else (void)wk407_bulk_accept(&bridge,p,buf,size);')
+        main=once(main,'if(kind==1)wk407_bulk_done(&bridge,p);','if(kind==9)wk_cable_setup_ack_submitted();\n        if(kind==1)wk407_bulk_done(&bridge,p);')
+        main=once(main,'if(!online){if(p==0)wkmt2_profile_host_reset();else wkmt2_profile_reset();}',
+                  'if(!online){if(p==0){wkmt2_profile_host_reset();wk_cable_setup_reset();}else {wkmt2_profile_reset();wk_cable_setup_peer_reset();}}')
+        main=once(main,'        if(wk407_bulk_space(&bridge,p))arm(p,ep,usbd_get_speed(handles[p])==USB_SPEED_HIGH?512:64);',
+                  '        if(p==0?(!wk_cable_setup_pending()&&(!wk_cable_setup_size()||!bridge.online[1]||wk407_bulk_space(&bridge,p))):wk407_bulk_space(&bridge,p))arm(p,ep,usbd_get_speed(handles[p])==USB_SPEED_HIGH?512:64);\n'
+                  '        if(p==0&&!busy[p][ep]&&wk_cable_setup_pending()){uint8_t ack[512];size_t n=wk_cable_setup_ack(ack,sizeof(ack));if(n)send(0,ep,9,ack,(unsigned)n);}')
+        main=once(main,'    wk_setup_tick(&setup,now);','    if(wk_cable_setup_changed())wk_setup_refresh(&setup);\n    wk_setup_tick(&setup,now);')
+        descriptors=once(descriptors,'0xac,0x05,0x65,0x02,0x6d,2,1,2,3,1','0xac,0x05,0x65,0x02,0x6e,2,1,2,3,1')
     out.mkdir(exist_ok=False)
     (out/"generated").mkdir();(out/"obj").mkdir()
     (out/"generated/main.c").write_text(main);(out/"generated/descriptors.c").write_text(descriptors)
@@ -213,8 +228,10 @@ def generate(out,pointer_collections=False,absolute_no_preferred=False,absolute_
         manifest["limits"].append("Explicit ARM permits five fixed absolute positions only on USB2 with USB1 unconfigured; physical pointer dispatch unverified")
     manifest["live_touch"]=live_touch
     manifest["native_format"]=native_format
+    manifest["ram_setup"]=ram_setup
     manifest["wire_protocol_version"]=2 if native_format else 1
     if live_touch:manifest.update(target_bcd_device="0x026d",stage="live touch candidate; NOT physically accepted",deployable=False,readiness="OFFLINE_CANDIDATE_ONLY",limits=["Experimental Apple identity", "Touch geometry and gestures not physically verified", "No target clipboard access or runtime"])
+    if ram_setup:manifest.update(target_bcd_device="0x026e",stage="native-v2 input plus volatile readonly program image; NOT physically accepted",limits=["Experimental Apple identity", "PSRAM initialization and physical input under program upload unverified", "Program runs on target CPU only after user opens it; no installation or persistence"])
     (out/"profile.json").write_text(json.dumps(manifest,indent=2)+"\n")
     return manifest
 
@@ -237,14 +254,30 @@ def build(out,sdk,prefix,manifest):
     # lto=no alone still left this crate as LLVM bitcode in the GNU archive.
     rust_core=PROBE_CORE if manifest.get("single_port_probe") else CORE
     crate_flags=[] if manifest.get("single_port_probe") else ["--crate-type","staticlib"]
-    run(["cargo","rustc","--offline","--manifest-path",rust_core/"Cargo.toml","--release","--target","riscv32imac-unknown-none-elf","--features","c-abi,native-mt2" if manifest.get("native_format") else "c-abi","--target-dir",rust_target,"--",*crate_flags,"-C","panic=abort","-C","lto=no","-C","embed-bitcode=no","-C","linker-plugin-lto=no","-C","target-feature=-unaligned-scalar-mem,-unaligned-vector-mem"],out,log)
-    archives=list((rust_target/"riscv32imac-unknown-none-elf/release/deps").glob("libwiredkvm_single_port_probe-*.a" if manifest.get("single_port_probe") else "libwiredkvm_mt2_protocol_draft-*.a"))
+    features="c-abi,native-mt2" if manifest.get("native_format") else "c-abi"
+    cargo_config=[]
+    if manifest.get("ram_setup"):
+        # Cargo must know the top-level crate is a staticlib. Injecting only a
+        # rustc --crate-type makes Cargo pass metadata-only externs for the new
+        # dependency. A generated wrapper leaves the existing MT2 crate intact.
+        rust_core=out/"firmware-core";(rust_core/"src").mkdir(parents=True)
+        (rust_core/"Cargo.toml").write_text('[package]\nname="wk-cable-profile"\nversion="0.0.0"\nedition="2021"\n[lib]\ncrate-type=["staticlib"]\n[dependencies]\nwiredkvm-mt2-protocol-draft={path="'+str(CORE)+'",features=["c-abi","native-mt2","ram-setup"]}\n[profile.release]\npanic="abort"\nopt-level="s"\nlto=false\n[workspace]\n')
+        (rust_core/"src/lib.rs").write_text('#![no_std]\npub use wiredkvm_mt2_protocol_draft::{ffi::*,ram_setup::*};\n')
+        crate_flags=[];features=""
+        cargo_config=["--config",'build.rustflags=["-C","target-feature=-unaligned-scalar-mem,-unaligned-vector-mem"]']
+    run(["cargo","rustc","--offline",*cargo_config,"--manifest-path",rust_core/"Cargo.toml","--release","--target","riscv32imac-unknown-none-elf","--features",features,"--target-dir",rust_target,"--",*crate_flags,"-C","panic=abort","-C","lto=no","-C","embed-bitcode=no","-C","linker-plugin-lto=no","-C","target-feature=-unaligned-scalar-mem,-unaligned-vector-mem"],out,log)
+    archive_pattern="libwk_cable_profile-*.a" if manifest.get("ram_setup") else ("libwiredkvm_single_port_probe-*.a" if manifest.get("single_port_probe") else "libwiredkvm_mt2_protocol_draft-*.a")
+    archives=list((rust_target/"riscv32imac-unknown-none-elf/release/deps").glob(archive_pattern))
     if len(archives)!=1:raise ValueError("expected one Rust staticlib, got "+str(archives))
     archive_audit=audit_rust_archive(archives[0])
     (out/"rust-archive-audit.json").write_text(json.dumps(archive_audit,indent=2)+"\n")
     sources=[out/"generated/main.c",out/"generated/descriptors.c",HERE/"mt2_glue.c"]+[ROOT/p for p in ["firmware/ch32v407/bridge.c","firmware/ch32v407/newlib_context.c","firmware/ch32v407/setup_msc.c","firmware/ch32v407/alignment_safe_libc.c","firmware/ch32v467_petros/setup_flash_none.c","firmware/main/wire_protocol.c"]]+[sdk/p for p in ["EVT/EXAM/SRC/Startup/startup_ch32v4x7.S",VENDOR+"/board/system_ch32v4x7.c",VENDOR+"/usb_driver/src/usbd_driver_core.c",VENDOR+"/usb_driver/port/usbhs1_dcp.c",VENDOR+"/usb_driver/port/usbhs2_dcp.c","EVT/EXAM/SRC/Peripheral/src/ch32v4x7_rcc.c"]]
     if manifest.get("single_port_probe"):sources.extend([HERE/"single_port_probe.c",HERE/"single_port_abort.c"])
     if manifest.get("live_touch"):sources.extend([HERE/"live_touch.c",HERE/"live_abort.c"])
+    if manifest.get("ram_setup"):
+        sources.remove(ROOT/"firmware/ch32v467_petros/setup_flash_none.c")
+        sources.extend([ROOT/"firmware/ch32v467_petros/setup_ram.c",sdk/"EVT/EXAM/SRC/Peripheral/src/ch32v4x7_psram.c"])
+        includes.append(ROOT/"firmware/ch32v467_petros")
     objects=[]
     for i,source in enumerate(sources):
         obj=out/"obj"/(str(i)+"-"+source.name+".o");args=[gcc,*FLAGS]+(["-DWKMT2_LIVE"] if manifest.get("live_touch") else [])+(["-DWKMT2_NATIVE"] if manifest.get("native_format") else [])
@@ -257,6 +290,8 @@ def build(out,sdk,prefix,manifest):
     size=run([str(prefix)+"size",elf],out,log)
     if not 0<binary.stat().st_size<=512*1024:raise ValueError("firmware outside 512KiB ceiling")
     manifest.update(binary={"path":str(binary),"bytes":binary.stat().st_size,"sha256":sha(binary)},size=size,inputs={str(p):sha(p) for p in sources+[linker]},rust_archive_sha256=sha(archives[0]),rust_archive_audit=archive_audit)
+    if manifest.get("ram_setup"):
+        for p in [ROOT/"firmware/ch32v467_petros/setup_ram.h",ROOT/"native/cable-image/Cargo.toml",ROOT/"native/cable-image/src/lib.rs",CORE/"src/ram_setup.rs"]:manifest["inputs"][str(p)]=sha(p)
     if manifest.get("live_touch"):
         for p in [HERE/"mt2_glue.h",HERE/"build_profile.py",CORE/"Cargo.toml",CORE/"Cargo.lock",CORE/"include/wkmt2.h",*sorted((CORE/"src").rglob("*.rs"))]:manifest["inputs"][str(p)]=sha(p)
         symbols=["wkmt2_live_offer","wkmt2_live_input","wkmt2_live_submitted","wkmt2_live_done","wkmt2_live_abort_usb","wk407_hid_done"]
@@ -278,6 +313,7 @@ def main():
     parser.add_argument("--absolute-mouse-logical",action="store_true",help="requires Pointer collections; absolute inner Mouse Logical collection; bcdDevice 026b")
     parser.add_argument("--single-port-probe",action="store_true",help="requires absolute-mouse-logical; USB2-only fixed-point diagnostic; bcdDevice 026c")
     parser.add_argument("--live-touch",action="store_true",help="experimental live gesture ingress, bcdDevice 026d")
+    parser.add_argument("--ram-setup",action="store_true",help="native-v2 plus volatile program image; PSRAM not persistent storage")
     parser.add_argument("--native-format",action="store_true",help="native three-bit finger/state fields and full clock; protocol v2")
     args=parser.parse_args();out=args.output
     if args.absolute_no_preferred and not args.pointer_collections:parser.error("--absolute-no-preferred requires --pointer-collections")
@@ -289,7 +325,7 @@ def main():
     out=out.parent.resolve(strict=True)/out.name
     if out.exists() or out.is_symlink():raise SystemExit("Output must be new; no overwrite/cleanup")
     if not out.is_relative_to(HERE):raise SystemExit("Output must be inside experiments/mt2-petros-profile")
-    manifest=generate(out,args.pointer_collections,args.absolute_no_preferred,args.absolute_mouse_logical,args.single_port_probe,args.live_touch,args.native_format)
+    manifest=generate(out,args.pointer_collections,args.absolute_no_preferred,args.absolute_mouse_logical,args.single_port_probe,args.live_touch,args.native_format,args.ram_setup)
     if args.build:
         if not args.sdk or not args.gcc_prefix:raise SystemExit("--build needs explicit patched SDK and GCC prefix")
         build(out,args.sdk.resolve(strict=True),args.gcc_prefix,manifest)

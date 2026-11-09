@@ -107,6 +107,16 @@ extension WKFilePortalServing {
 
 extension WKFilePortal: WKFilePortalServing {}
 
+enum WKCompanionInputPolicy {
+    // Native keyboard, pointer and touch reports remain firmware-owned. The
+    // portable clipboard receiver must not inject a second scroll/gesture path.
+#if WK_PORTABLE
+    static let legacyInputRelay = false
+#else
+    static let legacyInputRelay = true
+#endif
+}
+
 #if !WK_CH32_TEST
 @MainActor private final class WKTargetAutoRunner {
     private var companion: WKCompanion?
@@ -167,10 +177,10 @@ extension WKFilePortal: WKFilePortalServing {}
             hideWaiting()
 #endif
             let transport: WKTransport = files == nil ? WKHIDTransport() :
-                WKHIDTransport(vendor: 0x1a86, product: 0x4071, serial: "CH32V407-DoNotShip")
+                WKHIDTransport.ch32Target()
             let stream = files.map { path in WKStreamFiles { try WKCDCStreamIO(path: path, role: "target") } }
             let component = WKCompanion(role: "target", clipboard: WKClipboard(board: .general), transport: transport,
-                portal: WKFilePortal(), stream: stream, pixelScrollEnabled: true)
+                portal: WKFilePortal(), stream: stream, pixelScrollEnabled: WKCompanionInputPolicy.legacyInputRelay)
             companion = component; profile = next; changing = false; component.start(headless: headless)
         }
         if let old = companion { old.stop { Task { @MainActor in launch() } } } else { launch() }
@@ -183,7 +193,15 @@ extension WKFilePortal: WKFilePortalServing {}
         // Side-effect-free packaging check: before AppKit, USB, permissions,
         // pasteboard creation, mount or any per-user state.
         if arguments == ["--portable-check"] {
-            wkReply("{\"mode\":\"portable\",\"installer\":false,\"loginItem\":false,\"persistentPreferences\":false,\"automaticSetupEject\":false}")
+            var capabilities: [String: Any] = ["mode": "portable", "installer": false, "loginItem": false,
+                "persistentPreferences": false, "automaticSetupEject": false,
+                "legacyInputRelay": WKCompanionInputPolicy.legacyInputRelay, "binaryBulk": true]
+#if WK_TREE
+            capabilities["collections"] = true
+#else
+            capabilities["collections"] = false
+#endif
+            wkReply(String(decoding: try! JSONSerialization.data(withJSONObject: capabilities, options: .sortedKeys), as: UTF8.self))
             return
         }
 #else
@@ -225,7 +243,7 @@ extension WKFilePortal: WKFilePortalServing {}
             let transport: WKTransport
             if role == "host" { transport = WKUnixTransport(path: socketPath!) }
             else if WKUSBDiscovery.unique(role: "target", files: true) != nil {
-                transport = WKHIDTransport(vendor: 0x1a86, product: 0x4071, serial: "CH32V407-DoNotShip")
+                transport = WKHIDTransport.ch32Target()
             } else { transport = WKHIDTransport() }
             let relay = WKInputRelay(role: WKInputRelay.Role(rawValue: role)!, transport: transport)
             relay.onTerminate = { application.terminate(nil) }
@@ -246,10 +264,10 @@ extension WKFilePortal: WKFilePortalServing {}
         }
         if let ch32Files, !WKCH32Device.matches(path: ch32Files, role: role) { wkLog("CH32 device identity/interface mismatch"); exit(2) }
         let transport: WKTransport = role == "host" ? WKUnixTransport(path: socketPath!) :
-            (ch32Files == nil ? WKHIDTransport() : WKHIDTransport(vendor: 0x1a86, product: 0x4071, serial: "CH32V407-DoNotShip"))
+            (ch32Files == nil ? WKHIDTransport() : WKHIDTransport.ch32Target())
         let stream = ch32Files.map { path in WKStreamFiles { try WKCDCStreamIO(path: path, role: role) } }
         let companion = WKCompanion(role: role, clipboard: WKClipboard(board: .general), transport: transport,
-                                    portal: WKFilePortal(), stream: stream, pixelScrollEnabled: true)
+                                    portal: WKFilePortal(), stream: stream, pixelScrollEnabled: WKCompanionInputPolicy.legacyInputRelay)
         companion.start(headless: headless)
         withExtendedLifetime(companion) { application.run() }
     }

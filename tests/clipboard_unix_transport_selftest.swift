@@ -1,4 +1,5 @@
-// Standalone test: swiftc -O -framework IOKit host/clipboard/WKClipboardTransport.swift
+// Standalone test: swiftc -D WK_PORTABLE -O -framework AppKit -framework IOKit
+// host/clipboard/WKOnboarding.swift host/clipboard/WKClipboardTransport.swift
 // tests/clipboard_unix_transport_selftest.swift -o /tmp/wk-unix-transport-test
 // Only private temporary AF_UNIX sockets; no clipboard, HID open, UART or GUI.
 import Foundation

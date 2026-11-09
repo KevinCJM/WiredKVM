@@ -237,6 +237,7 @@
       "negative_keywords": [],
       "route_priority": 80,
       "first_read_modules": [
+        "portable_cable_runtime",
         "clipboard_bulk",
         "session_evidence"
       ],
@@ -281,6 +282,7 @@
       "negative_keywords": [],
       "route_priority": 80,
       "first_read_modules": [
+        "portable_cable_runtime",
         "installer",
         "session_evidence"
       ],

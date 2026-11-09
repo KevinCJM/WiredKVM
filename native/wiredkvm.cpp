@@ -1071,8 +1071,11 @@ int main(int argc, char **argv) {
         if(raw_touch.empty()&&source=="macos"){
             const char *helper=std::getenv("WK_RAW_TOUCH_HELPER");if(helper)raw_touch=helper;
         }
-        if(!raw_touch.empty() && (raw_touch[0]!='/'||source!="macos"||target!="desktop"||!absolute_mouse||!clipboard_socket.empty()||!file_socket.empty()||!exchange_image.empty()||!setup_image.empty()))
-            throw std::runtime_error("raw-touch requires absolute Book desktop control and no target-component/storage channels");
+        // Portable clipboard metadata uses its existing bounded local socket;
+        // file bodies have a separate USB Bulk owner. Keep storage automation
+        // excluded, but allow the clipboard coordinator beside native touch.
+        if(!raw_touch.empty() && (raw_touch[0]!='/'||source!="macos"||target!="desktop"||!absolute_mouse||!file_socket.empty()||!exchange_image.empty()||!setup_image.empty()))
+            throw std::runtime_error("raw-touch requires absolute Book desktop control and no exchange/setup storage channels");
         if (transport.empty())
             throw std::runtime_error("Usage: wiredkvm-native --transport SERIAL|tcp:127.0.0.1:PORT --source probe|check-hid|soak|demo|macos");
         if (baud < 9600 || baud > 2000000) throw std::runtime_error("bad serial baud");

@@ -1,13 +1,26 @@
 """Native owner + fake capture/USB peer. Never accesses real USB or OS input."""
 import socket
+import tempfile
 import time
 import unittest
+import zlib
 from tests.test_native_absolute import FakeSession, wait_until
 
 class TouchSession(FakeSession):
-    def __init__(self,events=(),ready=True,version=1):
+    def __init__(self,events=(),ready=True,version=1,clipboard=False):
         super().__init__(events,extra=("--raw-touch","/private/tmp/fixture-unused-touch-helper"))
         self.touch=[];self.ready=ready;self.version=version
+        self.clipboard=clipboard;self.reports=[]
+    def __enter__(self):
+        if self.clipboard:
+            self.clip_temp=tempfile.TemporaryDirectory(prefix="wk-touch-clipboard-")
+            self.ipc=self.clip_temp.name+"/clipboard.sock"
+            self.extra += ("--clipboard-socket",self.ipc)
+        return super().__enter__()
+    def __exit__(self,*args):
+        try:super().__exit__(*args)
+        finally:
+            if self.clipboard:self.clip_temp.cleanup()
     def peer(self):
         try:
             while not self.stop.is_set():
@@ -17,6 +30,11 @@ class TouchSession(FakeSession):
             with channel,channel.makefile("rb") as stream:
                 for wire in stream:
                     text=wire.decode().strip()
+                    if text.startswith("C1,"):
+                        _,raw,checksum=text.split(",")
+                        data=bytes.fromhex(raw)
+                        if len(data)!=64 or zlib.crc32(data)!=int(checksum,16):return
+                        self.reports.append(data);channel.sendall(wire);continue
                     if text=="MT2?":channel.sendall(f"MT2,version={self.version},enabled={int(self.ready)},faults=0,resets=1\n".encode());continue
                     if text.startswith("MT2"):
                         self.touch.append((time.monotonic(),text));continue
@@ -29,6 +47,26 @@ class TouchSession(FakeSession):
         except OSError:pass
 
 class RawTouchNativeTests(unittest.TestCase):
+    def test_clipboard_traffic_keeps_native_touch_keys_and_automatic_edge_return(self):
+        raw="020000000000000031000088"
+        events=[(0.05,"E 5000 0"),(0,"H B 19"),(0,"H D 19 "+raw),
+                (0.02,"T 4 1"),(0,"T 4 0"),(0.02,"M 20 0"),
+                (0.04,"M -127 0"),(0.14,"M -127 0")]
+        with TouchSession(events,clipboard=True) as s:
+            self.assertTrue(wait_until(lambda:(s.work/'started').exists()))
+            with socket.socket(socket.AF_UNIX) as client:
+                client.settimeout(2);client.connect(s.ipc)
+                payload=bytes(range(64))*256;client.sendall(payload)
+                received=b""
+                while len(received)<len(payload):received+=client.recv(len(payload)-len(received))
+                self.assertEqual(received,payload)
+                self.assertTrue(wait_until(lambda:s.counts['T']==2))
+                self.assertTrue(wait_until(lambda:len(s.returns())>0))
+                self.assertTrue(wait_until(lambda:any(row=='MT2E,19' for _,row in s.touch)))
+                self.assertIn("MT2D,19,"+raw,[row for _,row in s.touch])
+                self.assertEqual(len(s.reports),256)
+                self.assertIsNone(s.proc.poll())
+
     def test_local_stale_and_returned_contacts_cannot_leak_while_keyboard_still_works(self):
         raw="020000000000000031000088"
         events=[(0,"H B 10"),(0,"H D 10 "+raw), # still Book
