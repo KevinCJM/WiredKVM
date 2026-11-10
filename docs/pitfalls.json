@@ -1453,7 +1453,9 @@
         "scripts/build_portable_companion.py",
         "scripts/build_portable_host.py",
         "tests/test_collection_transfer.py",
-        "docs/history/DIRECT_CABLE_DEVELOPMENT_20261109.md"
+        "docs/history/DIRECT_CABLE_DEVELOPMENT_20261109.md",
+        "scripts/flash_portable_candidate.py",
+        "tests/test_flash_portable_candidate.py"
       ],
       "affected_modules": [
         "portable_cable_runtime"
@@ -1464,7 +1466,8 @@
       "check_before_edit": [
         "编译/测试开始前快照所有相关输入，结束时复核不变；运行期间不修改这些输入",
         "旧目标介质和新 Book 程序允许显式版本不同，但必须独立核对二者的固定二进制及介质哈希，不声称旧目标来自当前源码",
-        "失效证据须标记 INVALIDATED，不部署该批输出"
+        "失效证据须标记 INVALIDATED，不部署该批输出",
+        "恢复已固定的旧固件使用显式 --known，仅接受脚本白名单内的二进制路径和 SHA；不把旧版本与后来源码不同当作无法恢复，也不能因此跳过新候选的当前编译输入核对。仅 DBG、完整身份、当前固件前缀、全片备份和独立读回仍须成立。"
       ],
       "safe_observation_methods": [
         "新目录构建，比较开始/结束快照及最终二进制哈希，禁止覆盖活动运行路径"

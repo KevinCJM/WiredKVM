@@ -4,6 +4,8 @@
 --describe is read-only filesystem inspection. --flash pauses/restarts the
 verified MCU; use only after the user connects DBG alone. It never changes
 Book autostart, starts target programs, or uploads an image to RAM.
+--known selects an exact previously pinned binary, independent of current
+sources. It is an explicit rollback path, not permission to flash a new build.
 """
 import argparse
 import hashlib
@@ -17,12 +19,14 @@ PROBE='A47C8F062A1A'
 UID='ad-21-ad-50-6c-54-c6-c6'
 CHIP='0x46740011'
 TOOL_SHA='4f116e0f31a434320c18affecba894028a5873f8fe331382c4448a62feff2c61'
+# Artifact pins include diagnostic versions; membership is not feature acceptance.
 ACCEPTED={
     'native-v2':('candidate-native-v2-final-20261109','9322b86a3e70b272e71716d1051ec641783afdd33b8d0fc40452608f33d0866b'),
     'ram-setup-v1':('candidate-ram-setup-20261109-final','dde0403eccbade5d6a032dab4659170d8e468393a84d392cc7596c33bffed9e4'),
     'ram-diag-v2':('candidate-ram-setup-20261109-diag-v2','0d3a5fff3d92a3530de7919a070f3cef05e191cc6dd97c724c54b0dcef2c11fd'),
     'ram-power-v3':('candidate-ram-setup-20261109-power-v3','28c576763fe4f8a3588705945c4f53e5bf7be0a61c03fe9f51b205d7f2178f93'),
     'bulk-batch-v1':('candidate-bulk-batch-20261110','6fdfccd6c45686444aea213ec81022be3c90594a13aec80fca54c353a7c21250'),
+    'bulk-profile-v1':('candidate-bulk-profile-20261110','6caef7f682024f1b2b3f94859e714180aa610782ae866d8acf8aa9a9658cb604'),
 }
 BACKUP_BYTES=576*1024
 
@@ -30,14 +34,25 @@ def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     action=p.add_mutually_exclusive_group(required=True);action.add_argument('--describe',action='store_true');action.add_argument('--flash',action='store_true')
-    p.add_argument('--profile',type=Path,required=True);p.add_argument('--wlink',type=Path,required=True);p.add_argument('--output',type=Path)
+    source=p.add_mutually_exclusive_group(required=True)
+    source.add_argument('--profile',type=Path)
+    source.add_argument('--known',choices=ACCEPTED,help='exact pinned firmware artifact; do not validate it against later source edits')
+    p.add_argument('--wlink',type=Path,required=True);p.add_argument('--output',type=Path)
     p.add_argument('--expected-current',choices=ACCEPTED,help='explicit pinned running firmware to back up before writing')
-    a=p.parse_args();profile=json.loads(a.profile.read_text());image=Path(profile['binary']['path'])
-    if not profile.get('ram_setup') or sha(image)!=profile['binary']['sha256'] or sha(a.wlink)!=TOOL_SHA:raise ValueError('candidate or tool hash mismatch')
-    for name,digest in profile['inputs'].items():
-        if sha(Path(name))!=digest:raise ValueError('build input changed: '+name)
+    a=p.parse_args()
+    if sha(a.wlink)!=TOOL_SHA:raise ValueError('tool hash mismatch')
+    if a.known:
+        folder,digest=ACCEPTED[a.known]
+        image=ROOT/'experiments/mt2-petros-profile'/folder/'wiredkvm-mt2-stage1.bin'
+        if sha(image)!=digest:raise ValueError('pinned target firmware missing or changed')
+    else:
+        profile=json.loads(a.profile.read_text());image=Path(profile['binary']['path'])
+        if not profile.get('ram_setup') or sha(image)!=profile['binary']['sha256']:raise ValueError('candidate hash mismatch')
+        for inputs in [profile['inputs'],{str(ROOT/name):digest for name,digest in profile.get('production_inputs',{}).items()}]:
+            for name,digest in inputs.items():
+                if sha(Path(name))!=digest:raise ValueError('build input changed: '+name)
     if a.describe:
-        print(json.dumps({'candidateSHA256':sha(image),'bytes':image.stat().st_size,'probe':PROBE,'chip':CHIP,'uid':UID,'deviceAccess':False}));return
+        print(json.dumps({'candidateSHA256':sha(image),'bytes':image.stat().st_size,'probe':PROBE,'chip':CHIP,'uid':UID,'deviceAccess':False,'knownArtifact':a.known,'currentSourcesChecked':not bool(a.known)}));return
     if not a.expected_current:raise ValueError('--flash requires --expected-current; never guess the active firmware')
     folder,digest=ACCEPTED[a.expected_current]
     baseline=ROOT/'experiments/mt2-petros-profile'/folder/'wiredkvm-mt2-stage1.bin'
@@ -82,7 +97,8 @@ def main():
         raise
     run('resume.log',[a.wlink,'--device','0','--chip','CH32V4X7','reset','quit'])
     result={'firmwareSHA256':sha(image),'bytes':image.stat().st_size,'backupSHA256':sha(backup),'backupBytes':BACKUP_BYTES,
-            'readbackVerified':True,'probe':PROBE,'uid':UID,'chip':CHIP,'runtimeAccepted':False,'clipboardAccepted':False,'autostartChanged':False}
+            'readbackVerified':True,'probe':PROBE,'uid':UID,'chip':CHIP,'runtimeAccepted':False,'clipboardAccepted':False,'autostartChanged':False,
+            'knownArtifact':a.known,'expectedCurrent':a.expected_current,'currentSourcesChecked':not bool(a.known)}
     (out/'result.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result))
 
 if __name__=='__main__':main()

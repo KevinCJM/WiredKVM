@@ -1271,7 +1271,8 @@
         "tests/setup_ram_test.c",
         "tests/psram_model/ch32v4x7.h",
         "tests/psram_model/ch32v4x7_psram.h",
-        "tests/psram_model/ch32v4x7_pwr.h"
+        "tests/psram_model/ch32v4x7_pwr.h",
+        "tests/test_flash_portable_candidate.py"
       ],
       "related_configs": [
         "native/cable-image/Cargo.toml",
@@ -1303,7 +1304,8 @@
       ],
       "minimum_regression": [
         "python3 tests/test_cable_runtime.py",
-        "python3 experiments/mt2-petros-profile/test_live_touch.py --native-format --ram-setup"
+        "python3 experiments/mt2-petros-profile/test_live_touch.py --native-format --ram-setup",
+        "python3 tests/test_flash_portable_candidate.py"
       ],
       "routing_confidence": "high",
       "scope_flags": [

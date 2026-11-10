@@ -49,6 +49,24 @@ Book 需更新日志接收过滤；仅接收固定数字格式，未知字段、
 最后的数字状态没有新增 reset 回调或触点错误；它不能说明连接为何消失。
 已请求完整断电后按 USB1→Book、USB2→mini 顺序接回，并为新实例准备独立监测目录。
 
+## 已验证旧固件的回退入口
+
+`scripts/flash_portable_candidate.py` 增加显式 `--known bulk-batch-v1`，只接受脚本内
+固定路径和 SHA-256 的旧二进制，不依赖后来已经修改的源码或旧构建清单。
+`--known` 与任意 `--profile` 互斥；新候选仍须核对全部当前编译输入，包括生成依赖头。
+恢复时仍要求仅 DBG、完整设备身份、`--expected-current bulk-profile-v1`、完整备份和
+逐字节读回。回退失败仍先恢复完整刚备份的 Flash。没有执行新的物理刷写。
+
+文件预览命令（不接触设备）：
+
+```
+python3 scripts/flash_portable_candidate.py --describe --known bulk-batch-v1 --wlink /已核对的/wlink
+```
+
+`python3 tests/test_flash_portable_candidate.py` 的 11 项隔离检查通过，包括输入冲突、
+篡改固定二进制、错误探针、错误当前固件、完整备份、读回失败时完整恢复；USB/DBG
+全部为 mock。它们不证明实际 USB 重连，也没有把诊断版标记为功能验收。
+
 先前等待 8 MiB 用户操作的 1,800 秒采样窗口未触发，没有采样结果；不得把它报告为
 CPU 空闲或忙。Finder 原生取消仍未通过；与本次吞吐诊断分开验收。
 
