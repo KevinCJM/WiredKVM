@@ -189,3 +189,38 @@ USB 硬件边界仍是模型，不能作为真实速度、总线时序或交互�
 `candidate-bulk-batch-20261110/` 已刷入并独立读回；用户确认输入和手势正常。
 64 MiB 正向实际约 0.825 MB/s，没有明显提速，不能按模型宣称高速。最新实机记录见
 `../../docs/research/DIRECT_CABLE_RUNTIME_20261109.md`。
+
+## 2026-11-10 收发计数候选（未刷入）
+
+`--bulk-profile` 须配合 `--bulk-batch --native-format`，默认关闭。
+它只给现有 `MT2?` 状态附加有限数字，不增开接口，不改描述符、文件协议、
+队列容量、输入优先级或发送时机。`bulk_profile.h` 的计数由同一个轮询线程持有。
+USB 提交前后的队列和 DMA 所有权不变；计数不是提速修复。
+
+后缀中的数字均为十六进制 u32（`bp=1` 为格式标识）：
+
+| 字段 | 内容 |
+|---|---|
+| `bpl` | 主循环累计轮数 |
+| `bpg` | 启动以来最大轮询间隔，单位为 SysTick tick |
+| `bph` | 固件配置的 SysTick 频率，HCLK/8；不是外部频率实测 |
+| `bpm` | 固件毫秒计数 |
+| `bp0` / `bp1` | 对应 USB1 / USB2，依次为 OUT 字节、OUT 回调数、IN 已提交字节、IN 提交数、IN 完成回调数、多格 IN 提交数、提交时最大队列深度、提交失败数、USB reset 回调数 |
+
+计数会回绕；只比较同一启动、相邻状态的模 2³² 增量。USB reset 可能丢弃
+在途 DMA，因此“已提交”不等于对端已接收。OUT 也统计程序盘上传；应在程序盘
+READY 后取基线。`bpg` 和队列最大值是累计峰值，不能据此报告输入延迟分位数。
+原状态前缀保留，整行不超过 511 字节加结尾 NUL；意外过长时保留原完整状态。
+
+Book 的 `WKClipboardDiagnostics` 只接受固定字段和有界数字，拒绝附加正文、路径、
+重复字段、未知字段和溢出值。旧 Book 程序会丢弃这行，因此诊断需配套新版 Book
+协调器；原捕获器、触点程序、线内组件和文件协议保持原构建，不需更新 mini 应用。
+
+```
+python3 experiments/mt2-petros-profile/test_live_touch.py --native-format --ram-setup --bulk-batch --bulk-profile
+```
+
+实际生成 main / C / Rust 模型通过 1,000 轮双向满队列、800ms 文件端点堵塞、
+键鼠/双指/四指推进、取消及旧 DMA 完成回调测试；另测状态长度、u32 回绕和只统计
+文件端点。配套 Book `--self-test` 验证日志过滤。它们不证明物理速度或真实输入延迟。
+候选构建信息和实机边界见 [吞吐诊断记录](../../docs/research/BULK_THROUGHPUT_20261110.md)。

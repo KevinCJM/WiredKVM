@@ -175,6 +175,46 @@ static void stalled_batch_test(const uint8_t *cell) {
     puts("BULK_STALL_INPUT_PASS blocked_file_ms=800 keyboard_and_two_four_finger_progress=true no_device_access=true");
 }
 #endif
+#ifdef WK_BULK_PROFILE_TEST
+static void bulk_profile_test(void) {
+    for(unsigned p=0;p<2;p++) {
+        const wk_bulk_profile_port *v=&wk_bulk_profile_ports[p];
+        assert(v->tx_bytes>512&&v->tx_batches>0&&v->completed>0);
+        assert(v->completed<=v->tx_batches&&v->multi>0&&v->submit_failed>0);
+        assert(v->queue_max>0&&v->queue_max<=WK407_BULK_SLOTS);
+    }
+    uint32_t rx=wk_bulk_profile_ports[0].rx_packets;
+    uint32_t loops=wk_bulk_profile_loops;
+    line("MT2?\n");pass(1,true);
+    assert(wk_bulk_profile_ports[0].rx_packets==rx&&wk_bulk_profile_loops==loops+1);
+    uint8_t fragment[64]={0};
+    for(unsigned p=0;p<2;p++) {
+        uint32_t packets_before=wk_bulk_profile_ports[p].rx_packets,bytes_before=wk_bulk_profile_ports[p].rx_bytes;
+        data_cb(handles[p],(uint8_t)(p?5:4),fragment,sizeof(fragment));
+        assert(wk_bulk_profile_ports[p].rx_packets==packets_before+1&&wk_bulk_profile_ports[p].rx_bytes==bytes_before+64);
+    }
+    uint8_t out[512];const uint8_t prefix[]="MT2,version=2,enabled=1,faults=0\n";
+    size_t n=wk_bulk_profile_line(prefix,sizeof(prefix)-1,out,sizeof(out),25000000,72000);
+    assert(n>sizeof(prefix)&&n<sizeof(out)&&out[n-1]=='\n');out[n]=0;
+    assert(!memcmp(prefix,out,sizeof(prefix)-2)&&strstr((char *)out,",bp=1,")&&strstr((char *)out,",bp1="));
+    n=wk_bulk_profile_line(prefix,sizeof(prefix)-1,out,sizeof(prefix)-1,25000000,72000);
+    assert(n==sizeof(prefix)-1&&!memcmp(out,prefix,n));
+    /* Counter wrap is intentional and does not touch the input/bridge state. */
+    uint8_t buttons=bridge.buttons;uint32_t epoch=bridge.epoch;
+    wk_bulk_profile_ports[0].rx_bytes=UINT32_MAX-511;
+    rx=wk_bulk_profile_ports[0].rx_packets;wk_bulk_profile_rx(0,512);
+    assert(wk_bulk_profile_ports[0].rx_bytes==0&&wk_bulk_profile_ports[0].rx_packets==rx+1);
+    wk_bulk_profile_last=UINT32_MAX-9;wk_bulk_profile_gap=0;
+    wk_bulk_profile_loop(5);assert(wk_bulk_profile_gap==15);
+    assert(bridge.buttons==buttons&&bridge.epoch==epoch);
+    const uint8_t longest[]="MT2,version=2,enabled=1,faults=-2147483648,rx=4294967295,max_contacts=4294967295,resets=4294967295,gets=4294967295,sets=4294967295,get_ids=4294967295,set_ids=4294967295,errors=4294967295,inputs=4294967295\n";
+    memset(wk_bulk_profile_ports,255,sizeof(wk_bulk_profile_ports));wk_bulk_profile_loops=wk_bulk_profile_gap=UINT32_MAX;
+    n=wk_bulk_profile_line(longest,sizeof(longest)-1,out,sizeof(out),UINT32_MAX,UINT32_MAX);
+    assert(n>sizeof(longest)&&n<sizeof(out)&&out[n-1]=='\n');out[n]=0;
+    assert(strstr((char *)out,",bp=1,")&&strstr((char *)out,",bp1=ffffffff:"));
+    puts("BULK_PROFILE_PASS numeric_only=true bounded_record=true counter_wrap=true control_not_counted_as_file=true no_extra_usb_transaction=true physical_measurement=false");
+}
+#endif
 int main(void){
     handles[0]=&usbhs1d_handle;handles[1]=&usbhs2d_handle;mock_usb2.MIS_ST=USBHS_UDMS_SIE_FREE;
     wk407_init(&bridge);
@@ -255,5 +295,8 @@ int main(void){
 #endif
     // Long idle and mid-gesture loss, including host reset, release only touch.
     for(unsigned i=0;i<200;i++)pass(1,true);assert(wkmt2_live_faults()>0);
+#ifdef WK_BULK_PROFILE_TEST
+    bulk_profile_test();
+#endif
     puts("LIVE_MAIN_RUST_C_CALLBACK_PASS stress=1000 continuous_bulk_both_directions=true stale_epoch_rejected=true no_device_access=true");
 }

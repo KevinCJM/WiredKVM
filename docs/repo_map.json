@@ -813,7 +813,7 @@
       "name": "mt2_firmware_experiment",
       "path": "experiments",
       "kind": "isolated_firmware_experiment",
-      "purpose": "Native-v2 input is retained in the accepted Bulk-batch-v1 firmware (6fdfccd6) on V467 UID ad21ad506c54c6c6. User accepts keys/mouse, two/four-finger gestures, return, drag and local text clipboards. Direct cable portable clipboard now has separate physical evidence. Opt-in 4 KiB file IN batching and fast ingress passed generated-main/C/Rust offline pressure, blocked-file input progress and cancellation/DMA ownership tests; candidate is flashed and independently readback-verified; input/gestures/return were user-confirmed after update. The 64 MiB physical file test remains about 0.83 MB/s, without a material speed gain. Physical speed and saturated input latency remain unverified.",
+      "purpose": "Native-v2 input is retained in the accepted Bulk-batch-v1 firmware (6fdfccd6) on V467 UID ad21ad506c54c6c6. User accepts keys/mouse, two/four-finger gestures, return, drag and local text clipboards. Direct cable portable clipboard now has separate physical evidence. Opt-in 4 KiB file IN batching and fast ingress passed generated-main/C/Rust offline pressure, blocked-file input progress and cancellation/DMA ownership tests; candidate is flashed and independently readback-verified; input/gestures/return were user-confirmed after update. The 64 MiB physical file test remains about 0.83 MB/s, without a material speed gain. Physical speed and saturated input latency remain unverified. An opt-in numeric Bulk-profile firmware candidate (6caef7f6) and matching Book diagnostic-filter update are built, not deployed; generated-main stress passes. Counters do not establish the physical bottleneck or speed.",
       "module_tags": [
         "mt2",
         "firmware",
@@ -877,7 +877,9 @@
         "experiments/mt2-petros-profile/probe_native_book.py",
         "results/live-touch-20261109/CURRENT_RUNTIME.json",
         "results/live-touch-20261109/accepted-native-v2/user-acceptance.json",
-        "experiments/mt2-petros-profile/bulk_batch.h"
+        "experiments/mt2-petros-profile/bulk_batch.h",
+        "experiments/mt2-petros-profile/bulk_profile.h",
+        "docs/research/BULK_THROUGHPUT_20261110.md"
       ],
       "upstream_dependencies": [
         "firmware_ch32"
@@ -928,7 +930,8 @@
         "python3 experiments/mt2-petros-profile/test_profile.py",
         "cargo test --offline --manifest-path experiments/mt2-single-port-probe/Cargo.toml",
         "cargo test --offline --manifest-path experiments/mt2-petros-profile/single-port-core/Cargo.toml",
-        "python3 experiments/mt2-petros-profile/test_live_touch.py --native-format --ram-setup --bulk-batch"
+        "python3 experiments/mt2-petros-profile/test_live_touch.py --native-format --ram-setup --bulk-batch",
+        "python3 experiments/mt2-petros-profile/test_live_touch.py --native-format --ram-setup --bulk-batch --bulk-profile"
       ],
       "routing_confidence": "high",
       "scope_flags": [
@@ -1241,7 +1244,8 @@
         "scripts/flash_portable_candidate.py",
         "native/control-service/src/main.rs",
         "native/control-service/README.md",
-        "docs/research/FINDER_CANCEL_20261110.md"
+        "docs/research/FINDER_CANCEL_20261110.md",
+        "docs/research/BULK_THROUGHPUT_20261110.md"
       ],
       "upstream_dependencies": [
         "firmware_ch32",

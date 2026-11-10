@@ -19,10 +19,10 @@ def run(command,work):
     return r.stdout
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--native-format',action='store_true');parser.add_argument('--ram-setup',action='store_true');parser.add_argument('--bulk-batch',action='store_true');args=parser.parse_args();native=args.native_format;ram=args.ram_setup;batch=args.bulk_batch
+    parser=argparse.ArgumentParser();parser.add_argument('--native-format',action='store_true');parser.add_argument('--ram-setup',action='store_true');parser.add_argument('--bulk-batch',action='store_true');parser.add_argument('--bulk-profile',action='store_true');args=parser.parse_args();native=args.native_format;ram=args.ram_setup;batch=args.bulk_batch
     if ram and not native:raise ValueError('RAM setup requires native format')
     work=Path(tempfile.mkdtemp(prefix='live-main-test-',dir=HERE))
-    candidate=work/'candidate';profile.generate(candidate,pointer_collections=True,absolute_mouse_logical=True,live_touch=True,native_format=native,ram_setup=ram,bulk_batch=batch)
+    candidate=work/'candidate';profile.generate(candidate,pointer_collections=True,absolute_mouse_logical=True,live_touch=True,native_format=native,ram_setup=ram,bulk_batch=batch,bulk_profile=args.bulk_profile)
     constants=[n.value for n in ast.walk(ast.parse((HERE/'test_profile.py').read_text())) if isinstance(n,ast.Constant) and isinstance(n.value,str)]
     extension=next(x for x in constants if x.startswith('\ntypedef uint8_t usb_endp_t;'))
     header=old.STUB.replace('typedef struct {int unused;} usbd_handle_t;','typedef struct {bool enumerated;unsigned port;} usbd_handle_t;')+extension
@@ -49,6 +49,6 @@ def main():
     source.write_text((HERE/'test_live_touch_main.c').read_text().replace('GENERATED_MAIN',str(candidate/'generated/main.c')))
     extra=[candidate/'generated/descriptors.c',HERE/'mt2_glue.c',HERE/'live_touch.c',HERE/'live_abort.c']+[profile.ROOT/p for p in ['firmware/ch32v407/bridge.c','firmware/ch32v407/setup_msc.c','firmware/ch32v467_petros/setup_flash_none.c','firmware/main/wire_protocol.c']]
     if ram:extra.remove(profile.ROOT/'firmware/ch32v467_petros/setup_flash_none.c')
-    run(['clang',*(['-DWKMT2_NATIVE'] if native else []),*(['-DWK_RAM_SETUP'] if ram else []),*(['-DWK_BULK_BATCH_TEST'] if batch else []),'-std=c11','-DWKMT2_LIVE','-Wall','-Wextra','-Werror','-Wno-unused-function','-I',work,'-I',HERE,'-I',profile.CORE/'include','-I',profile.ROOT/'firmware/ch32v407','-I',profile.ROOT/'firmware/ch32v467_petros','-I',profile.ROOT/'firmware/main',source,*extra,*archives,'-o',work/'test'],work)
+    run(['clang',*(['-DWKMT2_NATIVE'] if native else []),*(['-DWK_RAM_SETUP'] if ram else []),*(['-DWK_BULK_BATCH_TEST'] if batch else []),*(['-DWK_BULK_PROFILE_TEST'] if args.bulk_profile else []),'-std=c11','-DWKMT2_LIVE','-Wall','-Wextra','-Werror','-Wno-unused-function','-I',work,'-I',HERE,'-I',profile.CORE/'include','-I',profile.ROOT/'firmware/ch32v407','-I',profile.ROOT/'firmware/ch32v467_petros','-I',profile.ROOT/'firmware/main',source,*extra,*archives,'-o',work/'test'],work)
     print(run([work/'test'],work).strip());print('RETAINED',work)
 if __name__=='__main__':main()

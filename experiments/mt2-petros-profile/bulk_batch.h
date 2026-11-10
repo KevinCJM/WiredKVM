@@ -2,6 +2,9 @@
  * One owner, one bounded copy, no fill delay and no shared input capacity.
  * A successful submit gives DMA its own immutable copy before queue removal. */
 #define WK_FILE_BATCH_CELLS 8u
+#ifndef WK_FILE_BATCH_PROFILE_SUBMIT
+#define WK_FILE_BATCH_PROFILE_SUBMIT(p,c,q,ok) ((void)0)
+#endif
 static uint8_t file_tx[2][WK_FILE_BATCH_CELLS*WK407_BULK_PACKET]
     __attribute__((aligned(4)));
 
@@ -22,7 +25,10 @@ static void send_file_batch(unsigned p,unsigned ep) {
         }
         memcpy(file_tx[p]+i*WK407_BULK_PACKET,v->bytes,WK407_BULK_PACKET);
     }
-    if(usbd_upload(handles[p],(uint8_t)(ep|128),file_tx[p],count*WK407_BULK_PACKET)!=USB_RST_OK)return;
+    if(usbd_upload(handles[p],(uint8_t)(ep|128),file_tx[p],count*WK407_BULK_PACKET)!=USB_RST_OK){
+        WK_FILE_BATCH_PROFILE_SUBMIT(p,count,q->count,false);return;
+    }
+    WK_FILE_BATCH_PROFILE_SUBMIT(p,count,q->count,true);
     busy[p][ep]=true;tx_epoch[p][ep]=bridge.epoch;tx_kind[p][ep]=1;
     tx_hid_epoch[p][ep]=bridge.hid_epoch;
     for(unsigned i=0;i<count;i++)wk407_bulk_done(&bridge,p);

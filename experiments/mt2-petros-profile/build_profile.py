@@ -189,7 +189,23 @@ def live_overlays(main,descriptors):
     descriptors=once(descriptors,'0xac,0x05,0x65,0x02,0x6b,2,1,2,3,1','0xac,0x05,0x65,0x02,0x6d,2,1,2,3,1')
     return main,descriptors
 
-def generate(out,pointer_collections=False,absolute_no_preferred=False,absolute_mouse_logical=False,single_port_probe=False,live_touch=False,native_format=False,ram_setup=False,bulk_batch=False):
+def bulk_profile_overlay(main):
+    """Finite counters on the existing MT2 status; no new input/USB producer."""
+    main=once(main,'static uint32_t touch_at;','static uint32_t touch_at;\n#include "bulk_profile.h"')
+    main=once(main,'(void)parameter;unsigned p=wk407_port(h);',
+              '(void)parameter;unsigned p=wk407_port(h);\n    wk_bulk_profile_ports[p].resets++;')
+    main=once(main,'if(tx_kind[p][e]==1||tx_kind[p][e]==5){} /* copied and popped at submit */',
+              'if(tx_kind[p][e]==1){wk_bulk_profile_ports[p].completed++;}\n            else if(tx_kind[p][e]==5){} /* copied and popped at submit */')
+    main=once(main,'        armed[p][e]=false;\n        if(p==0&&e==2)',
+              '        armed[p][e]=false;\n        if(e==(p?5u:4u))wk_bulk_profile_rx(p,size);\n        if(p==0&&e==2)')
+    main=once(main,'    uint32_t now=wk407_now_ms();wk407_tick(&bridge,now);',
+              '    wk_bulk_profile_loop((uint32_t)SysTick->CNT);\n    uint32_t now=wk407_now_ms();wk407_tick(&bridge,now);')
+    main=once(main,'else if(diagnostic)send(0,2,7,diagnostic,(unsigned)diagnostic_size);',
+              'else if(diagnostic){uint8_t record[512];size_t n=wk_bulk_profile_line(diagnostic,diagnostic_size,record,sizeof(record),SystemCoreClock/8,now);\n            if(n)send(0,2,7,record,(unsigned)n);}')
+    return main
+
+def generate(out,pointer_collections=False,absolute_no_preferred=False,absolute_mouse_logical=False,single_port_probe=False,live_touch=False,native_format=False,ram_setup=False,bulk_batch=False,bulk_profile=False):
+    if bulk_profile and not (bulk_batch and native_format):raise ValueError("Bulk profiling requires the native live-touch/bulk-batch profile")
     main_path=ROOT/"firmware/ch32v407/main.c";descriptor_path=ROOT/"firmware/ch32v407/descriptors.c"
     main,descriptors=overlays(main_path.read_text(),descriptor_path.read_text(),pointer_collections,absolute_no_preferred,absolute_mouse_logical,single_port_probe)
     if live_touch:
@@ -220,6 +236,7 @@ def generate(out,pointer_collections=False,absolute_no_preferred=False,absolute_
                 f'usbd_endp_open(h,{ep},USBD_ENDP_FEATURE_ZLP|(packet==512?USBD_ENDP_FEATURE_BURST:0),packet);')
         main=once(main,'const wk407_bulk_packet *v=wk407_bulk_peek(&bridge,p);if(v)send(p,ep,1,v->bytes,v->size);','send_file_batch(p,ep);')
         main=once(main,'/* At most one 512-byte operation per file direction per pass. */','/* One 512-byte OUT arm and one bounded IN batch per direction; no fill wait. */')
+    if bulk_profile:main=bulk_profile_overlay(main)
     out.mkdir(exist_ok=False)
     (out/"generated").mkdir();(out/"obj").mkdir()
     (out/"generated/main.c").write_text(main);(out/"generated/descriptors.c").write_text(descriptors)
@@ -237,6 +254,10 @@ def generate(out,pointer_collections=False,absolute_no_preferred=False,absolute_
     manifest["native_format"]=native_format
     manifest["ram_setup"]=ram_setup
     manifest["bulk_batch"]=bulk_batch
+    manifest["bulk_profile"]=bulk_profile
+    if bulk_profile:
+        manifest["bulk_diagnostics"]={"transport":"existing MT2 status suffix","contents":False,"counter_bits":32,"physical_measurement":False}
+        manifest["production_inputs"][str((HERE/"bulk_profile.h").relative_to(ROOT))]=sha(HERE/"bulk_profile.h")
     if bulk_batch:
         manifest["file_in_batch"]={"high_speed_max_bytes":4096,"full_speed_max_bytes":512,"wait_for_fill":False,"separate_dma_copies":True,"physical_speed_verified":False}
         manifest["production_inputs"][str((HERE/"bulk_batch.h").relative_to(ROOT))]=sha(HERE/"bulk_batch.h")
@@ -327,6 +348,7 @@ def main():
     parser.add_argument("--ram-setup",action="store_true",help="native-v2 plus volatile program image; PSRAM not persistent storage")
     parser.add_argument("--native-format",action="store_true",help="native three-bit finger/state fields and full clock; protocol v2")
     parser.add_argument("--bulk-batch",action="store_true",help="experimental bounded 4 KiB file IN DMA batches; input endpoints unchanged")
+    parser.add_argument("--bulk-profile",action="store_true",help="opt-in bounded numeric counters on existing MT2 status; requires --bulk-batch and --native-format")
     args=parser.parse_args();out=args.output
     if args.absolute_no_preferred and not args.pointer_collections:parser.error("--absolute-no-preferred requires --pointer-collections")
     if args.absolute_mouse_logical and not args.pointer_collections:parser.error("--absolute-mouse-logical requires --pointer-collections")
@@ -337,7 +359,7 @@ def main():
     out=out.parent.resolve(strict=True)/out.name
     if out.exists() or out.is_symlink():raise SystemExit("Output must be new; no overwrite/cleanup")
     if not out.is_relative_to(HERE):raise SystemExit("Output must be inside experiments/mt2-petros-profile")
-    manifest=generate(out,args.pointer_collections,args.absolute_no_preferred,args.absolute_mouse_logical,args.single_port_probe,args.live_touch,args.native_format,args.ram_setup,args.bulk_batch)
+    manifest=generate(out,args.pointer_collections,args.absolute_no_preferred,args.absolute_mouse_logical,args.single_port_probe,args.live_touch,args.native_format,args.ram_setup,args.bulk_batch,args.bulk_profile)
     if args.build:
         if not args.sdk or not args.gcc_prefix:raise SystemExit("--build needs explicit patched SDK and GCC prefix")
         build(out,args.sdk.resolve(strict=True),args.gcc_prefix,manifest)

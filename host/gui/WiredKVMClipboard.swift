@@ -15,12 +15,56 @@ final class WKClipboardDiagnostics: @unchecked Sendable {
     }
     var fileURL: URL { directory.appendingPathComponent("clipboard.log") }
 
+    // Preserve only the firmware's fixed numeric status. Never accept arbitrary
+    // native stderr just to collect throughput measurements.
+    private static func rawTouchStatus(_ text: String) -> Bool {
+        guard text.utf8.count <= 511 else { return false }
+        let fields = text.split(separator: ",", omittingEmptySubsequences: false)
+        guard fields.first == "MT2" else { return false }
+        var values: [String: String] = [:]
+        for field in fields.dropFirst() {
+            let pair = field.split(separator: "=", omittingEmptySubsequences: false)
+            guard pair.count == 2, values[String(pair[0])] == nil else { return false }
+            values[String(pair[0])] = String(pair[1])
+        }
+        let base = Set("version enabled faults rx max_contacts resets gets sets get_ids set_ids errors inputs".split(separator: " ").map(String.init))
+        let profile = Set("bp bpl bpg bph bpm bp0 bp1".split(separator: " ").map(String.init))
+        let keys = Set(values.keys)
+        guard keys == base || keys == base.union(profile),
+              ["1", "2"].contains(values["version"]!), ["0", "1"].contains(values["enabled"]!) else { return false }
+        for key in base {
+            let value = values[key]!
+            if key == "faults" {
+                guard value.range(of: "^-?[0-9]{1,10}$", options: .regularExpression) != nil, Int32(value) != nil else { return false }
+            } else {
+                guard !value.isEmpty, value.utf8.count <= 10,
+                      value.utf8.allSatisfy({ $0 >= 48 && $0 <= 57 }), UInt32(value) != nil else { return false }
+            }
+        }
+        if keys != base {
+            func hex(_ value: Substring) -> Bool {
+                !value.isEmpty && value.utf8.count <= 8 && value.utf8.allSatisfy {
+                    ($0 >= 48 && $0 <= 57) || ($0 >= 97 && $0 <= 102)
+                }
+            }
+            guard values["bp"] == "1" else { return false }
+            for key in ["bpl", "bpg", "bph", "bpm"] { guard hex(Substring(values[key]!)) else { return false } }
+            for key in ["bp0", "bp1"] {
+                let numbers = values[key]!.split(separator: ":", omittingEmptySubsequences: false)
+                guard numbers.count == 9, numbers.allSatisfy(hex) else { return false }
+            }
+        }
+        return true
+    }
+
     static func filtered(_ line: String) -> String? {
         guard line.utf8.count <= 2048, !line.contains("\n"), !line.contains("\r") else { return nil }
         let words = line.split(separator: " ").map(String.init)
         guard let prefix = words.first else { return nil }
         let allowed: Set<String>
         switch prefix {
+        case "CPP_RAW_TOUCH_STATUS":
+            return words.count == 2 && rawTouchStatus(words[1]) ? line : nil
         case "CPP_WIREDKVM_FAILURE":
             let codes: Set<String> = ["code=OTHER", "code=WK1_OVERFLOW", "code=WK1_REJECT",
                 "code=HEARTBEAT_TIMEOUT", "code=HID_ACK_TIMEOUT", "code=UART_STALLED",
@@ -92,10 +136,24 @@ final class WKClipboardDiagnostics: @unchecked Sendable {
         log.record("CPP_WIREDKVM_FAILURE code=WK1_OVERFLOW")
         log.record("CPP_WIREDKVM_FAILURE code=PRIVATE_CONTENT")
         log.record("CPP_WIREDKVM_ERROR PRIVATE_CONTENT")
+        let status = "CPP_RAW_TOUCH_STATUS MT2,version=2,enabled=1,faults=0,rx=10,max_contacts=4,resets=1,gets=1,sets=1,get_ids=1,set_ids=1,errors=0,inputs=10"
+        let profile = status + ",bp=1,bpl=ffff,bpg=10,bph=17d7840,bpm=ffff,bp0=200:1:200:1:1:0:1:0:0,bp1=200:1:200:1:1:0:1:0:0"
+        precondition(Self.filtered(status) == status && Self.filtered(profile) == profile)
+        for invalid in [profile + ",payload=PRIVATE_CONTENT", profile + ",bp=1", profile + ",path=/private/secret",
+                        profile.replacingOccurrences(of: "bpl=ffff", with: "bpl=PRIVATE_CONTENT"),
+                        profile.replacingOccurrences(of: "bpl=ffff", with: "bpl=100000000"),
+                        profile.replacingOccurrences(of: "bp0=200:1:200:1:1:0:1:0:0", with: "bp0=1:2"),
+                        status.replacingOccurrences(of: "rx=10", with: "rx=4294967296"),
+                        status.replacingOccurrences(of: "inputs=10", with: "inputs="),
+                        profile.replacingOccurrences(of: ",bpm=ffff", with: "")] {
+            precondition(Self.filtered(invalid) == nil)
+        }
+        log.record(profile)
         log.flushForTest()
         let text = try String(contentsOf: log.fileURL, encoding: .utf8)
         precondition(text.contains("transfer=7") && !text.contains("PRIVATE_CONTENT") && !text.contains("/private/secret"))
         precondition(text.contains("CPP_WIREDKVM_FAILURE code=WK1_OVERFLOW"))
+        precondition(text.contains("CPP_RAW_TOUCH_STATUS MT2,") && text.contains("bp0=200:1:200:1:1:0:1:0:0"))
         let permissions = try FileManager.default.attributesOfItem(atPath: log.fileURL.path)[.posixPermissions] as! NSNumber
         precondition(permissions.intValue & 0o777 == 0o600)
         let fd = Darwin.open(log.fileURL.path, O_WRONLY)
