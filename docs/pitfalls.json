@@ -1545,6 +1545,44 @@
         "用注入库存、错误会话/标志/版本/枚举、原空 pong 和完整私有复制粘贴回归验证有界状态报告",
         "Book 仅枚举已核对 CH32 的文件接口；目标侧由线内组件自行回报，不用远程终端读取配置"
       ]
+    },
+    {
+      "id": "P42",
+      "title": "发布源进度和协议取消不能代替 Finder 原生取消",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p42_guard"
+      ],
+      "symptoms": [
+        "Finder 停在正在停止，而源取消回调没有执行",
+        "把协议取消或自建进度窗口通过算成 Finder 取消已通过"
+      ],
+      "trigger_actions": [
+        "修改文件入口、原生进度或取消处理"
+      ],
+      "related_paths": [
+        "host/clipboard/WKFilePortal.swift",
+        "host/clipboard/WKStreamFiles.swift",
+        "host/clipboard/WKOnDemandClipboard.swift",
+        "docs/research/FINDER_CANCEL_20261110.md"
+      ],
+      "affected_modules": [
+        "clipboard_bulk",
+        "portable_cable_runtime"
+      ],
+      "blast_radius": [
+        "Finder file-copy cancellation, integrity and local clipboard isolation"
+      ],
+      "check_before_edit": [
+        "Book 自建文件实测：点击 Finder 停止后 69.15 秒内，发布在源 URL 的 Progress 没有收到取消回调；完成正文后 Finder 才结束。不能默认发布即建立父子进度或取消通路。",
+        "当前 GET 在返回成功头前等待完整已校验文件；连接断开尚未取消引擎。不能把正常完成、预览、重试和并行 GET 的关闭无条件当作取消。",
+        "保留整体长度和 SHA 校验、迟到结果拒绝及两台本机复制优先。分段实验须验证失败时不产生假完整文件，不得靠零内容或提前发布半成品改善界面。",
+        "用真实 Finder 点击、实际停止供数及立即新粘贴验证；280 轮协议模型不替代这项验收。只观察自建源和自建目标，不扫描用户任意复制操作。"
+      ],
+      "safe_observation_methods": [
+        "用户已授权的 Book 独立自建文件实验；只记录有限事件与时间，保留退出和目标文件证据；不访问 mini 终端或其它应用日志。"
+      ]
     }
   ]
 }

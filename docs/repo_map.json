@@ -456,7 +456,8 @@
         "results/collection-transfer-20261106/stream-v1/collections.json",
         "docs/research/CLIPBOARD_ZERO_RUNTIME_GATE_20261109.md",
         "results/clipboard-zero-runtime-20261109/admission_probe.c",
-        "results/clipboard-zero-runtime-20261109/admission-probe.log"
+        "results/clipboard-zero-runtime-20261109/admission-probe.log",
+        "docs/research/FINDER_CANCEL_20261110.md"
       ],
       "upstream_dependencies": [],
       "downstream_dependencies": [],
@@ -488,7 +489,8 @@
         "P23",
         "P38",
         "P40",
-        "P41"
+        "P41",
+        "P42"
       ],
       "minimum_regression": [],
       "routing_confidence": "medium",
@@ -1196,7 +1198,7 @@
       "name": "portable_cable_runtime",
       "path": "native/cable-image",
       "kind": "implementation_entrypoints",
-      "purpose": "Target app executes directly from cable without installation or persistence. Frozen Book v12 at 0e79400 has input ready; universal target app and readonly media pass build, strict signature and inventory checks, but mini v12 has not started and cold media reload is pending. Earlier v9 physical evidence covers bidirectional text/local text clipboards, native input, matching 8 MiB/PNG/folder round trips and reverse image-content user confirmation. Flashed bounded-IN firmware retains accepted input; physical 64 MiB forward remains about 0.83 MB/s. Reverse failed at final source-ctime validation; the content-recheck and disk scheduling fixes pass isolated regression, not physical acceptance. Book discovery measured 480 Mbps; target rate, high speed, PSRAM stability, native Finder cancel, multiple roots and saturated input latency remain pending.",
+      "purpose": "Portable target app runs directly from cable without installation or persistence. Frozen v12 at 0e79400 is running on Book and opened by the user on mini; readonly media uploaded in 8.242 seconds. Both sides report 480 Mbps; Book cached file endpoints confirm 512-byte Bulk. Physical v12 64 MiB round trip matches whole SHA-256, but forward/reverse remain about 0.819/0.860 MB/s. User accepted forward saturated keyboard, mouse, two/four-finger gestures and edge return; reverse input feedback is pending. Earlier v9 text/PNG/folder/image-content evidence remains separately scoped. Book-only native Finder cancel test failed: source Progress callback absent for 69.15 seconds. High speed, native cancel, PSRAM stability, multiple roots, opposite image-content direction and persistent portable autostart remain pending.",
       "module_tags": [
         "portable",
         "ram_setup",
@@ -1238,7 +1240,8 @@
         "scripts/build_portable_host.py",
         "scripts/flash_portable_candidate.py",
         "native/control-service/src/main.rs",
-        "native/control-service/README.md"
+        "native/control-service/README.md",
+        "docs/research/FINDER_CANCEL_20261110.md"
       ],
       "upstream_dependencies": [
         "firmware_ch32",
@@ -1291,7 +1294,8 @@
         "P38",
         "P39",
         "P40",
-        "P41"
+        "P41",
+        "P42"
       ],
       "minimum_regression": [
         "python3 tests/test_cable_runtime.py",
