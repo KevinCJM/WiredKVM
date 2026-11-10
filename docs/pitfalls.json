@@ -1505,6 +1505,46 @@
       "safe_observation_methods": [
         "只记录时间、字节数及固定错误码；只校验自建测试文件，不读取其他剪贴板或目标终端"
       ]
+    },
+    {
+      "id": "P41",
+      "title": "USB 速率属性的枚举不能混用，协商速率也不是吞吐",
+      "severity": "medium",
+      "confidence": "high",
+      "risk_codes": [
+        "p41_guard"
+      ],
+      "symptoms": [
+        "把 USBSpeed=3 当作 USBDeviceSpeed=3，错误推断 5 Gbps",
+        "只测 Book 侧 480 Mbps 就宣称双端高速或转发性能达标"
+      ],
+      "trigger_actions": [
+        "新增 USB 自动诊断、分析吞吐瓶颈或更换传输后端"
+      ],
+      "related_paths": [
+        "host/clipboard/WKOnboarding.swift",
+        "host/clipboard/WKOnDemandClipboard.swift",
+        "host/clipboard/WiredKVMCompanion.swift",
+        "tests/onboarding_selftest.swift",
+        "host/clipboard/WKFilePipelineSelfTest.swift"
+      ],
+      "affected_modules": [
+        "portable_cable_runtime",
+        "clipboard_bulk",
+        "installer"
+      ],
+      "blast_radius": [
+        "transport diagnostics and performance conclusions"
+      ],
+      "check_before_edit": [
+        "按已验证身份/接口读取 IOKit 的 Device Speed，并按 SDK USB.h 的 USBDeviceSpeed 映射：0 为 Low，1 为 Full，2 为 High；不要用 USBSpeed 替代它。缺失、异常和不唯一时为 unknown。",
+        "仅沿已有小型元数据通道回传固定数值，不传路径、剪贴板或任意系统属性。每连接最多三次；保留原 WKOD 长度和旧组件兼容。",
+        "分别记录两侧协商速率与有效文件字节/时间；480 Mbps 不等于文件传输速度达标，也不能证明另一端。"
+      ],
+      "safe_observation_methods": [
+        "用注入库存、错误会话/标志/版本/枚举、原空 pong 和完整私有复制粘贴回归验证有界状态报告",
+        "Book 仅枚举已核对 CH32 的文件接口；目标侧由线内组件自行回报，不用远程终端读取配置"
+      ]
     }
   ]
 }

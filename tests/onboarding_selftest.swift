@@ -31,6 +31,16 @@ import Foundation
             let d=WKUSBDiscovery.Port(path:"/dev/cu.other",serial:"fixture2",product:0x4070,interface:0)
             precondition(WKUSBDiscovery.unique(role:"host",files:false,inventory:[a,d])==nil)
         }
+        check("negotiated-usb-speed-is-identity-bound-and-finite") {
+            precondition(WKUSBDiscovery.Rate(deviceProperty:0).mbps == "1.5")
+            precondition(WKUSBDiscovery.Rate(deviceProperty:1).mbps == "12")
+            precondition(WKUSBDiscovery.Rate(deviceProperty:2).mbps == "480")
+            for value in [nil,-1,3,256] as [Int?] { precondition(WKUSBDiscovery.Rate(deviceProperty:value) == .unknown) }
+            let port=WKUSBDiscovery.Port(path:"/dev/cu.fixture",serial:"fixture",product:0x4070,interface:2,rate:.high)
+            precondition(WKUSBDiscovery.rate(path:port.path,inventory:[port]) == .high)
+            precondition(WKUSBDiscovery.rate(path:"/dev/cu.unknown",inventory:[port]) == .unknown)
+            precondition(WKUSBDiscovery.rate(path:port.path,inventory:[port,port]) == .unknown)
+        }
         check("grace-one-offer-per-connection-and-user-pause") {
             var p=WKSetupOfferPolicy();p.reset(at:100)
             precondition(!p.shouldOffer(at:104.99,enabled:true,paused:false))

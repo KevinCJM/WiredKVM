@@ -9,12 +9,24 @@ import Darwin
 // Each USB role is usable before the other computer has any application.
 // Development VID/PIDs are deliberately restricted, not shipping identities.
 enum WKUSBDiscovery {
+    // IOKit's "Device Speed" uses USB.h USBDeviceSpeed (not "USBSpeed",
+    // which has a different enumeration). A negotiated rate is not throughput.
+    enum Rate: UInt8 {
+        case low = 0, full = 1, high = 2, unknown = 255
+        init(deviceProperty: Int?) {
+            self = deviceProperty.flatMap { UInt8(exactly: $0) }.flatMap(Self.init(rawValue:)) ?? .unknown
+        }
+        var mbps: String {
+            switch self { case .low: return "1.5"; case .full: return "12"; case .high: return "480"; case .unknown: return "unknown" }
+        }
+    }
     // The native-touch prototype retains our private clipboard collection and
     // serial. Never match an ordinary Apple trackpad by VID/PID alone.
     static let targetIdentities: [(vendor: Int, product: Int)] = [(0x1a86, 0x4071), (0x05ac, 0x0265)]
     struct Port: Equatable {
         let path: String, serial: String
         let product: Int, interface: Int
+        var rate: Rate = .unknown
         var role: String { product == 0x4070 ? "host" : "target" }
         // CDC ACM is a two-interface function. macOS can publish the serial
         // child below either the control or data interface of that function.
@@ -41,7 +53,8 @@ enum WKUSBDiscovery {
                   let vendor = property("idVendor") as? Int, let product = property("idProduct") as? Int,
                   let serial = property("USB Serial Number") as? String, let interface = property("bInterfaceNumber") as? Int,
                   accepts(vendor: vendor, product: product, serial: serial, interface: interface) else { continue }
-            found.append(Port(path: path, serial: serial, product: product, interface: interface))
+            found.append(Port(path: path, serial: serial, product: product, interface: interface,
+                              rate: Rate(deviceProperty: property("Device Speed") as? Int)))
         }
         return found
     }
@@ -49,6 +62,10 @@ enum WKUSBDiscovery {
         let interface = role == "host" ? (files ? 2 : 0) : 3
         let paths = Set((inventory ?? ports()).filter { $0.role == role && $0.function == interface }.map(\.path))
         return paths.count == 1 ? paths.first : nil
+    }
+    static func rate(path: String, inventory: [Port]? = nil) -> Rate {
+        let matches = (inventory ?? ports()).filter { $0.path == path }
+        return matches.count == 1 ? matches[0].rate : .unknown
     }
 }
 

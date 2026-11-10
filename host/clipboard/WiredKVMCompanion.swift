@@ -71,6 +71,7 @@ enum WKMetadata {
                     valid = parts.count == 2 && parts.allSatisfy(WKMessage.validNonce)
                 case "result": valid = ["READY", "BLOCK", "CHECK"].contains(value)
                 case "code": valid = safeCode(value)
+                case "usbMbps": valid = ["unknown", "1.5", "12", "480"].contains(value)
                 default: valid = false
                 }
             }
@@ -184,6 +185,7 @@ enum WKCompanionInputPolicy {
             let stream = files.map { path in WKStreamFiles { try WKCDCStreamIO(path: path, role: "target") } }
             let component = WKCompanion(role: "target", clipboard: WKClipboard(board: .general), transport: transport,
                 portal: WKFilePortal(), stream: stream, pixelScrollEnabled: WKCompanionInputPolicy.legacyInputRelay)
+            if let files { component.usbLinkRateProvider = { WKUSBDiscovery.rate(path: files) } }
             companion = component; profile = next; changing = false; component.start(headless: headless)
         }
         if let old = companion { old.stop { Task { @MainActor in launch() } } } else { launch() }
@@ -271,6 +273,7 @@ enum WKCompanionInputPolicy {
         let stream = ch32Files.map { path in WKStreamFiles { try WKCDCStreamIO(path: path, role: role) } }
         let companion = WKCompanion(role: role, clipboard: WKClipboard(board: .general), transport: transport,
                                     portal: WKFilePortal(), stream: stream, pixelScrollEnabled: WKCompanionInputPolicy.legacyInputRelay)
+        if let ch32Files { companion.usbLinkRateProvider = { WKUSBDiscovery.rate(path: ch32Files) } }
         companion.start(headless: headless)
         withExtendedLifetime(companion) { application.run() }
     }

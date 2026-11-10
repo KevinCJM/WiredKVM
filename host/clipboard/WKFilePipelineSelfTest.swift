@@ -73,6 +73,7 @@ private final class WKTestClock { var now: Double = 100 }
 private final class WKPipelineFixture {
     let time = WKTestClock()
     var dataReports = 0
+    var usbRateReports = [0,0]
     let root: URL
     let aBoard: NSPasteboard
     let bBoard: NSPasteboard
@@ -90,7 +91,8 @@ private final class WKPipelineFixture {
     private let streams: (WKStreamFiles, WKStreamFiles)?
     
 
-    init(legacyTarget: Bool = false, denyPortal: Bool = false, streams: (WKStreamFiles, WKStreamFiles)? = nil) throws {
+    init(legacyTarget: Bool = false, denyPortal: Bool = false, streams: (WKStreamFiles, WKStreamFiles)? = nil,
+         usbRates: (WKUSBDiscovery.Rate, WKUSBDiscovery.Rate)? = nil) throws {
         self.streams = streams
         root = FileManager.default.temporaryDirectory.appendingPathComponent("wk-private-file-pipeline-" + UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
@@ -112,6 +114,9 @@ private final class WKPipelineFixture {
         a.reply = { [weak self] in self?.replies.append($0) }
         a.log = { [weak self] in self?.logs.append($0) }
         b.log = { [weak self] in self?.logs.append($0) }; b.reply = { _ in }
+        if let usbRates {
+            a.usbLinkRateProvider = { usbRates.0 }; b.usbLinkRateProvider = { usbRates.1 }
+        }
         // Do not start either companion: start() touches host stdin/signal handlers.
         // These explicit injected operations exercise only the isolated objects.
         a.startPortal(); b.startPortal()
@@ -146,6 +151,9 @@ private final class WKPipelineFixture {
 
     private func deliver(_ fromA: Bool, _ bytes: Data) {
         if WKReport(bytes, wireMagic: WKCompanion.magic)?.kind == .data { dataReports += 1 }
+        if let report = WKReport(bytes, wireMagic: WKCompanion.magic), report.kind == .pong, report.flags == 0x40 {
+            usbRateReports[fromA ? 0 : 1] += 1
+        }
         if dropReport?(fromA, bytes) == true { return }
         if holdBulk, WKReport(bytes, wireMagic: WKCompanion.fileMagic)?.kind == .data {
             held.append((fromA, bytes)); return
@@ -239,7 +247,23 @@ enum WKFilePipelineSelfTest {
     static func streamSuite(make: () -> (WKStreamIO, WKStreamIO, (Bool) -> Void)) throws {
         do {
             let (ioA,ioB,_) = make(), streams = (WKStreamFiles { ioA }, WKStreamFiles { ioB })
-            let f = try WKPipelineFixture(streams: streams)
+            let f = try WKPipelineFixture(streams: streams, usbRates: (.high,.full))
+            f.drive(400)
+            try wkPipelineExpect(f.logs.contains("WKCLIP_DIAG role=host event=TRANSPORT phase=RESULT usbMbps=480"), "host negotiated speed missing")
+            try wkPipelineExpect(f.logs.contains("WKCLIP_DIAG role=target event=TRANSPORT phase=RESULT usbMbps=12"), "target negotiated speed did not cross the cable")
+            try wkPipelineExpect(f.usbRateReports == [3,3], "USB speed diagnostic was not bounded")
+            let count = f.logs.count
+            for (session,flags,sequence,payload) in [
+                (f.b.link.session &+ 1,UInt8(0x40),UInt32(0),Data([0x57,0x4b,0x55,0x53,1,2])),
+                (f.b.link.session,UInt8(0),UInt32(0),Data([0x57,0x4b,0x55,0x53,1,2])),
+                (f.b.link.session,UInt8(0x40),UInt32(1),Data([0x57,0x4b,0x55,0x53,1,2])),
+                (f.b.link.session,UInt8(0x40),UInt32(0),Data([0x57,0x4b,0x55,0x53,2,2])),
+                (f.b.link.session,UInt8(0x40),UInt32(0),Data([0x57,0x4b,0x55,0x53,1,3]))] {
+                f.at.onReport(WKReport(kind:.pong,flags:flags,session:session,sequence:sequence,payload:payload).encode(wireMagic:WKCompanion.magic))
+            }
+            try wkPipelineExpect(f.logs.count == count && f.a.link.ready && f.b.link.ready, "invalid USB diagnostic changed state or entered logs")
+            try wkPipelineExpect(WKMetadata.line(role:"target",event:"TRANSPORT",fields:["usbMbps":"625"]) == nil,"arbitrary speed admitted")
+            wkLog("WKCLIP_TEST bounded-peer-usb-negotiated-rate PASS")
             streams.1.onDiagnostic("stream-source-ctime-changed"); f.drive(100)
             try wkPipelineExpect(f.logs.contains("WKCLIP_DIAG role=target event=ERROR code=stream-source-ctime-changed"), "peer failure reason did not cross the control channel")
             for code in ["/Users/private/file.png", "stream-clipboard-content", String(repeating: "x", count: 100)] {

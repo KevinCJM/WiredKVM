@@ -487,7 +487,8 @@
         "P16",
         "P23",
         "P38",
-        "P40"
+        "P40",
+        "P41"
       ],
       "minimum_regression": [],
       "routing_confidence": "medium",
@@ -570,7 +571,8 @@
         "P18",
         "P19",
         "P22",
-        "P29"
+        "P29",
+        "P41"
       ],
       "minimum_regression": [],
       "routing_confidence": "medium",
@@ -1194,7 +1196,7 @@
       "name": "portable_cable_runtime",
       "path": "native/cable-image",
       "kind": "implementation_entrypoints",
-      "purpose": "Portable v9 runs on Book and from cable on mini. Text/native input pass; 8 MiB and PNG round-trip hashes and folder-tree integrity pass. User confirms reverse image-content paste into a supporting input; Finder folder paste requires file content. Intermittent PSRAM mismatch and earlier Finder 100004 remain unrooted. Cold recovery passed, stability unproven. V9 bounded CDC draining and finite source-failure diagnostics passed isolated regression; measured PNG transfer remains about 0.85 MB/s. Fast C ingress and bounded 4 KiB file IN are flashed/readback-verified; 64 MiB forward succeeded at about 0.83 MB/s. Reverse failed after body with a confirmed source-ctime check rejection. V10 content revalidation candidate passes isolated tests and builds but is not yet running. No high-speed or full physical cancellation acceptance.",
+      "purpose": "Portable v9 runs on Book and from cable on mini. Text/native input pass; 8 MiB and PNG round-trip hashes and folder-tree integrity pass. User confirms reverse image-content paste into a supporting input; Finder folder paste requires file content. Intermittent PSRAM mismatch and earlier Finder 100004 remain unrooted. Cold recovery passed, stability unproven. V9 bounded CDC draining and finite source-failure diagnostics passed isolated regression; measured PNG transfer remains about 0.85 MB/s. Fast C ingress and bounded 4 KiB file IN are flashed/readback-verified; 64 MiB forward succeeded at about 0.83 MB/s. Reverse failed after body with a confirmed source-ctime check rejection. V10 content revalidation candidate passes isolated tests and builds but is not yet running. No high-speed or full physical cancellation acceptance. Subsequent optional negotiated-rate telemetry passes the private pipeline regression and reports Book as 480 Mbps through identity-bound discovery; target rate and physical speed remain unverified. Active Book remains frozen v10, awaiting cold media reload.",
       "module_tags": [
         "portable",
         "ram_setup",
@@ -1288,7 +1290,8 @@
         "P37",
         "P38",
         "P39",
-        "P40"
+        "P40",
+        "P41"
       ],
       "minimum_regression": [
         "python3 tests/test_cable_runtime.py",

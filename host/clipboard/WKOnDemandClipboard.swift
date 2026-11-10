@@ -81,6 +81,18 @@ final class WKCompanion: NSObject, NSMenuDelegate {
     var reply: (String) -> Void = wkReply
     var log: (String) -> Void = wkLog
     var receivedCount = 0
+    // Production injects identity-bound discovery. Offline fixtures inject a
+    // fixed rate; the coordinator never enumerates devices on its own.
+    var usbLinkRateProvider: (() -> WKUSBDiscovery.Rate)?
+    private var usbLinkRate: WKUSBDiscovery.Rate?
+    private var usbRateAnnouncements = 0
+    private var usbRateAnnouncedAt: Double = -10
+    private var peerUSBRate: WKUSBDiscovery.Rate?
+    private static func usbRate(_ report: WKReport) -> WKUSBDiscovery.Rate? {
+        guard report.kind == .pong, report.flags == 0x40, report.sequence == 0, report.transfer == 0,
+              report.payload.count == 6, report.payload.prefix(5) == Data([0x57,0x4b,0x55,0x53,1]) else { return nil }
+        return WKUSBDiscovery.Rate(rawValue: report.payload[5])
+    }
 
     init(role: String, clipboard: WKClipboard, transport: WKTransport,
          link: WKLink = WKLink(wireMagic: WKCompanion.magic), portal: WKFilePortalServing? = nil,
@@ -325,6 +337,10 @@ final class WKCompanion: NSObject, NSMenuDelegate {
         if enabled != bulkPhysical { bulkPhysical = enabled; bulkLink.connected(enabled, at: clock()) }
     }
     private func connectionChanged(_ ready: Bool) {
+        usbLinkRate = ready ? usbLinkRateProvider?() : nil
+        usbRateAnnouncements = 0; usbRateAnnouncedAt = -10; peerUSBRate = nil
+        if let rate = usbLinkRate,
+           let line = WKMetadata.line(role: role, event: "TRANSPORT", fields: ["phase":"RESULT","usbMbps":rate.mbps]) { log(line) }
         pendingStreamDiagnostic = nil
         preparing = nil; streamResponse = nil; lastFinishedToken = nil; peerBulkImages = false; imageJob?.cancel(); imageJob = nil; imageReady = nil; decodedImage = nil
         stream?.setEpoch(ready ? (link.session ^ link.peerSession) : 0)
@@ -355,6 +371,12 @@ final class WKCompanion: NSObject, NSMenuDelegate {
         if role != "host", fnKey.receive(data, at: clock()) { return }
         if data.prefix(4) == Self.fileMagic { bulkLink.receive(data, at: clock()); return }
         link.receive(data, at: clock())
+        if link.ready, let report = WKReport(data, wireMagic: Self.magic), report.session == link.peerSession,
+           let rate = Self.usbRate(report) {
+            if role == "host", rate != peerUSBRate,
+               let line = WKMetadata.line(role: "target", event: "TRANSPORT", fields: ["phase":"RESULT","usbMbps":rate.mbps]) { log(line) }
+            peerUSBRate = rate; return
+        }
         guard link.ready, let report = WKReport(data, wireMagic: Self.magic), report.kind == .ping,
               report.session == link.peerSession, report.payload.count == (stream == nil ? 24 : 32),
               report.payload.prefix(4) == Data("WKOD".utf8) else { return }
@@ -398,6 +420,12 @@ final class WKCompanion: NSObject, NSMenuDelegate {
         if role != "host" { fnKey.tick(now) }
         transport.tick(now); setupLease?.tick(now); pollClipboard(now)
         link.tick(now); bulkLink.tick(now)
+        // A bounded extension of pong; older peers treat it as a keepalive.
+        // No extra content transaction or image/file bytes enter this channel.
+        if link.ready, let rate = usbLinkRate, usbRateAnnouncements < 3, now-usbRateAnnouncedAt >= 1,
+           transport.send(WKReport(kind: .pong, flags: 0x40, session: link.session, payload: Data([0x57,0x4b,0x55,0x53,1,rate.rawValue])).encode(wireMagic: Self.magic)) {
+            usbRateAnnouncements += 1; usbRateAnnouncedAt = now
+        }
         if portalReady && portal?.isAvailable != true { portalReady = false; updateBulk(); failIncomingFiles() }
         if link.ready && now - lastAdvertisement >= 0.15 {
             var payload = Data("WKOD".utf8); payload.appendLE(protocolBuild)
