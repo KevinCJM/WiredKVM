@@ -207,10 +207,14 @@ static bool admitted(const wk407_bridge *b,unsigned source,const uint8_t *cell) 
 }
 bool wk407_bulk_accept(wk407_bridge *b,unsigned source,const void *data,size_t n) {
     if(!wk407_bulk_space(b,source)||n>512)return false;
-    const uint8_t *p=data;
-    for(size_t i=0;i<n;i++) {
-        uint8_t *cell=b->cell[source];unsigned used=b->cell_size[source];cell[used++]=p[i];
-        if(used>=4&&memcmp(cell,"WKS5",4)){memmove(cell,cell+1,--used);}
+    const uint8_t *p=data;size_t i=0;uint8_t *cell=b->cell[source];unsigned used=b->cell_size[source];
+    while(i<n) {
+        /* Synchronize only the prefix. Once matched, copy the bounded remainder
+         * without rechecking the same four bytes for every payload byte. */
+        if(used<4){size_t take=4-used;if(take>n-i)take=n-i;memcpy(cell+used,p+i,take);used+=(unsigned)take;i+=take;if(used<4)break;}
+        if(memcmp(cell,"WKS5",4)){memmove(cell,cell+1,3);used=3;continue;}
+        size_t take=512-used;if(take>n-i)take=n-i;
+        memcpy(cell+used,p+i,take);used+=(unsigned)take;i+=take;
         if(used==512) {
             if(admitted(b,source,cell)) {
                 wk407_bulk_queue *q=&b->bulk[1-source];wk407_bulk_packet *v=&q->item[(q->head+q->count)%WK407_BULK_SLOTS];
@@ -219,9 +223,8 @@ bool wk407_bulk_accept(wk407_bridge *b,unsigned source,const void *data,size_t n
             }
             used=0;
         }
-        b->cell_size[source]=(uint16_t)used;
     }
-    return true;
+    b->cell_size[source]=(uint16_t)used;return true;
 }
 const wk407_bulk_packet *wk407_bulk_peek(const wk407_bridge *b,unsigned d) { return d<2&&b->bulk[d].count?&b->bulk[d].item[b->bulk[d].head]:NULL; }
 void wk407_bulk_done(wk407_bridge *b,unsigned d) { if(d<2&&b->bulk[d].count){wk407_bulk_queue *q=&b->bulk[d];b->forwarded[d]+=q->item[q->head].size;q->head=(q->head+1)%WK407_BULK_SLOTS;q->count--;} }

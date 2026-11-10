@@ -24,7 +24,29 @@ static bool control(wk407_bridge &b,unsigned source,unsigned kind,unsigned origi
     uint32_t crc=~0u;for(unsigned i=0;i<60;i++){crc^=p[i];for(unsigned j=0;j<8;j++)crc=(crc>>1)^((crc&1)?0xedb88320u:0);}
     little(p+60,~crc,4);bool ok=wk407_clipboard(&b,source,p,64);while(wk407_urgent_peek(&b,1-source))wk407_urgent_done(&b,1-source);return ok;
 }
+static void bulk_boundaries() {
+    wk407_bridge b;uint8_t packet[512]={};memcpy(packet,"WKS5",4);little(packet+4,512,4);packet[8]=1;
+    little(packet+12,12345,8);memset(packet+20,7,16);little(packet+44,432,4);
+    for(unsigned i=80;i<512;i++)packet[i]=uint8_t(i*37);
+    for(unsigned source=0;source<2;source++)for(unsigned cut=0;cut<=512;cut++) {
+        wk407_init(&b);wk407_connected(&b,0,true,0);wk407_connected(&b,1,true,0);
+        assert(control(b,0,1,0)&&control(b,1,1,1)&&control(b,1-source,2,source));
+        assert(wk407_bulk_accept(&b,source,packet,cut));
+        assert(wk407_bulk_accept(&b,source,packet+cut,512-cut));
+        auto received=wk407_bulk_peek(&b,1-source);
+        assert(received&&received->size==512&&!memcmp(received->bytes,packet,512));
+        wk407_bulk_done(&b,1-source);assert(!wk407_bulk_peek(&b,1-source)&&!b.cell_size[source]);
+        const uint8_t noise[]={'x','W','K','S','z','W','K','W','W'};
+        for(uint8_t c:noise)assert(wk407_bulk_accept(&b,source,&c,1));
+        for(unsigned i=0;i<512;i++)assert(wk407_bulk_accept(&b,source,packet+i,1));
+        received=wk407_bulk_peek(&b,1-source);assert(received&&!memcmp(received->bytes,packet,512));
+        wk407_bulk_done(&b,1-source);assert(!wk407_bulk_peek(&b,1-source));
+        command(b,17,'A',1,2,0);drain(b);
+    }
+    std::cout<<"BULK_BOUNDARIES_PASS splits=1026 noise_resync=true byte_fragments=true input_retained=true\n";
+}
 int main() {
+    bulk_boundaries();
     wk407_bridge b;wk407_init(&b);wk407_connected(&b,0,true,0);wk407_connected(&b,1,true,0);
     assert(!wk407_hid_peek(&b)); // attaching a fresh keyboard must not warp the pointer
     uint8_t bytes[512]={};memcpy(bytes,"WKS5",4);little(bytes+4,512,4);bytes[8]=1;

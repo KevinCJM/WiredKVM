@@ -21,6 +21,7 @@ ACCEPTED={
     'native-v2':('candidate-native-v2-final-20261109','9322b86a3e70b272e71716d1051ec641783afdd33b8d0fc40452608f33d0866b'),
     'ram-setup-v1':('candidate-ram-setup-20261109-final','dde0403eccbade5d6a032dab4659170d8e468393a84d392cc7596c33bffed9e4'),
     'ram-diag-v2':('candidate-ram-setup-20261109-diag-v2','0d3a5fff3d92a3530de7919a070f3cef05e191cc6dd97c724c54b0dcef2c11fd'),
+    'ram-power-v3':('candidate-ram-setup-20261109-power-v3','28c576763fe4f8a3588705945c4f53e5bf7be0a61c03fe9f51b205d7f2178f93'),
 }
 BACKUP_BYTES=576*1024
 

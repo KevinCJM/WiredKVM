@@ -169,3 +169,22 @@ SDK 标记检查不能替代完整来源校验。构建保留 map、日志、输
 `WK_RAW_TOUCH_HELPER`）与带 `WK_PIXEL_SCROLL`、`WK_RAW_TOUCH` 的捕获器须配套使用。
 helper 的 `--stream` 通过 stdin 接受 `ON epoch`/`OFF`，仅在 Book 运行；
 目标不运行组件。真实输入仅从主控的 CDC 所有者发往独立 EP87。
+
+## 2026-11-10 文件 IN 合并候选
+
+`--bulk-batch` 是单独启用的实验选项，不改变默认生成配置或 USB 描述符。
+它只对高速文件 IN 端点启用 SDK 的 BURST，并将已排队的最多八格合并到
+独立的 4 KiB DMA 缓冲；有一格就发送，不等待凑满。全速连接仍每次最多
+512 字节；HID、触点、控制、MSC 及文件 OUT 的端点和缓冲不变。
+提交失败不弹出队列，成功提交后复制件由 DMA 独占；取消能清除未提交的旧格。
+已经交给 DMA 的旧数据最多 4 KiB，接收方仍须按代次拒绝它。
+
+```
+python3 experiments/mt2-petros-profile/test_live_touch.py --native-format --ram-setup --bulk-batch
+```
+
+测试执行真实生成主循环、C 桥和 Rust 触点核心，覆盖队列环回、提交失败、
+DMA 副本不变、取消后新代次及两侧文件堵塞时的键鼠/触点推进。
+USB 硬件边界仍是模型，不能作为真实速度、总线时序或交互延迟验收。
+当前候选 `candidate-bulk-batch-20261110/` 已构建，尚未刷板；最新实机记录见
+`../../docs/research/DIRECT_CABLE_RUNTIME_20261109.md`。

@@ -14,6 +14,12 @@ typedef struct __attribute__((packed)){signed short x:13; signed short y:13;unsi
 _Static_assert(sizeof(native_finger)==9,"Independent C packed ABI");
 #endif
 static uint8_t touch_bytes[64];
+#ifdef WK_BULK_BATCH_TEST
+static unsigned endpoint_flags[2][256],file_size[2],file_uploads[2];
+static uint8_t file_copy[2][4096];
+static const void *file_dma[2];
+static bool fail_file_upload;
+#endif
 #ifdef WK_RAM_SETUP
 static uint8_t ram[WK_SETUP_FLASH_BYTES],program_ack[512];
 static unsigned program_acks;
@@ -26,11 +32,24 @@ bool wk_setup_flash_read(void *ctx,uint32_t at,void *out,size_t n){(void)ctx;uin
 uint8_t mock_ep87_read(void){return ctrl87;}
 void mock_ep87_write(uint8_t v){ctrl87=(ctrl87&v&0xc0)|(ctrl87&0x0c)|(v&3);}
 void usbd_endp_close(usbd_handle_t *h,unsigned ep){(void)h;(void)ep;assert(0);}
-int usbd_endp_open(usbd_handle_t *h,unsigned ep,unsigned flags,unsigned n){(void)h;(void)ep;(void)flags;(void)n;return 0;}
+int usbd_endp_open(usbd_handle_t *h,unsigned ep,unsigned flags,unsigned n){
+#ifdef WK_BULK_BATCH_TEST
+    endpoint_flags[h->port][ep]=flags;
+    if(flags&USBD_ENDP_FEATURE_BURST)assert(mock_speed==USB_SPEED_HIGH&&n==512&&ep==(h->port?0x85u:0x84u));
+#endif
+    (void)h;(void)ep;(void)flags;(void)n;return 0;}
 int usbd_endp_set_response(usbd_handle_t *h,uint8_t ep,int response){
     if(h->port==1&&ep==0x87){assert(response==ENDP_RESP_NAK&&!(ctrl87&128));}return 0;
 }
 int usbd_upload(usbd_handle_t *h,uint8_t ep,const void *b,unsigned n){
+#ifdef WK_BULK_BATCH_TEST
+    if(ep==(h->port?0x85:0x84)) {
+        if(fail_file_upload){fail_file_upload=false;return -1;}
+        assert(n>0&&n<=4096&&n%512==0);
+        if(mock_speed!=USB_SPEED_HIGH)assert(n<=512);
+        memcpy(file_copy[h->port],b,n);file_dma[h->port]=b;file_size[h->port]=n;file_uploads[h->port]++;
+    } else assert(n<=512);
+#endif
     const unsigned e=ep&127;assert(!busy[h->port][e]);packets[h->port][e]++;
 #ifdef WK_RAM_SETUP
     if(h->port==0&&ep==0x84&&n==512&&!memcmp(b,"WKIA",4)){memcpy(program_ack,b,n);program_acks++;}
@@ -45,6 +64,9 @@ memcpy(touch_bytes,b,n);touch_size=n;ctrl87=(ctrl87&~3)|2;
     return 0;
 }
 static void complete(unsigned p,unsigned e){if(busy[p][e]){
+#ifdef WK_BULK_BATCH_TEST
+    if(e==(p?5u:4u))assert(!memcmp(file_dma[p],file_copy[p],file_size[p]));
+#endif
     if(p==1&&e==7){ctrl87^=4;ctrl87|=128;}
     data_cb(handles[p],(uint8_t)(e|128),NULL,0);
     if(p==1&&e==7)ctrl87&=~131;
@@ -87,6 +109,72 @@ static void program_test(const uint8_t *pressure){
     puts("RAM_SETUP_MAIN_PASS readonly_image_published=true interleaved_touch_keys_bulk=true physicalPSRAM=false");
 }
 #endif
+#ifdef WK_BULK_BATCH_TEST
+static void batch_control(unsigned p,unsigned kind,unsigned origin,unsigned generation,unsigned id) {
+    uint8_t control[64]={0};memcpy(control,"WKB5",4);control[4]=(uint8_t)kind;control[5]=(uint8_t)origin;
+    control[8]=1;memset(control+16,(int)id,16);control[32]=(uint8_t)generation;
+    uint32_t crc=~0u;for(unsigned i=0;i<60;i++){crc^=control[i];for(unsigned bit=0;bit<8;bit++)crc=(crc>>1)^((crc&1)?0xedb88320u:0);}
+    crc=~crc;for(unsigned i=0;i<4;i++)control[60+i]=(uint8_t)(crc>>(8*i));
+    assert(wk407_clipboard(&bridge,p,control,sizeof(control)));
+}
+static void batch_test(const uint8_t *cell) {
+    uint8_t row[512],expected[13][512];
+    for(unsigned p=0;p<2;p++) {
+        unsigned ep=p?5:4;complete(p,ep);
+        wk407_bulk_queue *q=&bridge.bulk[p];q->head=WK407_BULK_SLOTS-3;q->count=0;
+        for(unsigned i=0;i<13;i++){
+            memcpy(row,cell,512);memset(row+64,(int)(i+1),448);memcpy(expected[i],row,512);
+            assert(wk407_bulk_accept(&bridge,1-p,row,512));
+        }
+        fail_file_upload=true;unsigned before=file_uploads[p];send_file_batch(p,ep);
+        assert(!busy[p][ep]&&q->count==13&&file_uploads[p]==before);
+        send_file_batch(p,ep);assert(busy[p][ep]&&file_size[p]==4096&&q->count==5);
+        assert(!memcmp(file_copy[p],expected,4096));
+        /* Reuse all popped ring slots while DMA retains its independent copy. */
+        while(wk407_bulk_space(&bridge,1-p))assert(wk407_bulk_accept(&bridge,1-p,cell,512));
+        send_file_batch(p,ep);assert(file_uploads[p]==before+1);
+        complete(p,ep);assert(q->count==WK407_BULK_SLOTS);
+        q->head=q->count=0;
+        assert(wk407_bulk_accept(&bridge,1-p,expected[0],512));
+        send_file_batch(p,ep);assert(file_size[p]==512&&q->count==0);complete(p,ep);
+        mock_speed=1;
+        for(unsigned i=0;i<3;i++)assert(wk407_bulk_accept(&bridge,1-p,cell,512));
+        send_file_batch(p,ep);assert(file_size[p]==512&&q->count==2);complete(p,ep);
+        mock_speed=USB_SPEED_HIGH;q->head=q->count=0;
+        unsigned origin=1-p,old_id=0x51+p,new_id=0x61+p;
+        bridge.transactions[origin][0].generation=1;bridge.stream_generation[origin]=1;
+        memset(bridge.transactions[origin][0].id,(int)old_id,16);
+        memcpy(row,cell,512);memset(row+20,(int)old_id,16);
+        for(unsigned i=0;i<13;i++)assert(wk407_bulk_accept(&bridge,origin,row,512));
+        send_file_batch(p,ep);assert(file_size[p]==4096&&q->count==5);
+        batch_control(p,3,origin,1,old_id);assert(q->count==0&&busy[p][ep]);
+        assert(wk407_bulk_accept(&bridge,origin,row,512)&&q->count==0);
+        batch_control(p,2,origin,2,new_id);memset(row+20,(int)new_id,16);
+        assert(wk407_bulk_accept(&bridge,origin,row,512)&&q->count==1);
+        complete(p,ep);assert(q->count==1); /* old DMA completion cannot pop the new ID */
+        send_file_batch(p,ep);assert(file_size[p]==512&&q->count==0&&!memcmp(file_copy[p],row,512));complete(p,ep);
+        memset(bridge.transactions[origin],0,sizeof(bridge.transactions[origin]));
+        bridge.transactions[origin][0].used=true;memcpy(bridge.transactions[origin][0].id,cell+20,16);bridge.stream_generation[origin]=0;
+        while(wk407_urgent_peek(&bridge,origin))wk407_urgent_done(&bridge,origin);
+    }
+    puts("BULK_BATCH_PASS max_in=4096 no_fill_wait=true full_speed=512 failed_submit_retains_queue=true ring_wrap=true dma_immutable=true cancel_purges_queued_old_id=true stale_dma_retains_new_id=true");
+}
+static void stalled_batch_test(const uint8_t *cell) {
+    unsigned keys=packets[1][1],touches=packets[1][7];
+    for(unsigned i=0;i<200;i++) {
+        for(unsigned p=0;p<2;p++)while(wk407_bulk_space(&bridge,p))assert(wk407_bulk_accept(&bridge,p,cell,512));
+        wk(7000+i,'T',4,(int)(i&1));gesture(1,i&1?4:2);
+        mock_tick.CNT+=4;service();
+        /* Both file IN transfers remain owned by DMA for the entire run. */
+        complete(1,1);complete(1,2);complete(1,3);complete(1,7);complete(0,2);
+        for(unsigned p=0;p<2;p++)assert(!memcmp(file_dma[p],file_copy[p],file_size[p]));
+    }
+    assert(packets[1][1]>=keys+190&&packets[1][7]>=touches+190);
+    for(unsigned p=0;p<2;p++){complete(p,p?5:4);bridge.bulk[p].head=bridge.bulk[p].count=0;}
+    wk(7300,'T',4,0);pass(4,true);
+    puts("BULK_STALL_INPUT_PASS blocked_file_ms=800 keyboard_and_two_four_finger_progress=true no_device_access=true");
+}
+#endif
 int main(void){
     handles[0]=&usbhs1d_handle;handles[1]=&usbhs2d_handle;mock_usb2.MIS_ST=USBHS_UDMS_SIE_FREE;
     wk407_init(&bridge);
@@ -96,6 +184,16 @@ int main(void){
     wk_setup_init(&setup,NULL,NULL);
 #endif
     wkmt2_profile_reset();
+#ifdef WK_BULK_BATCH_TEST
+    for(mock_speed=1;mock_speed<=USB_SPEED_HIGH;mock_speed++) {
+        reset_cb(handles[0],0);reset_cb(handles[1],0);
+        for(unsigned p=0;p<2;p++)for(unsigned ep=1;ep<8;ep++) {
+            unsigned flags=endpoint_flags[p][ep|128];
+            assert(((flags&USBD_ENDP_FEATURE_BURST)!=0)==(mock_speed==USB_SPEED_HIGH&&ep==(p?5u:4u)));
+        }
+    }
+    mock_speed=USB_SPEED_HIGH;
+#endif
 #ifdef WK_RAM_SETUP
     usbhs2d_handle.enumerated=false;pass(1,true);assert(armed[0][4]);
     usbhs2d_handle.enumerated=true;pass(1,true);
@@ -124,6 +222,9 @@ int main(void){
         bridge.stream_session[p]=1;bridge.transactions[p][0].used=true;
         memcpy(bridge.transactions[p][0].id,pressure+20,16);
     }
+#ifdef WK_BULK_BATCH_TEST
+    batch_test(pressure);
+#endif
     for(unsigned i=0;i<1000;i++){
         for(unsigned p=0;p<2;p++){
             for(unsigned refill=0;refill<WK407_BULK_SLOTS&&wk407_bulk_space(&bridge,p);refill++){
@@ -136,6 +237,9 @@ int main(void){
         wk(i*3+1,'P',0,0);pass(1,true);wk(i*3+2,'T',4,1-i%2);pass(1,true);wk(i*3+3,'A',1000+i,1000);gesture(1,i%2?4:2);pass(4,true);}
     assert(packets[1][1]>before+100&&packets[1][7]>100&&packets[0][4]>=1000&&packets[1][5]>=1000);
     assert(bridge.buttons==0&&bridge.keys[0]==0);
+#ifdef WK_BULK_BATCH_TEST
+    stalled_batch_test(pressure);
+#endif
     // End while SIE owns an old report. New epoch waits for only its release,
     // not a file queue. A racing completion cannot pop the release head.
     gesture(1,4);pass(4,false);assert(busy[1][7]);mock_usb2.MIS_ST=0;

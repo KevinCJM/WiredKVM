@@ -423,7 +423,7 @@
       "name": "clipboard_bulk",
       "path": "host/clipboard",
       "kind": "implementation_entrypoints",
-      "purpose": "Portable target app runs directly from cable, without installation/persistence. Premount canonical portal directory fix and offline pipeline regressions pass. Bidirectional fresh text, local fresh text and one actual 8 MiB file round trip with matching SHA-256 pass. Earlier Finder 100004 zero-byte return remains an unrooted failure. High speed, images/collections, physical cancel timing and saturated input latency remain pending.",
+      "purpose": "Portable target app runs directly from cable without installation/persistence. Fresh text in both directions and both local text clipboards pass. One 8 MiB and one PNG file round trip have matching SHA-256; a folder tree round trip matches file hashes, empty file and empty directory. User confirms mini-to-Book image contents paste into a supporting input; this is distinct from Finder file paste. Earlier Finder 100004 remains unrooted. High speed, opposite image-content direction, multiple roots, physical cancel timing and saturated input latency remain pending.",
       "module_tags": [
         "clipboard_bulk",
         "needs_code_confirmation"
@@ -808,7 +808,7 @@
       "name": "mt2_firmware_experiment",
       "path": "experiments",
       "kind": "isolated_firmware_experiment",
-      "purpose": "Native-v2 firmware 9322b86a is flashed/readback verified on CH32V467WEU6 UID ad21ad506c54c6c6. User accepted two/four-finger gestures, automatic return, drag selection, local text copy/paste and matching scroll direction. Same-Book dual-port decode bench was blocked before USB2 reset; no bench touches injected. Continuous bidirectional Bulk with input/touch passed the real-main offline test; physical saturated-transfer latency remains unverified. Cross-machine clipboard is incomplete under zero target runtime.",
+      "purpose": "Native-v2 input is retained in the accepted RAM-power-v3 firmware (28c57676) on V467 UID ad21ad506c54c6c6. User accepts keys/mouse, two/four-finger gestures, return, drag and local text clipboards. Direct cable portable clipboard now has separate physical evidence. Opt-in 4 KiB file IN batching and fast ingress passed generated-main/C/Rust offline pressure, blocked-file input progress and cancellation/DMA ownership tests; candidate is built but not flashed. Physical speed and saturated input latency remain unverified.",
       "module_tags": [
         "mt2",
         "firmware",
@@ -871,7 +871,8 @@
         "experiments/mt2-usb/examples/native_stationary_probe.rs",
         "experiments/mt2-petros-profile/probe_native_book.py",
         "results/live-touch-20261109/CURRENT_RUNTIME.json",
-        "results/live-touch-20261109/accepted-native-v2/user-acceptance.json"
+        "results/live-touch-20261109/accepted-native-v2/user-acceptance.json",
+        "experiments/mt2-petros-profile/bulk_batch.h"
       ],
       "upstream_dependencies": [
         "firmware_ch32"
@@ -921,7 +922,8 @@
         "cargo test --offline --manifest-path experiments/mt2-usb/Cargo.toml --features c-abi",
         "python3 experiments/mt2-petros-profile/test_profile.py",
         "cargo test --offline --manifest-path experiments/mt2-single-port-probe/Cargo.toml",
-        "cargo test --offline --manifest-path experiments/mt2-petros-profile/single-port-core/Cargo.toml"
+        "cargo test --offline --manifest-path experiments/mt2-petros-profile/single-port-core/Cargo.toml",
+        "python3 experiments/mt2-petros-profile/test_live_touch.py --native-format --ram-setup --bulk-batch"
       ],
       "routing_confidence": "high",
       "scope_flags": [
@@ -1191,7 +1193,7 @@
       "name": "portable_cable_runtime",
       "path": "native/cable-image",
       "kind": "implementation_entrypoints",
-      "purpose": "Portable cable runtime: PSRAM image upload/target launch and text/native input passed, plus one 8 MiB round-trip hash match. Reconnect later produced an intermittent PSRAM mismatch; cold power recovery passed, stability unproven. PNG forward readable; reverse Finder 100004 recurred after body arrival before final confirmation. V9 candidate adds bounded CDC draining and finite source-failure codes over control; complete isolated regressions pass. Book v9 temporarily ready, target v9 replacement pending. No high-speed or full media/collection physical acceptance.",
+      "purpose": "Portable v9 runs on Book and from cable on mini. Text/native input pass; 8 MiB and PNG round-trip hashes and folder-tree integrity pass. User confirms reverse image-content paste into a supporting input; Finder folder paste requires file content. Intermittent PSRAM mismatch and earlier Finder 100004 remain unrooted. Cold recovery passed, stability unproven. V9 bounded CDC draining and finite source-failure diagnostics passed isolated regression; measured PNG transfer remains about 0.85 MB/s. Fast C ingress plus opt-in bounded 4 KiB file IN firmware candidate is built and offline-tested but not flashed. No high-speed or full physical cancellation acceptance.",
       "module_tags": [
         "portable",
         "ram_setup",
