@@ -186,5 +186,6 @@ python3 experiments/mt2-petros-profile/test_live_touch.py --native-format --ram-
 测试执行真实生成主循环、C 桥和 Rust 触点核心，覆盖队列环回、提交失败、
 DMA 副本不变、取消后新代次及两侧文件堵塞时的键鼠/触点推进。
 USB 硬件边界仍是模型，不能作为真实速度、总线时序或交互延迟验收。
-当前候选 `candidate-bulk-batch-20261110/` 已构建，尚未刷板；最新实机记录见
+`candidate-bulk-batch-20261110/` 已刷入并独立读回；用户确认输入和手势正常。
+64 MiB 正向实际约 0.825 MB/s，没有明显提速，不能按模型宣称高速。最新实机记录见
 `../../docs/research/DIRECT_CABLE_RUNTIME_20261109.md`。

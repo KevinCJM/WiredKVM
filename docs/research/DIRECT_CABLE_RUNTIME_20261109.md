@@ -48,7 +48,7 @@ mini 从线内只读卷打开应用，由 mini CPU 执行。不复制到 Applica
 - 目标应用：`build/portable-direct-cable-20261110-diag-v9/`
 - 程序盘：`build/portable-media-20261110-diag-v9/`
 - Book 协调器与固定哈希配置：`build/portable-book-20261110-diag-v9/`
-- RAM 程序盘固件：`experiments/mt2-petros-profile/candidate-ram-setup-20261109-power-v3/`
+- 当前 RAM 程序盘与合并 IN 固件：`experiments/mt2-petros-profile/candidate-bulk-batch-20261110/`（已刷入并独立读回）
 - 原生输入已验收固件继续保留在 `candidate-native-v2-final-20261109/`。
 
 Book 协调器先等待输入捕获就绪，再异步上传程序盘；上传失败保留输入并重试。装载工具退出并释放文件 CDC 后才启动剪贴板组件。组件与装载工具使用同一独占文件锁。剪贴板子进程退出后可重试，不能删除仍被输入控制器使用的私有 socket 目录。
@@ -93,10 +93,18 @@ Rust 监督服务已支持可选的便携协调器及固定哈希配置；保留
 
 此次只有用户界面反馈，没有额外读取剪贴板正文。详见 results/portable-direct-cable-20261110/image-content-user-acceptance.json、png-v9-return-integrity.json 和 folder-roundtrip-integrity.json。
 
-### 高速通道优化候选，尚未刷板
+### 有界合并固件已刷入，尚未达到高速
 
 `candidate-bulk-batch-20261110`：84,840 字节，SHA-256 `6fdfccd6c45686444aea213ec81022be3c90594a13aec80fca54c353a7c21250`。在保留 native-v2/RAM 程序盘路径上，优化 C 桥重复前缀检查，并以 `--bulk-batch` 将文件 IN 的已排队数据合并为最多 4 KiB 的独立 DMA 副本。高速端点使用 SDK BURST；全速保留最多 512 字节。无等待凑包，未改描述符、键鼠、触点或 MSC 端点。
 
-真实生成主循环/C/Rust 边界模拟通过：双向连续文件压力 1,000 轮；两侧文件 IN 堵塞 800 毫秒期间键盘及两/四指报告持续推进；队列环回、失败提交、取消清旧队列及旧 DMA 完成不误删新 ID 均通过。53 个源码输入在构建和测试前后相同。所有结果仅为离线证据，物理速度与延迟尚未测量。
+真实生成主循环/C/Rust 边界模拟通过：双向连续文件压力 1,000 轮；两侧文件 IN 堵塞 800 毫秒期间键盘及两/四指报告持续推进；队列环回、失败提交、取消清旧队列及旧 DMA 完成不误删新 ID 均通过。53 个源码输入在构建和测试前后相同。上述压力与取消结果仅为离线证据。之后在指定板刷入并独立读回，用户确认键鼠、双指/四指与返回正常。64 MiB 正向收到完整最终确认，但首个 ACK 至最终确认约 81.3 秒，约 0.825 MB/s，未取得明显提速。
 
-系统 Finder 取消进度窗口是否能及时触发 USB 引擎取消，仍是独立未验收项目；不能用上述协议取消模拟替代。当前可用固件仍为 `ram-power-v3`，刷候选前须退出 mini 临时会话、安全推出来源卷并只接指定 DBG。
+系统 Finder 取消进度窗口是否能及时触发 USB 引擎取消，仍是独立未验收项目；不能用上述协议取消模拟替代。当前已刷入 `bulk-batch-v1`；`ram-power-v3` 的完整备份仍保留，后续刷写仍须退出 mini 临时会话、安全推出来源卷并只接指定 DBG。
+
+### 64 MiB 反向 100004 已取得具体原因
+
+反向所有 67,108,864 字节到达后，目标回传固定错误码 `stream-source-ctime-changed`，随后 Book 为 `stream-file-interrupted`，Finder 报 100004 且实际文件为 0 字节。该次拒绝明确发生在源文件最终 ctime 检查；不能据此确定是谁修改元数据，也不能把此前所有 100004 都归为这一原因。证据为 results/portable-direct-cable-20261110/bulk-batch-physical/reverse-metadata.log 与 reverse-failed.json。
+
+V10 候选在身份/大小/mtime 未改变而仅 ctime 不同时，通过独立磁盘任务重新读取已固定 fd，完整内容必须与实际发送正文 SHA-256 相同，且重读前后元数据保持稳定。内容改变或重读期间不稳定仍拒绝。每 64 KiB 检查取消，迟到结果不能发布。仅元数据改变成功、恢复 mtime 的正文篡改仍拒绝，以及双向图片/文件/文件夹、本机复制优先、取消和磁盘堵塞的全套隔离回归已通过。
+
+V10 通用程序 3,394,928 字节，程序镜像 3,459,072 字节，4 MiB 剩余 735,232 字节；最终镜像严格验签与文件回读通过。两端尚未切换到该版本，实际修复仍待重测；本次不刷固件。高速和 Finder 取消的物理验收仍未通过。

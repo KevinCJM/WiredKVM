@@ -1469,6 +1469,42 @@
       "safe_observation_methods": [
         "新目录构建，比较开始/结束快照及最终二进制哈希，禁止覆盖活动运行路径"
       ]
+    },
+    {
+      "id": "P40",
+      "title": "ctime 变化不能直接等同正文变化，但必须保留内容完整性校验",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "p40_guard"
+      ],
+      "symptoms": [
+        "所有正文已到达后，发送端返回 stream-source-ctime-changed，Finder 100004 且目标为零字节"
+      ],
+      "trigger_actions": [
+        "修改文件源最终验证、处理元数据变化或优化跨机文件复制"
+      ],
+      "related_paths": [
+        "host/clipboard/WKStreamFiles.swift",
+        "tests/ch32v407_stream_test.swift",
+        "docs/research/DIRECT_CABLE_RUNTIME_20261109.md"
+      ],
+      "affected_modules": [
+        "portable_cable_runtime",
+        "clipboard_bulk"
+      ],
+      "blast_radius": [
+        "source integrity and final Finder file publication"
+      ],
+      "check_before_edit": [
+        "先记录固定发送端错误码；不能把所有 100004 都归因于同一原因。2026-11-10 的 64 MiB 回传实测为 source ctime 检查拒绝，具体元数据写入者未观测。",
+        "仅 ctime 变化而身份、大小、mtime 均保留时，在独立磁盘任务中重读已固定 fd，整体 SHA-256 必须与实际发送正文相同；重读前后元数据须稳定。不能直接忽略 ctime 或跳过最终哈希。",
+        "每次重读至多 64 KiB 后检查取消；已取消任务的迟到结果不能发布，也不能阻塞新传输。",
+        "覆盖仅 xattr 变化成功、正文改变拒绝、恢复 mtime 后正文不同仍拒绝；保留两端本机剪贴板与输入回归。"
+      ],
+      "safe_observation_methods": [
+        "只记录时间、字节数及固定错误码；只校验自建测试文件，不读取其他剪贴板或目标终端"
+      ]
     }
   ]
 }

@@ -313,7 +313,7 @@ final class FirmwareIO: WKStreamIO {
             let huge = WKStreamOffer(id: UUID().uuidString.lowercased(), name: "huge", nonce: "1", size: WKStreamOffer.maximumSize)
             do { try b.expect(huge, now: 0); throw Failure(description: "disk reserve ignored") } catch WKStreamError.capacity { }
         }
-        for scenario in ["empty","corrupt","disconnect","timeout","source-changed","metadata-changed","cancel","old-epoch"] {
+        for scenario in ["empty","corrupt","disconnect","timeout","source-changed","content-changed-mtime-restored","metadata-changed","cancel","old-epoch"] {
             let url = try source(root, scenario + ".bin", scenario == "empty" ? 0 : 1048576, 0x18)
             let source = try WKStreamSource(url: url, nonce: "200")
             let (p,a,b) = pair(root); var complete = false, published = false, diagnostics: [String] = []
@@ -334,17 +334,28 @@ final class FirmwareIO: WKStreamIO {
                         let n = value.withUnsafeBytes { setxattr(url.path, "com.wiredkvm.fixture", $0.baseAddress, $0.count, 0, 0) }
                         try check(n == 0, "fixture metadata change failed")
                     }
+                    if scenario == "content-changed-mtime-restored" {
+                        var before = stat(); try check(stat(url.path, &before) == 0, "fixture stat failed")
+                        let fd = Darwin.open(url.path, O_WRONLY | O_CLOEXEC); try check(fd >= 0, "fixture open failed")
+                        let bytes = Data([3,4,5]); let n = bytes.withUnsafeBytes { pwrite(fd,$0.baseAddress!,3,0) }
+                        var times = [before.st_atimespec,before.st_mtimespec]
+                        let restored = futimens(fd,&times); Darwin.close(fd)
+                        try check(n == 3 && restored == 0, "fixture content change/mtime restore failed")
+                    }
                     if scenario == "cancel" { a.cancel(source.offer.id); b.cancel(source.offer.id) }
                 }
                 a.step(now: Double(i) * 0.001); b.step(now: Double(i) * 0.001)
             }
-            if scenario == "empty" { try check(complete && published,"empty file") }
+            if ["empty", "metadata-changed"].contains(scenario) { try check(complete && published,"\(scenario) did not complete with verified content") }
             else { try check(!complete && !published, "\(scenario) incorrectly succeeded") }
             if scenario == "metadata-changed" {
-                try check(diagnostics.contains(where: { $0.contains("code=stream-source-ctime-changed") }), "metadata-only failure was not distinguished")
+                try check(!diagnostics.contains(where: { $0.contains("event=ERROR") }), "metadata-only revalidation incorrectly rejected content")
+            }
+            if scenario == "content-changed-mtime-restored" {
+                try check(diagnostics.contains(where: { $0.contains("code=stream-source-changed") }), "same-size content mutation with restored mtime escaped revalidation")
             }
             a.stop(); b.stop()
         }
-        print("CH32_STREAM_FAULTS_PASS empty corruption disconnect timeout source-change cancellation retired-epoch")
+        print("CH32_STREAM_FAULTS_PASS empty corruption disconnect timeout source-change metadata-rehash restored-mtime-content-rejected cancellation retired-epoch")
     }
 }

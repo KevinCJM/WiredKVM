@@ -486,7 +486,8 @@
         "P15",
         "P16",
         "P23",
-        "P38"
+        "P38",
+        "P40"
       ],
       "minimum_regression": [],
       "routing_confidence": "medium",
@@ -808,7 +809,7 @@
       "name": "mt2_firmware_experiment",
       "path": "experiments",
       "kind": "isolated_firmware_experiment",
-      "purpose": "Native-v2 input is retained in the accepted RAM-power-v3 firmware (28c57676) on V467 UID ad21ad506c54c6c6. User accepts keys/mouse, two/four-finger gestures, return, drag and local text clipboards. Direct cable portable clipboard now has separate physical evidence. Opt-in 4 KiB file IN batching and fast ingress passed generated-main/C/Rust offline pressure, blocked-file input progress and cancellation/DMA ownership tests; candidate is built but not flashed. Physical speed and saturated input latency remain unverified.",
+      "purpose": "Native-v2 input is retained in the accepted Bulk-batch-v1 firmware (6fdfccd6) on V467 UID ad21ad506c54c6c6. User accepts keys/mouse, two/four-finger gestures, return, drag and local text clipboards. Direct cable portable clipboard now has separate physical evidence. Opt-in 4 KiB file IN batching and fast ingress passed generated-main/C/Rust offline pressure, blocked-file input progress and cancellation/DMA ownership tests; candidate is flashed and independently readback-verified; input/gestures/return were user-confirmed after update. The 64 MiB physical file test remains about 0.83 MB/s, without a material speed gain. Physical speed and saturated input latency remain unverified.",
       "module_tags": [
         "mt2",
         "firmware",
@@ -1193,7 +1194,7 @@
       "name": "portable_cable_runtime",
       "path": "native/cable-image",
       "kind": "implementation_entrypoints",
-      "purpose": "Portable v9 runs on Book and from cable on mini. Text/native input pass; 8 MiB and PNG round-trip hashes and folder-tree integrity pass. User confirms reverse image-content paste into a supporting input; Finder folder paste requires file content. Intermittent PSRAM mismatch and earlier Finder 100004 remain unrooted. Cold recovery passed, stability unproven. V9 bounded CDC draining and finite source-failure diagnostics passed isolated regression; measured PNG transfer remains about 0.85 MB/s. Fast C ingress plus opt-in bounded 4 KiB file IN firmware candidate is built and offline-tested but not flashed. No high-speed or full physical cancellation acceptance.",
+      "purpose": "Portable v9 runs on Book and from cable on mini. Text/native input pass; 8 MiB and PNG round-trip hashes and folder-tree integrity pass. User confirms reverse image-content paste into a supporting input; Finder folder paste requires file content. Intermittent PSRAM mismatch and earlier Finder 100004 remain unrooted. Cold recovery passed, stability unproven. V9 bounded CDC draining and finite source-failure diagnostics passed isolated regression; measured PNG transfer remains about 0.85 MB/s. Fast C ingress and bounded 4 KiB file IN are flashed/readback-verified; 64 MiB forward succeeded at about 0.83 MB/s. Reverse failed after body with a confirmed source-ctime check rejection. V10 content revalidation candidate passes isolated tests and builds but is not yet running. No high-speed or full physical cancellation acceptance.",
       "module_tags": [
         "portable",
         "ram_setup",
@@ -1286,7 +1287,8 @@
         "P36",
         "P37",
         "P38",
-        "P39"
+        "P39",
+        "P40"
       ],
       "minimum_regression": [
         "python3 tests/test_cable_runtime.py",

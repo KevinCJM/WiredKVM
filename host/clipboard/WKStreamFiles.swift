@@ -104,6 +104,8 @@ final class WKStreamSource: @unchecked Sendable {
     let offer: WKStreamOffer
     fileprivate let fd: Int32
     private let original: stat
+    private let cancellation = NSLock()
+    private var cancelled = false
 #if WK_TREE
     private var tree: WKTransferTree?
     init(tree: WKTransferTree, nonce: String) throws {
@@ -127,11 +129,17 @@ final class WKStreamSource: @unchecked Sendable {
     }
     deinit { if fd >= 0 { Darwin.close(fd) } }
     func cancel() {
+        cancellation.lock(); cancelled = true; cancellation.unlock()
 #if WK_TREE
         tree?.cancel()
 #endif
     }
+    private func checkCancellation() throws {
+        cancellation.lock(); let value = cancelled; cancellation.unlock()
+        if value { throw WKStreamError.disconnected }
+    }
     fileprivate func read(offset: UInt64, count: Int) throws -> Data {
+        try checkCancellation()
 #if WK_TREE
         if let tree { return try tree.read(offset: offset, maximum: count) }
 #endif
@@ -139,12 +147,14 @@ final class WKStreamSource: @unchecked Sendable {
         if count == 0 { return Data() }
         var bytes = Data(count: count)
         let n = bytes.withUnsafeMutableBytes { pread(fd, $0.baseAddress!, $0.count, off_t(offset)) }
-        guard n == count else { throw WKStreamError.changed }; return bytes
+        guard n == count else { throw WKStreamError.changed }
+        try checkCancellation(); return bytes
     }
     fileprivate func unchanged() -> Bool {
         validationFailure() == nil
     }
-    fileprivate func validationFailure() -> String? {
+    fileprivate func validationFailure(expectedHash: Data? = nil) -> String? {
+        do { try checkCancellation() } catch { return streamErrorCode(error) }
 #if WK_TREE
         if let tree { return tree.unchanged() ? nil : "stream-source-changed" }
 #endif
@@ -153,7 +163,29 @@ final class WKStreamSource: @unchecked Sendable {
         guard s.st_dev == original.st_dev && s.st_ino == original.st_ino else { return "stream-source-identity-changed" }
         guard s.st_size == original.st_size else { return "stream-source-size-changed" }
         guard s.st_mtimespec.tv_sec == original.st_mtimespec.tv_sec && s.st_mtimespec.tv_nsec == original.st_mtimespec.tv_nsec else { return "stream-source-mtime-changed" }
-        guard s.st_ctimespec.tv_sec == original.st_ctimespec.tv_sec && s.st_ctimespec.tv_nsec == original.st_ctimespec.tv_nsec else { return "stream-source-ctime-changed" }
+        if s.st_ctimespec.tv_sec != original.st_ctimespec.tv_sec || s.st_ctimespec.tv_nsec != original.st_ctimespec.tv_nsec {
+            guard let expectedHash, expectedHash.count == 32 else { return "stream-source-ctime-changed" }
+            // Extended metadata can change after an offer (for example, while
+            // the system is indexing a newly received file).
+            // Ctime alone is not content proof. Re-read the pinned descriptor
+            // off the stream/UI queues and compare with the bytes transmitted.
+            // A changed mtime/size/identity or unstable re-read still fails.
+            do {
+                var hash = SHA256(), offset: UInt64 = 0
+                while offset < offer.size {
+                    let bytes = try read(offset: offset, count: Int(min(65536, offer.size-offset)))
+                    hash.update(data: bytes); offset += UInt64(bytes.count)
+                }
+                try checkCancellation()
+                var after = stat()
+                guard fstat(fd, &after) == 0 else { return "stream-source-stat-failed" }
+                guard after.st_dev == s.st_dev && after.st_ino == s.st_ino else { return "stream-source-identity-changed" }
+                guard after.st_size == s.st_size else { return "stream-source-size-changed" }
+                guard after.st_mtimespec.tv_sec == s.st_mtimespec.tv_sec && after.st_mtimespec.tv_nsec == s.st_mtimespec.tv_nsec else { return "stream-source-mtime-changed" }
+                guard after.st_ctimespec.tv_sec == s.st_ctimespec.tv_sec && after.st_ctimespec.tv_nsec == s.st_ctimespec.tv_nsec else { return "stream-source-ctime-changed" }
+                guard Data(hash.finalize()) == expectedHash else { return "stream-source-changed" }
+            } catch { return streamErrorCode(error) }
+        }
         return nil
     }
 }
@@ -276,6 +308,7 @@ final class WKStreamEngine {
         var offset: UInt64 = 0, acked: UInt64 = 0, hash = SHA256(), finished = false
         var granted = false
         var reader: WKDiskTask<Data>?, finalCheck: WKDiskTask<String?>?
+        var finalHash: Data?
         var prefetched = Data()
         var activity: Double
         init(_ source: WKStreamSource, _ now: Double) { self.source = source; activity = now }
@@ -567,7 +600,10 @@ final class WKStreamEngine {
                         try enqueue(Frame(kind: 1, epoch: epoch, id: id, offset: item.offset, body: bytes))
                         item.hash.update(data: bytes); item.offset += UInt64(length)
                     } else if item.offset == item.source.offer.size && item.acked == item.offset && !item.finished {
-                        if item.finalCheck == nil { item.finalCheck = WKDiskTask(inline: inlineDisk, gate: diskGate) { [source = item.source] in source.validationFailure() } }
+                        if item.finalCheck == nil {
+                            let digest = Data(item.hash.finalize()); item.finalHash = digest
+                            item.finalCheck = WKDiskTask(inline: inlineDisk, gate: diskGate) { [source = item.source] in source.validationFailure(expectedHash: digest) }
+                        }
                         guard let result = item.finalCheck?.result() else { continue }
                         do {
                             if let code = try result.get() {
@@ -575,7 +611,8 @@ final class WKStreamEngine {
                                 cancel(id); onFailure(id); continue
                             }
                         } catch { diagnostic(error); cancel(id); onFailure(id); continue }
-                        try enqueue(Frame(kind: 2, epoch: epoch, id: id, offset: item.offset, body: Data(item.hash.finalize())))
+                        guard let digest = item.finalHash else { throw WKStreamError.integrity }
+                        try enqueue(Frame(kind: 2, epoch: epoch, id: id, offset: item.offset, body: digest))
                         item.finished = true
                     }
                 }
