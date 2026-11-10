@@ -565,7 +565,6 @@ final class WKStreamEngine {
                 pending.last = now; pendingControls[id] = pending
                 emitControl(pending.control.encode())
             }
-            serviceDisks(now: now)
             input.append(try Self.readAvailable(io))
             guard input.count <= 65536 else { throw WKStreamError.capacity }
             var consumed = 0
@@ -584,6 +583,9 @@ final class WKStreamEngine {
                 } // one bad transaction never kills independent snapshots
             }
             if consumed > 0 { input = Data(input.dropFirst(consumed)) }
+            // Use newly received bodies/credits in this turn instead of
+            // leaving disk work idle until the next timer callback.
+            serviceDisks(now: now)
             let ids = outgoing.keys.sorted()
             // Round-robin fixed cells: neither an image nor a long file owns the
             // whole stream. Bounded work gives cancellation a turn every tick.
