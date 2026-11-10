@@ -955,7 +955,7 @@
       "name": "host_autostart",
       "path": "native/control-service",
       "kind": "implementation_entrypoints",
-      "purpose": "Book Rust supervisor preserves the legacy input-only mode and adds optional pinned portable_host/portable_runtime mode. Portable v11 is temporarily running with original authorized capture; old LaunchAgent is session-bootout only and unchanged on disk. Portable login/reboot/hotplug acceptance remains pending; USB1-only/mini-first electrical enumeration limitation is not fixed.",
+      "purpose": "Book Rust supervisor preserves the legacy input-only mode and adds optional pinned portable_host/portable_runtime mode. Portable v12 is temporarily running with original authorized capture; old LaunchAgent is session-bootout only and unchanged on disk. Portable login/reboot/hotplug acceptance remains pending; USB1-only/mini-first electrical enumeration limitation is not fixed.",
       "module_tags": [
         "host_autostart",
         "host_input",
@@ -1196,7 +1196,7 @@
       "name": "portable_cable_runtime",
       "path": "native/cable-image",
       "kind": "implementation_entrypoints",
-      "purpose": "Portable v9 runs on Book and from cable on mini. Text/native input pass; 8 MiB and PNG round-trip hashes and folder-tree integrity pass. User confirms reverse image-content paste into a supporting input; Finder folder paste requires file content. Intermittent PSRAM mismatch and earlier Finder 100004 remain unrooted. Cold recovery passed, stability unproven. V9 bounded CDC draining and finite source-failure diagnostics passed isolated regression; measured PNG transfer remains about 0.85 MB/s. Fast C ingress and bounded 4 KiB file IN are flashed/readback-verified; 64 MiB forward succeeded at about 0.83 MB/s. Reverse failed after body with a confirmed source-ctime check rejection. V10 content revalidation candidate passes isolated tests and builds but is not yet running. No high-speed or full physical cancellation acceptance. Subsequent optional negotiated-rate telemetry passes the private pipeline regression and reports Book as 480 Mbps through identity-bound discovery; target rate and physical speed remain unverified. Active Book is frozen v11 at eac49b2 with input ready; the board retains the old image until cold reload and mini v11 has not started. No new physical clipboard result.",
+      "purpose": "Target app executes directly from cable without installation or persistence. Frozen Book v12 at 0e79400 has input ready; universal target app and readonly media pass build, strict signature and inventory checks, but mini v12 has not started and cold media reload is pending. Earlier v9 physical evidence covers bidirectional text/local text clipboards, native input, matching 8 MiB/PNG/folder round trips and reverse image-content user confirmation. Flashed bounded-IN firmware retains accepted input; physical 64 MiB forward remains about 0.83 MB/s. Reverse failed at final source-ctime validation; the content-recheck and disk scheduling fixes pass isolated regression, not physical acceptance. Book discovery measured 480 Mbps; target rate, high speed, PSRAM stability, native Finder cancel, multiple roots and saturated input latency remain pending.",
       "module_tags": [
         "portable",
         "ram_setup",
