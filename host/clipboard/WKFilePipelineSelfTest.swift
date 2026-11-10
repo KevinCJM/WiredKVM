@@ -237,6 +237,19 @@ enum WKFilePipelineSelfTest {
     // Injected USB stream endpoints exercise the real coordinator, private
     // pasteboards and background workers. No general pasteboard or mounts.
     static func streamSuite(make: () -> (WKStreamIO, WKStreamIO, (Bool) -> Void)) throws {
+        do {
+            let (ioA,ioB,_) = make(), streams = (WKStreamFiles { ioA }, WKStreamFiles { ioB })
+            let f = try WKPipelineFixture(streams: streams)
+            streams.1.onDiagnostic("stream-source-ctime-changed"); f.drive(100)
+            try wkPipelineExpect(f.logs.contains("WKCLIP_DIAG role=target event=ERROR code=stream-source-ctime-changed"), "peer failure reason did not cross the control channel")
+            for code in ["/Users/private/file.png", "stream-clipboard-content", String(repeating: "x", count: 100)] {
+                do {
+                    _ = try WKMessage(kind: "stream-diagnostic", nonce: "1", body: Data(code.utf8)).encoded()
+                    throw WKPipelineTestFailure(description: "private or arbitrary diagnostic admitted")
+                } catch is WKStreamError { }
+            }
+            wkLog("WKCLIP_TEST bounded-peer-stream-diagnostic PASS")
+        }
         for direction in ["OUT", "IN"] {
             let (ioA, ioB, stall) = make()
             let streams = (WKStreamFiles { ioA }, WKStreamFiles { ioB })

@@ -79,3 +79,10 @@ Rust 监督服务已支持可选的便携协调器及固定哈希配置；保留
 `scripts/flash_portable_candidate.py --describe` 仅检查文件与哈希；`--flash --expected-current <已验收版本>` 是显式 DBG 刷写入口，必须明确指定当前固件。它要求只有指定 DBG，先核对芯片身份，再备份完整 576 KiB、确认原可用固件前缀、刷写及独立读回。刷写失败会尝试完整备份回退。它不更改 Book 自动服务，也不启动 mini 程序。
 
 参考：[沁恒 PSRAM 应用说明](https://github.com/openwch/ch32_application_notes/blob/main/zh/AN36000/AN36000.md)、[沁恒 SDK 的 200 MHz PSRAM 示例](https://github.com/openwch/ch32v407_ch32v467/tree/main/EVT/EXAM/PSRAM/PSRAM/User)。
+
+
+## 2026-11-10 继续验证
+
+冷重连出现过一次 PSRAM 写后读回不一致，拒绝发布；再次完整断电后 8.060 秒重载成功。该问题仍需稳定性验证。PNG 文件正向用户确认可读，反向再次出现 100004：正文全部到达但最终确认前取消，未通过完整性验收。
+
+当前候选 v9 增加固定发送端失败码回传及每轮有界 CDC 连续读取。通用程序 3,377,920 字节，新镜像 3,442,688 字节；隔离全套回归与最终只读镜像检查通过。Book v9 已临时就绪，线内 v9 目标程序等待用户退出旧会话及冷重载；这些状态不能视作物理修复或提速已通过。活动路径与证据按 results/portable-direct-cable-20261110 中的实际记录核对。

@@ -37,7 +37,9 @@ enum WKCollectionTransferSelfTest {
         var manifests: [String: WKTreeManifest] = [:], received: [String: WKReceivedFile] = [:], finished = Set<String>(), failures: [String] = []
         var prefixBeforeData = 0, arrived: [String: UInt64] = [:]
         a.onProgress = { id,done,_ in arrived[id]=done }; b.onProgress = a.onProgress
-        a.onManifest = { id, m in manifests[id] = m; if received[id] == nil && (arrived[id] ?? m.size) < m.size { prefixBeforeData += 1 } }; b.onManifest = a.onManifest
+        // The manifest can now precede the first disk-progress callback. No
+        // progress means zero acknowledged bytes, not a completed payload.
+        a.onManifest = { id, m in manifests[id] = m; if received[id] == nil && (arrived[id] ?? 0) < m.size { prefixBeforeData += 1 } }; b.onManifest = a.onManifest
         a.onFile = { id, f in received[id] = f }; b.onFile = a.onFile
         a.onComplete = { finished.insert($0) }; b.onComplete = a.onComplete
         a.onFailure = { failures.append($0) }; b.onFailure = a.onFailure
@@ -51,7 +53,8 @@ enum WKCollectionTransferSelfTest {
             if tick == 350 { pipe.readLimit = 65536; pipe.writeLimit = 65536 }
             a.step(now: Double(tick)*0.0001); pipe.probe(UInt32(tick)); b.step(now: Double(tick)*0.0001); tick += 1
         }
-        try check(failures.isEmpty && finished.count == 2 && prefixBeforeData == 2, "bidirectional collection incomplete: \(failures)")
+        try check(failures.isEmpty && finished.count == 2 && prefixBeforeData == 2,
+                  "bidirectional collection incomplete: failures=\(failures) completed=\(finished.count) files=\(received.count) manifests=\(manifests.count) early=\(prefixBeforeData) ticks=\(tick) offsets=\(arrived.values.sorted())")
         try check(pipe.failures == 0 && pipe.probes == tick, "HID probe failed")
         var verified = 0
         for (source, expected) in [(aSource,filesA),(bSource,filesB)] {

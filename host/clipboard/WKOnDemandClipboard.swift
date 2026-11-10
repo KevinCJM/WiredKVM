@@ -26,6 +26,7 @@ final class WKCompanion: NSObject, NSMenuDelegate {
     private var streamIncoming: [String: WKStreamOffer] = [:]
     private var preparing: (nonce: String, revision: Int)?
     private var streamResponse: WKStreamSource?
+    private var pendingStreamDiagnostic: String?
     private var imageJob: WKStreamFiles.ImageJob?
     private var decodedImage: (id: String, image: WKBulkImage)?
     private var imageReady: WKMessage?
@@ -146,6 +147,10 @@ final class WKCompanion: NSObject, NSMenuDelegate {
             guard let self else { return }
             if let unix = self.transport as? WKUnixTransport { _ = unix.sendRealtime(data) }
             else { _ = self.transport.send(data) }
+        }
+        stream?.onDiagnostic = { [weak self] code in
+            guard let self, self.role == "target", WKMetadata.safeCode(code) else { return }
+            self.pendingStreamDiagnostic = code // one bounded, payload-free peer error
         }
         stream?.onProgress = { [weak self] id, done, total in
             guard let self, let offer = self.streamSources[id]?.offer ?? self.streamIncoming[id] else { return }
@@ -320,6 +325,7 @@ final class WKCompanion: NSObject, NSMenuDelegate {
         if enabled != bulkPhysical { bulkPhysical = enabled; bulkLink.connected(enabled, at: clock()) }
     }
     private func connectionChanged(_ ready: Bool) {
+        pendingStreamDiagnostic = nil
         preparing = nil; streamResponse = nil; lastFinishedToken = nil; peerBulkImages = false; imageJob?.cancel(); imageJob = nil; imageReady = nil; decodedImage = nil
         stream?.setEpoch(ready ? (link.session ^ link.peerSession) : 0)
         cancelPaste(notifyPeer: false); discardLease(); response = nil; purposes.removeAll()
@@ -403,6 +409,10 @@ final class WKCompanion: NSObject, NSMenuDelegate {
         }
         if let p = paste, now >= p.deadline { cancelPaste(notifyPeer: true) }
         if let l = lease, now >= l.deadline { discardLease() }
+        if let code = pendingStreamDiagnostic, link.ready, !link.transmitting {
+            if let bytes = try? WKMessage(kind: "stream-diagnostic", nonce: "1", body: Data(code.utf8)).encoded(),
+               link.send(bytes) != nil { pendingStreamDiagnostic = nil }
+        }
         if let item = response, !link.transmitting { response = nil; sendContent(item) }
         if let ready = imageReady, !link.transmitting {
             if let data = try? ready.encoded(), link.send(data) != nil { imageReady = nil }
@@ -564,6 +574,11 @@ final class WKCompanion: NSObject, NSMenuDelegate {
         do {
             let item = try WKMessage.decode(data)
             guard item.nonce != "0" else { return false }
+            if item.kind == "stream-diagnostic" {
+                guard role == "host", let code = String(data: item.body, encoding: .utf8),
+                      let line = WKMetadata.line(role: "target", event: "ERROR", fields: ["code": code]) else { return false }
+                log(line); return true
+            }
             if item.kind == "prepare" || item.kind == "pull" {
                 guard role == "target" else { return false }
                 pollClipboard(clock())

@@ -49,7 +49,7 @@ def main():
          '-lcompression','-import-objc-header','tests/ch32v407_sim.h',*sources,*objects,
          rust_target/'release/libwiredkvm_transfer_tree.a','-o',binary],'swift-build.log')
     run([binary,'--collections','--json',out/'collections.json'],'collections.log')
-    run([binary,'--json',out/'single-file.json'],'single-file.log')
+    run([binary,'--result',out/'single-file.json'],'single-file.log')
     run([binary,'--cancel'],'cancellation.log')
     run([binary,'--images'],'images.log')
     run([binary,'--pipeline'],'clipboard-pipeline.log')

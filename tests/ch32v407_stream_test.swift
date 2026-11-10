@@ -278,6 +278,33 @@ final class FirmwareIO: WKStreamIO {
         print("CH32_BLOCKED_DISK_PASS source-and-destination both-directions late-completion-discarded physicalUSB=false")
     }
     static func faults(_ root: URL) throws {
+        // Model nonblocking CDC short reads: drain ready bytes in one turn,
+        // stop at EAGAIN/empty, and never spin without a strict syscall limit.
+        do {
+            final class ShortReadIO: WKStreamIO {
+                let port: UInt8 = 0
+                var calls = 0, remaining = 12000, chunk = 512, oversized = false
+                func forwardControl(_ data: Data) -> Bool { true }
+                func close() { }
+                func write(_ data: Data) throws -> Int { data.count }
+                func read(maximum: Int) throws -> Data {
+                    calls += 1
+                    if oversized { return Data(count: maximum + 1) }
+                    let n = min(remaining, chunk, maximum)
+                    remaining -= n; return Data(repeating: 0x73, count: n)
+                }
+            }
+            let io = ShortReadIO()
+            try check(WKStreamEngine.readAvailable(io) == Data(repeating: 0x73, count: 12000), "short CDC read lost ready bytes")
+            try check(io.calls == 25, "empty CDC read did not end draining")
+            io.remaining = 100; io.chunk = 1; io.calls = 0
+            try check(WKStreamEngine.readAvailable(io).count == 32 && io.calls == 32, "CDC syscall budget was not bounded")
+            io.remaining = 100000; io.chunk = 32768; io.calls = 0
+            try check(WKStreamEngine.readAvailable(io).count == 32768 && io.calls == 1, "CDC byte budget was not bounded")
+            io.oversized = true
+            do { _ = try WKStreamEngine.readAvailable(io); throw Failure(description: "oversized CDC read admitted") } catch WKStreamError.invalid { }
+            print("CH32_CDC_DRAIN_PASS ready_short_reads=true calls_bounded=32 bytes_bounded=32768")
+        }
         // Admission limits fail before receiving file bytes or allocating a body.
         do {
             let (pipe,a,b) = pair(root); defer { a.stop(); b.stop(); _ = pipe }
@@ -286,10 +313,11 @@ final class FirmwareIO: WKStreamIO {
             let huge = WKStreamOffer(id: UUID().uuidString.lowercased(), name: "huge", nonce: "1", size: WKStreamOffer.maximumSize)
             do { try b.expect(huge, now: 0); throw Failure(description: "disk reserve ignored") } catch WKStreamError.capacity { }
         }
-        for scenario in ["empty","corrupt","disconnect","timeout","source-changed","cancel","old-epoch"] {
+        for scenario in ["empty","corrupt","disconnect","timeout","source-changed","metadata-changed","cancel","old-epoch"] {
             let url = try source(root, scenario + ".bin", scenario == "empty" ? 0 : 1048576, 0x18)
             let source = try WKStreamSource(url: url, nonce: "200")
-            let (p,a,b) = pair(root); var complete = false, published = false
+            let (p,a,b) = pair(root); var complete = false, published = false, diagnostics: [String] = []
+            a.onDiagnostic = { diagnostics.append($0) }; b.onDiagnostic = a.onDiagnostic
             a.onComplete = { _ in complete = true }; b.onFile = { _,_ in published = true }
             try a.add(source, now: 0); try b.expect(source.offer, now: 0)
             if scenario == "corrupt" { p.corrupt = true }
@@ -301,12 +329,20 @@ final class FirmwareIO: WKStreamIO {
                     if scenario == "source-changed" {
                         let f = try FileHandle(forWritingTo: url); try f.seek(toOffset: 100000); try f.write(contentsOf: Data([3,4,5])); try f.close()
                     }
+                    if scenario == "metadata-changed" {
+                        let value = Data([7])
+                        let n = value.withUnsafeBytes { setxattr(url.path, "com.wiredkvm.fixture", $0.baseAddress, $0.count, 0, 0) }
+                        try check(n == 0, "fixture metadata change failed")
+                    }
                     if scenario == "cancel" { a.cancel(source.offer.id); b.cancel(source.offer.id) }
                 }
                 a.step(now: Double(i) * 0.001); b.step(now: Double(i) * 0.001)
             }
             if scenario == "empty" { try check(complete && published,"empty file") }
             else { try check(!complete && !published, "\(scenario) incorrectly succeeded") }
+            if scenario == "metadata-changed" {
+                try check(diagnostics.contains(where: { $0.contains("code=stream-source-ctime-changed") }), "metadata-only failure was not distinguished")
+            }
             a.stop(); b.stop()
         }
         print("CH32_STREAM_FAULTS_PASS empty corruption disconnect timeout source-change cancellation retired-epoch")

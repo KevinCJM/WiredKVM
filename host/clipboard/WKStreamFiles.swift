@@ -142,13 +142,19 @@ final class WKStreamSource: @unchecked Sendable {
         guard n == count else { throw WKStreamError.changed }; return bytes
     }
     fileprivate func unchanged() -> Bool {
+        validationFailure() == nil
+    }
+    fileprivate func validationFailure() -> String? {
 #if WK_TREE
-        if let tree { return tree.unchanged() }
+        if let tree { return tree.unchanged() ? nil : "stream-source-changed" }
 #endif
         var s = stat()
-        return fstat(fd, &s) == 0 && s.st_size == original.st_size && s.st_dev == original.st_dev && s.st_ino == original.st_ino &&
-            s.st_mtimespec.tv_sec == original.st_mtimespec.tv_sec && s.st_mtimespec.tv_nsec == original.st_mtimespec.tv_nsec &&
-            s.st_ctimespec.tv_sec == original.st_ctimespec.tv_sec && s.st_ctimespec.tv_nsec == original.st_ctimespec.tv_nsec
+        guard fstat(fd, &s) == 0 else { return "stream-source-stat-failed" }
+        guard s.st_dev == original.st_dev && s.st_ino == original.st_ino else { return "stream-source-identity-changed" }
+        guard s.st_size == original.st_size else { return "stream-source-size-changed" }
+        guard s.st_mtimespec.tv_sec == original.st_mtimespec.tv_sec && s.st_mtimespec.tv_nsec == original.st_mtimespec.tv_nsec else { return "stream-source-mtime-changed" }
+        guard s.st_ctimespec.tv_sec == original.st_ctimespec.tv_sec && s.st_ctimespec.tv_nsec == original.st_ctimespec.tv_nsec else { return "stream-source-ctime-changed" }
+        return nil
     }
 }
 
@@ -269,7 +275,7 @@ final class WKStreamEngine {
         let source: WKStreamSource
         var offset: UInt64 = 0, acked: UInt64 = 0, hash = SHA256(), finished = false
         var granted = false
-        var reader: WKDiskTask<Data>?, finalCheck: WKDiskTask<Bool>?
+        var reader: WKDiskTask<Data>?, finalCheck: WKDiskTask<String?>?
         var prefetched = Data()
         var activity: Double
         init(_ source: WKStreamSource, _ now: Double) { self.source = source; activity = now }
@@ -496,6 +502,21 @@ final class WKStreamEngine {
             } catch { diagnostic(error);cancel(id); onFailure(id) }
         }
     }
+    // CDC can return a short read even with more cells already queued. Drain
+    // without sleeping, but cap both bytes and syscalls so cancellation and
+    // the next disk/control work keep their turn. A short read is not EOF.
+    static func readAvailable(_ io: WKStreamIO) throws -> Data {
+        var bytes = Data()
+        for _ in 0..<32 {
+            let remaining = 32768 - bytes.count
+            if remaining == 0 { break }
+            let part = try io.read(maximum: remaining)
+            guard part.count <= remaining else { throw WKStreamError.invalid }
+            if part.isEmpty { break }
+            bytes.append(part)
+        }
+        return bytes
+    }
     func step(now: Double) {
         guard !stopped else { return }
         do {
@@ -512,7 +533,7 @@ final class WKStreamEngine {
                 emitControl(pending.control.encode())
             }
             serviceDisks(now: now)
-            input.append(try io.read(maximum: 32768))
+            input.append(try Self.readAvailable(io))
             guard input.count <= 65536 else { throw WKStreamError.capacity }
             var consumed = 0
             while input.count - consumed >= Self.cell {
@@ -546,9 +567,14 @@ final class WKStreamEngine {
                         try enqueue(Frame(kind: 1, epoch: epoch, id: id, offset: item.offset, body: bytes))
                         item.hash.update(data: bytes); item.offset += UInt64(length)
                     } else if item.offset == item.source.offer.size && item.acked == item.offset && !item.finished {
-                        if item.finalCheck == nil { item.finalCheck = WKDiskTask(inline: inlineDisk, gate: diskGate) { [source = item.source] in source.unchanged() } }
+                        if item.finalCheck == nil { item.finalCheck = WKDiskTask(inline: inlineDisk, gate: diskGate) { [source = item.source] in source.validationFailure() } }
                         guard let result = item.finalCheck?.result() else { continue }
-                        guard (try? result.get()) == true else { diagnostic(WKStreamError.changed);cancel(id); onFailure(id); continue }
+                        do {
+                            if let code = try result.get() {
+                                onDiagnostic("WKCLIP_DIAG role=\(io.port == 0 ? "host" : "target") event=ERROR code=\(code) phase=REJECT")
+                                cancel(id); onFailure(id); continue
+                            }
+                        } catch { diagnostic(error); cancel(id); onFailure(id); continue }
                         try enqueue(Frame(kind: 2, epoch: epoch, id: id, offset: item.offset, body: Data(item.hash.finalize())))
                         item.finished = true
                     }
@@ -612,6 +638,7 @@ final class WKStreamFiles {
 #endif
     var onFailure: (String) -> Void = { _ in }
     var onComplete: (String) -> Void = { _ in }
+    var onDiagnostic: (String) -> Void = { _ in }
     init(connect: @escaping () throws -> WKStreamIO) { self.connect = connect }
     func start() {
         worker.async { [self] in
@@ -633,7 +660,11 @@ final class WKStreamFiles {
             do {
                 let e = WKStreamEngine(io: try connect(), directory: directory); engine = e; e.setEpoch(desiredEpoch)
                 e.onControl = { [weak self] data in DispatchQueue.main.async { self?.onControl(data) } }
-                e.onDiagnostic = { wkLog($0) }
+                e.onDiagnostic = { [weak self] line in
+                    wkLog(line)
+                    let code = line.split(separator: " ").first(where: { $0.hasPrefix("code=") }).map { String($0.dropFirst(5)) }
+                    if let code { DispatchQueue.main.async { self?.onDiagnostic(code) } }
+                }
                 e.onAccepted = { [weak self] id in DispatchQueue.main.async { self?.onAccepted(id) } }
                 // UI progress is throttled; no per-cell main-thread flood.
                 var lastProgress: [String: Double] = [:]

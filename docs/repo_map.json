@@ -950,7 +950,7 @@
       "name": "host_autostart",
       "path": "native/control-service",
       "kind": "implementation_entrypoints",
-      "purpose": "Book Rust supervisor preserves the legacy input-only mode and adds optional pinned portable_host/portable_runtime mode. Portable v8 is temporarily running with original authorized capture; old LaunchAgent is session-bootout only and unchanged on disk. Portable login/reboot/hotplug acceptance remains pending; USB1-only/mini-first electrical enumeration limitation is not fixed.",
+      "purpose": "Book Rust supervisor preserves the legacy input-only mode and adds optional pinned portable_host/portable_runtime mode. Portable v9 is temporarily running with original authorized capture; old LaunchAgent is session-bootout only and unchanged on disk. Portable login/reboot/hotplug acceptance remains pending; USB1-only/mini-first electrical enumeration limitation is not fixed.",
       "module_tags": [
         "host_autostart",
         "host_input",
@@ -1191,7 +1191,7 @@
       "name": "portable_cable_runtime",
       "path": "native/cable-image",
       "kind": "implementation_entrypoints",
-      "purpose": "Direct-from-cable macOS runtime: V467 PSRAM readonly image and portable target startup verified. User accepted local/cross-machine new text plus native input/gestures/edge return. Premount realpath fixes the file portal alias. Book v8 retry completed one 8 MiB round trip with matching SHA-256; earlier Finder 100004/zero-byte result remains a failure with unknown root cause. About 0.81 MB/s measured on return; images/collections, physical cancellation, saturation latency and permanent autostart upgrade remain unaccepted.",
+      "purpose": "Portable cable runtime: PSRAM image upload/target launch and text/native input passed, plus one 8 MiB round-trip hash match. Reconnect later produced an intermittent PSRAM mismatch; cold power recovery passed, stability unproven. PNG forward readable; reverse Finder 100004 recurred after body arrival before final confirmation. V9 candidate adds bounded CDC draining and finite source-failure codes over control; complete isolated regressions pass. Book v9 temporarily ready, target v9 replacement pending. No high-speed or full media/collection physical acceptance.",
       "module_tags": [
         "portable",
         "ram_setup",

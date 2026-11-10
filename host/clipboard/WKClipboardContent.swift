@@ -192,6 +192,9 @@ struct WKMessage: Codable {
             guard offer.nonce == nonce else { throw WKClipboardError.invalid("file-offer-nonce-mismatch") }
         case "stream-ready":
             guard name == nil, let id = String(data: body, encoding: .utf8), WKFileOffer.validID(id) else { throw WKStreamError.invalid }
+        case "stream-diagnostic":
+            guard name == nil, body.count <= 64, let code = String(data: body, encoding: .utf8),
+                  (code.hasPrefix("stream-") || code.hasPrefix("posix-")), WKMetadata.safeCode(code) else { throw WKStreamError.invalid }
         case "stream-offer":
             guard name == nil, try WKStreamOffer.decode(body).nonce == nonce else { throw WKClipboardError.invalid("invalid-stream-offer") }
         default: throw WKClipboardError.invalid("unsupported-content")
