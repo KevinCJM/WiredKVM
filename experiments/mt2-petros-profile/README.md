@@ -190,7 +190,7 @@ USB 硬件边界仍是模型，不能作为真实速度、总线时序或交互�
 64 MiB 正向实际约 0.825 MB/s，没有明显提速，不能按模型宣称高速。最新实机记录见
 `../../docs/research/DIRECT_CABLE_RUNTIME_20261109.md`。
 
-## 2026-11-10 收发计数候选（未刷入）
+## 2026-11-10 收发计数版本（已刷入，短测未完成）
 
 `--bulk-profile` 须配合 `--bulk-batch --native-format`，默认关闭。
 它只给现有 `MT2?` 状态附加有限数字，不增开接口，不改描述符、文件协议、
@@ -223,4 +223,6 @@ python3 experiments/mt2-petros-profile/test_live_touch.py --native-format --ram-
 实际生成 main / C / Rust 模型通过 1,000 轮双向满队列、800ms 文件端点堵塞、
 键鼠/双指/四指推进、取消及旧 DMA 完成回调测试；另测状态长度、u32 回绕和只统计
 文件端点。配套 Book `--self-test` 验证日志过滤。它们不证明物理速度或真实输入延迟。
-候选构建信息和实机边界见 [吞吐诊断记录](../../docs/research/BULK_THROUGHPUT_20261110.md)。
+本版本已备份、刷入并独立读回，Book 已实际收到数字状态；8 MiB 短测正文尚未开始时
+USB1 断开，原因未定。当前等待完整断电重连，不能视为输入/吞吐验收。
+构建信息和实机边界见 [吞吐诊断记录](../../docs/research/BULK_THROUGHPUT_20261110.md)。
