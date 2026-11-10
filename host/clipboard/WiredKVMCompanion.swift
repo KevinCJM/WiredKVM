@@ -8,7 +8,7 @@ func wkReply(_ message: String) { FileHandle.standardOutput.write(Data((message 
 // companion. Error userInfo/description, pasteboard types and file metadata are
 // never formatted. This also makes GUI persistence safe to allowlist independently.
 enum WKMetadata {
-    static let events: Set<String> = ["COPY", "ARM", "CANCEL", "REVISION", "LINK", "TRANSPORT", "TX", "RX", "FILE_TX", "FILE_RX", "BULK_TX", "BULK_RX", "TX_BIND", "APPLY", "COMPLETE", "PASTE", "CHECK", "ERROR"]
+    static let events: Set<String> = ["COPY", "ARM", "CANCEL", "REVISION", "LINK", "TRANSPORT", "PORTAL", "TX", "RX", "FILE_TX", "FILE_RX", "BULK_TX", "BULK_RX", "TX_BIND", "APPLY", "COMPLETE", "PASTE", "CHECK", "ERROR"]
     static let errorCodes: Set<String> = [
         "image-over-64MiB", "image-source-over-128MiB", "item-too-large", "invalid-envelope-size", "envelope-checksum-mismatch", "content-integrity-check-failed",
         "invalid-control", "invalid-utf8", "invalid-png", "invalid-filename", "unsupported-content", "single-file-only",
@@ -72,6 +72,8 @@ enum WKMetadata {
                 case "result": valid = ["READY", "BLOCK", "CHECK"].contains(value)
                 case "code": valid = safeCode(value)
                 case "usbMbps": valid = ["unknown", "1.5", "12", "480"].contains(value)
+                case "davMetadata", "davMissing", "davWaiting", "davServed", "davFailed", "davMalformed", "davCapacity", "davProxy":
+                    valid = WKMessage.validNonce(value) && UInt32(value) != nil
                 default: valid = false
                 }
             }
@@ -86,6 +88,7 @@ enum WKMetadata {
 // here so that a fresh local copy cannot be overwritten by an older remote item.
 protocol WKFilePortalServing: AnyObject {
     var isAvailable: Bool { get }
+    var diagnosticCounts: [UInt32]? { get }
     func start(completion: @escaping (Result<Void, Error>) -> Void)
     func stop()
     func stop(completion: @escaping () -> Void)
@@ -101,6 +104,7 @@ protocol WKFilePortalServing: AnyObject {
 }
 
 extension WKFilePortalServing {
+    var diagnosticCounts: [UInt32]? { nil }
     func stop(completion: @escaping () -> Void) { stop(); completion() }
     func offerStream(_ offer: WKStreamOffer) throws -> URL { throw WKFilePortalError.unavailable }
     func fulfill(id: String, file: WKReceivedFile) throws { throw WKFilePortalError.unavailable }

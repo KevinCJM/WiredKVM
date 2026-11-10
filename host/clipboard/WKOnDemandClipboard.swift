@@ -88,6 +88,21 @@ final class WKCompanion: NSObject, NSMenuDelegate {
     private var usbRateAnnouncements = 0
     private var usbRateAnnouncedAt: Double = -10
     private var peerUSBRate: WKUSBDiscovery.Rate?
+    private var lastPortalCounts: [UInt32]?
+    private var portalCountsSent = 0
+    private var portalCountsSentAt: Double = -10
+    private var peerPortalCounts: [UInt32]?
+    private static let portalKeys = ["davMetadata", "davMissing", "davWaiting", "davServed", "davFailed", "davMalformed", "davCapacity", "davProxy"]
+    private static func portalCounts(_ report: WKReport) -> [UInt32]? {
+        guard report.kind == .pong, report.flags == 0x41, report.sequence == 0, report.transfer == 0,
+              report.payload.count == 37, report.payload.prefix(5) == Data([0x57,0x4b,0x50,0x53,1]) else { return nil }
+        return (0..<WKPortalCounters.count).map { report.payload.readLE(at: 5 + $0 * 4) }
+    }
+    private func logPortalCounts(_ counts: [UInt32], role: String) {
+        guard counts.count == Self.portalKeys.count else { return }
+        let fields = Dictionary(uniqueKeysWithValues: zip(Self.portalKeys, counts.map(String.init)))
+        if let line = WKMetadata.line(role: role, event: "PORTAL", fields: fields) { log(line) }
+    }
     private static func usbRate(_ report: WKReport) -> WKUSBDiscovery.Rate? {
         guard report.kind == .pong, report.flags == 0x40, report.sequence == 0, report.transfer == 0,
               report.payload.count == 6, report.payload.prefix(5) == Data([0x57,0x4b,0x55,0x53,1]) else { return nil }
@@ -339,6 +354,7 @@ final class WKCompanion: NSObject, NSMenuDelegate {
     private func connectionChanged(_ ready: Bool) {
         usbLinkRate = ready ? usbLinkRateProvider?() : nil
         usbRateAnnouncements = 0; usbRateAnnouncedAt = -10; peerUSBRate = nil
+        lastPortalCounts = nil; peerPortalCounts = nil; portalCountsSent = 0; portalCountsSentAt = -10
         if let rate = usbLinkRate,
            let line = WKMetadata.line(role: role, event: "TRANSPORT", fields: ["phase":"RESULT","usbMbps":rate.mbps]) { log(line) }
         pendingStreamDiagnostic = nil
@@ -371,6 +387,11 @@ final class WKCompanion: NSObject, NSMenuDelegate {
         if role != "host", fnKey.receive(data, at: clock()) { return }
         if data.prefix(4) == Self.fileMagic { bulkLink.receive(data, at: clock()); return }
         link.receive(data, at: clock())
+        if link.ready, let report = WKReport(data, wireMagic: Self.magic), report.session == link.peerSession,
+           let counts = Self.portalCounts(report) {
+            if role == "host", counts != peerPortalCounts { logPortalCounts(counts, role: "target") }
+            peerPortalCounts = counts; return
+        }
         if link.ready, let report = WKReport(data, wireMagic: Self.magic), report.session == link.peerSession,
            let rate = Self.usbRate(report) {
             if role == "host", rate != peerUSBRate,
@@ -427,6 +448,19 @@ final class WKCompanion: NSObject, NSMenuDelegate {
             usbRateAnnouncements += 1; usbRateAnnouncedAt = now
         }
         if portalReady && portal?.isAvailable != true { portalReady = false; updateBulk(); failIncomingFiles() }
+        // Diagnostic snapshots are fixed 37-byte keepalives, never a content
+        // transaction. At most 64 per connection, at most one per second, and
+        // only when changed. Failure/backpressure cannot delay a paste or HID.
+        if link.ready, portalCountsSent < 64, now - portalCountsSentAt >= 1,
+           let counts = portal?.diagnosticCounts, counts.count == WKPortalCounters.count, counts != lastPortalCounts {
+            if role == "host" { logPortalCounts(counts, role: role); lastPortalCounts = counts; portalCountsSent += 1; portalCountsSentAt = now }
+            else {
+                var payload = Data([0x57,0x4b,0x50,0x53,1]); counts.forEach { payload.appendLE($0) }
+                if transport.send(WKReport(kind: .pong, flags: 0x41, session: link.session, payload: payload).encode(wireMagic: Self.magic)) {
+                    lastPortalCounts = counts; portalCountsSent += 1; portalCountsSentAt = now
+                }
+            }
+        }
         if link.ready && now - lastAdvertisement >= 0.15 {
             var payload = Data("WKOD".utf8); payload.appendLE(protocolBuild)
             payload.appendLE(UInt64(localState)!); payload.appendLE(UInt64(localSource)!)
@@ -507,6 +541,10 @@ final class WKCompanion: NSObject, NSMenuDelegate {
         let token = w[2], parts = token.split(separator: ".").map(String.init)
         guard parts.count == 2, parts.allSatisfy(WKMessage.validNonce), !parts.contains("0") else { return }
         pollClipboard(clock())
+        if let line = WKMetadata.line(role: role, event: "CHECK", fields: ["direction": w[1], "token": token,
+            "linkReady": link.ready ? "1" : "0", "ready": remoteState != "0" ? "1" : "0",
+            "notTransmitting": link.transmitting ? "0" : "1",
+            "revisionMatches": parts[0] == (w[1] == "OUT" ? localSource : remoteSource) ? "1" : "0"]) { log(line) }
         if paste?.token == token { return } // same V intent: do not restart or reset deadline
         cancelPaste(notifyPeer: true)
         guard link.ready, remoteState != "0", !link.transmitting,

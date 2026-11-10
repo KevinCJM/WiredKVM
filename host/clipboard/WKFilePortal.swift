@@ -3,6 +3,19 @@ import CFNetwork
 import CryptoKit
 import Darwin
 
+// Fixed counters only. No request URL, capability, filename or clipboard data
+// leaves the file server. A successful GET is not a Finder destination commit.
+final class WKPortalCounters: @unchecked Sendable {
+    enum Event: Int { case metadata, missing, waiting, served, failed, malformed, capacity, proxy }
+    static let count = 8
+    private let lock = NSLock()
+    private var values = [UInt32](repeating: 0, count: 8)
+    func record(_ event: Event) {
+        lock.lock(); values[event.rawValue] &+= 1; lock.unlock()
+    }
+    func snapshot() -> [UInt32] { lock.lock(); defer { lock.unlock() }; return values }
+}
+
 enum WKFilePortalError: Error, CustomStringConvertible {
     case unavailable, stopped, invalidOffer, capacity, integrity, failed, timeout, proxy, accessDenied, system(Int32), mount
     var description: String {
@@ -205,6 +218,7 @@ private final class WKPortalConnection: @unchecked Sendable {
 }
 
 final class WKPortalHTTPServer: @unchecked Sendable {
+    let counters = WKPortalCounters()
     private let store: WKPortalStore
     private let state = NSLock()
     private let acceptQueue = DispatchQueue(label: "WiredKVM.portal.accept")
@@ -287,10 +301,11 @@ final class WKPortalHTTPServer: @unchecked Sendable {
                 setsockopt(client, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size)) == 0
             let id = UUID(), connection = WKPortalConnection(client)
             state.lock()
-            let accepted = !stopped && configured && peer.sin_addr.s_addr == inet_addr("127.0.0.1") && connections.count < 8
+            let atCapacity = connections.count >= 8
+            let accepted = !stopped && configured && peer.sin_addr.s_addr == inet_addr("127.0.0.1") && !atCapacity
             if accepted { connections[id] = connection }
             state.unlock()
-            guard accepted else { connection.finish(); continue }
+            guard accepted else { if atCapacity { counters.record(.capacity) }; connection.finish(); continue }
             workers.async { [self] in
                 defer { connection.finish(); state.lock(); connections.removeValue(forKey: id); state.unlock() }
                 handle(client)
@@ -389,13 +404,14 @@ final class WKPortalHTTPServer: @unchecked Sendable {
         return count == 0 || (count < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
     }
     private func handle(_ fd: Int32) {
-        guard proxyCheck(url) else { header(fd, 503); return }
-        guard let request = request(fd) else { header(fd, 400); return }
-        guard let item = resource(request.target) else { header(fd, 404); return }
+        guard proxyCheck(url) else { counters.record(.proxy); header(fd, 503); return }
+        guard let request = request(fd) else { counters.record(.malformed); header(fd, 400); return }
+        guard let item = resource(request.target) else { counters.record(.missing); header(fd, 404); return }
         switch request.method {
         case "OPTIONS": header(fd, 200, extra: ["DAV": "1", "Allow": "OPTIONS, HEAD, PROPFIND, GET", "MS-Author-Via": "DAV"])
         case "PROPFIND":
             guard let depth = request.headers["depth"], ["0", "1"].contains(depth) else { header(fd, 403); return }
+            counters.record(.metadata)
             let body = properties(item, descendants: depth == "1")
             if header(fd, 207, length: body.count, type: "application/xml; charset=utf-8") { _ = send(fd, body) }
         case "HEAD", "GET":
@@ -411,7 +427,7 @@ final class WKPortalHTTPServer: @unchecked Sendable {
             }
             // Pin before responding: clipboard retirement must not remove a file
             // while Finder is waiting for data or sending its final bytes.
-            do { try store.acquire(id: metadata.id) } catch { header(fd, 404); return }
+            do { try store.acquire(id: metadata.id) } catch { counters.record(.missing); header(fd, 404); return }
             defer { store.release(id: metadata.id) }
             guard let range = Self.range(request.headers["range"], size: contentSize) else {
                 header(fd, 416, extra: ["Content-Range": "bytes */\(contentSize)"]); return
@@ -419,9 +435,13 @@ final class WKPortalHTTPServer: @unchecked Sendable {
             var extra = ["Accept-Ranges": "bytes", "ETag": "\"\(etag)\""]
             if range.partial { extra["Content-Range"] = "bytes \(range.start)-\(range.end - 1)/\(contentSize)" }
             if request.method == "HEAD" {
+                counters.record(.metadata)
                 header(fd, range.partial ? 206 : 200, length: range.end - range.start, extra: extra)
                 return
             }
+            counters.record(.waiting)
+            var served = false
+            defer { counters.record(served ? .served : .failed) }
             do {
                 let data = try store.waitPayload(id: metadata.id, timeout: waitTimeout, cancelled: { self.disconnected(fd) })
                 guard proxyCheck(url), !disconnected(fd) else { return }
@@ -434,6 +454,7 @@ final class WKPortalHTTPServer: @unchecked Sendable {
                     let part = try data.read(offset: baseOffset + offset, maximum: min(65536, range.end - offset))
                     guard !part.isEmpty, send(fd, part) else { return }; offset += part.count
                 }
+                served = true
             } catch { if !disconnected(fd) { header(fd, 503) } }
         default: header(fd, 405, extra: ["Allow": "OPTIONS, HEAD, PROPFIND, GET"])
         }
@@ -517,6 +538,11 @@ final class WKFilePortal: @unchecked Sendable {
     private var store: WKPortalStore?
     private var server: WKPortalHTTPServer?
     private var ownedDirectory: URL?
+
+    var diagnosticCounts: [UInt32]? {
+        state.lock(); let current = server; state.unlock()
+        return current?.counters.snapshot()
+    }
 
     // No filesystem reads: a paste-readiness check must never block on WebDAV.
     var isAvailable: Bool {

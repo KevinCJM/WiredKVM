@@ -73,3 +73,26 @@ CPU 空闲或忙。Finder 原生取消仍未通过；与本次吞吐诊断分开
 本地结果位于 `results/portable-direct-cable-20261110/physical-scheduling-v12/`、
 `bulk-profile-candidate/` 和 `build/portable-book-20261110-bulk-profile/`。
 这些生成结果不提交公开仓库；源码、规格、有限结果和可重跑测试随提交保留。
+
+## 用户重新接线后恢复
+
+用户随后说明，前一次测试中手动插拔了硬件并关闭了测试文件夹。因此，先前断线
+不能用作诊断固件故障的证据。用户确认完整断电并按主控先接顺序重连后，Book 检测
+到新注册号 `4295713211`；原监督服务自动启动新控制子进程，输入 READY、数字状态
+及 mini 组件连接均已观测。程序盘重新上传 `8.449s`、`reused=false`。
+
+Book 测试窗口已重新打开并选中 8 MiB 文件。新监测目录为
+`results/portable-direct-cable-20261110/physical-bulk-profile-v2/`，绑定新实例身份；
+等待用户本轮复制粘贴。前两轮采样没有正文数据，不与本轮混用。
+
+### Single-paste failure and text recovery
+
+- User reports Book-to-mini Finder -43 for the new single-03 filename with one C/V. Generation 21 / nonce 2390645657 reaches whole-transfer COMPLETE at 1794303969.926 after first progress 1794303959.999. No destination hash or Finder acceptance; repeated C/V is not the sole trigger. The bounded v3 sampling window had already ended; no CPU sample was collected for this transfer.
+- Text also failed per user. Only the identity/hash-verified Book helper 92766 was normally terminated. The existing coordinator reuses the same program disk, starts helper 74228, and links again. Coordinator 92654, native 92687 and capture 92688 remain unchanged. User confirms both fresh text directions recovered. This is recovery, not a proven root-cause fix. No target terminal or install.
+- Regression with private pasteboards passes repeat V/recopy, independent pending snapshots, images and collection pipelines. Initial sandbox execution could not access the private pasteboard service; the same built binary passed after a scoped sandbox escalation.
+- A separate Book-only real read-only loopback VFS probe creates 12 dynamic own files: all immediate lstat calls and full reads pass. It never touches the general clipboard or USB. It does not establish the target Finder behavior.
+- Candidate diagnostic: eight fixed numeric HTTP outcome counters, a changed-only 37-byte keepalive at most once per second / 64 times per connection, and numeric paste gating checks. No URL, capability, name or clipboard content. Counter success means HTTP body sent, not destination commit. Candidate is not deployed and does not change the file protocol or native input path.
+
+Candidate v13 validation: actual C bridge/Swift/Rust 32 MiB streams in both directions, 444 tree file hashes, 280 protocol cancel rounds, blocked disks/late completion, image pipeline, repeated V/recopy and file-portal failure followed by fresh text pass. Portal HTTP counters match HEAD/PROPFIND/404/400/verified GET/failed GET outcomes. Wrong session, flags, sequence, transfer, version and payload length cannot enter peer logs; report cap is 64 and exhausted diagnostics do not block text. These are isolated tests, not mini Finder or native-cancel acceptance.
+
+Universal portable binary SHA-256 `81515766d457a8c73a036cca370e411f96d6738b38a3f68cf897fdd3f708e939`; Book coordinator `e4c27da8ef6953fe8fe41934ee57d78059454d07b03c6553226ed9f8d08f50a2`; program asset `3774e1f29acfdeec7bc14e7806580a7518eeaecf12f8f7834b70d54ff720e0b4` (3,500,032 bytes). Native binary matches the current baseline; capture/touch are reused in place. Read-only program disk and five portable packaging checks pass. No deployment, firmware update or input change has occurred.

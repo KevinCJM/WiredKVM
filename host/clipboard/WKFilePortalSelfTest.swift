@@ -179,6 +179,11 @@ struct WKFilePortalSelfTest {
         _ = try store.offer(id: "late", name: "late", size: data.count, sha256: hash)
         let expired = try request(root.appendingPathComponent("late/late"))
         check(expired.status == 503 && expired.body.isEmpty && expired.headers["content-length"] == "0", "bounded wait ends with failure status")
+        let counts = server.counters.snapshot()
+        check(counts.count == 8 && counts[0] == 2 && counts[1] == 2 && counts[2] == 4 &&
+              counts[3] == 2 && counts[4] == 2 && counts[5] == 1 && counts[6] == 0,
+              "HTTP counter categories must match observed outcomes")
+        print("PORTAL_COUNTERS_PASS fixed_numeric=true no_request_paths=true")
         proxy.put(false)
         do { check(try request(file).status == 503, "proxy change fails closed") }
         catch { /* The proxy monitor may close the listener/connection first. */ }

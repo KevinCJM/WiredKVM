@@ -423,7 +423,7 @@
       "name": "clipboard_bulk",
       "path": "host/clipboard",
       "kind": "implementation_entrypoints",
-      "purpose": "Portable target app runs directly from cable without installation/persistence. Fresh text in both directions and both local text clipboards pass. One 8 MiB and one PNG file round trip have matching SHA-256; a folder tree round trip matches file hashes, empty file and empty directory. User confirms mini-to-Book image contents paste into a supporting input; this is distinct from Finder file paste. Earlier Finder 100004 remains unrooted. High speed, opposite image-content direction, multiple roots, physical cancel timing and saturated input latency remain pending.",
+      "purpose": "Portable target app runs directly from cable without installation. Earlier 64 MiB round trip has verified hashes but remains about 0.82-0.86 MB/s. Current new-name single 8 MiB Book-to-mini body reaches protocol COMPLETE while Finder reports -43; repeated paste is not the sole trigger. User confirms fresh text in both directions recovered after restarting only the Book clipboard helper. File -43 root cause, high speed, native Finder cancellation and remaining content/input acceptance stay pending. Bounded portal counters are a candidate diagnostic, not a repair or delivery proof.",
       "module_tags": [
         "clipboard_bulk",
         "needs_code_confirmation"
@@ -447,13 +447,10 @@
         "native/clipboard_channel.hpp",
         "agent/file_wire.py",
         "docs/history/INPUT_CLIPBOARD_STATUS_20261106.md",
-        "results/clipboard-audit-20261106/AUDIT.md",
-        "results/clipboard-audit-20261106/summary.json",
         "docs/history/PORTABLE_COMPANION_20261106.md",
         "docs/history/TARGET_ZERO_RUNTIME_20261106.md",
         "native/transfer-tree",
         "host/clipboard/WKTransferTree.swift",
-        "results/collection-transfer-20261106/stream-v1/collections.json",
         "docs/research/CLIPBOARD_ZERO_RUNTIME_GATE_20261109.md",
         "results/clipboard-zero-runtime-20261109/admission_probe.c",
         "results/clipboard-zero-runtime-20261109/admission-probe.log",
@@ -461,7 +458,9 @@
       ],
       "upstream_dependencies": [],
       "downstream_dependencies": [],
-      "out_of_scope_dependencies": [],
+      "out_of_scope_dependencies": [
+        "Earlier ignored audit/result artifacts missing from this checkout; historical claims require their original evidence."
+      ],
       "related_tests": [
         "tests/test_file_transfer_native.py",
         "tests/test_clipboard_native.py",
@@ -813,7 +812,7 @@
       "name": "mt2_firmware_experiment",
       "path": "experiments",
       "kind": "isolated_firmware_experiment",
-      "purpose": "Diagnostic Bulk-profile firmware (6caef7f6) is flashed and independently readback-verified on V467 UID ad21ad506c54c6c6. Matching Book numeric logging is activated; the frozen capture/touch binaries and v12 portable component are unchanged. Input READY and numeric status were observed, but USB1 disappeared before any new 8 MiB body; cause unproven, service awaits full power-cycle reconnect. New input acceptance and physical throughput are pending. Prior Bulk-batch-v1 had user-accepted input/gestures/return and v12 64 MiB round-trip integrity at about 0.82-0.86 MB/s. Generated-main/C/Rust pressure and diagnostic format tests pass; they are not physical speed or latency proof.",
+      "purpose": "Diagnostic Bulk-profile firmware (6caef7f6) is flashed and independently readback-verified on V467 UID ad21ad506c54c6c6. Book numeric logging is active, with frozen capture/touch and unchanged v12 portable component. User explained physically unplugging during the previous trial, then confirmed cold power-cycle reconnect; fresh registry 4295713211, new live helper identities, input READY and clipboard link are observed. New 8 MiB body sample and user input acceptance are pending. Prior v12 64 MiB round-trip integrity was about 0.82-0.86 MB/s with normal control. Generated-main/C/Rust pressure and diagnostic tests are not physical speed or latency proof.",
       "module_tags": [
         "mt2",
         "firmware",
@@ -1201,7 +1200,7 @@
       "name": "portable_cable_runtime",
       "path": "native/cable-image",
       "kind": "implementation_entrypoints",
-      "purpose": "Target app runs directly from cable without installation or persistence. Book diagnostic coordinator at 3aeee4a uses unchanged v12 (0e79400) portable component/media and frozen capture/touch binaries. Diagnostic firmware was flashed/readback verified and numeric status observed, then USB1 disappeared before new 8 MiB body; Book service waits for reconnect. Earlier v12 physical 64 MiB round trip matches whole SHA-256 at about 0.819/0.860 MB/s with user-confirmed normal control. Earlier text/PNG/folder/image-content evidence remains separately scoped. Native Finder cancel, physical high speed, PSRAM stability, multiple roots, opposite image-content direction and persistent portable autostart remain pending.",
+      "purpose": "Live diagnostic firmware and Book coordinator use unchanged v12 portable app/media and frozen input binaries. After a Book-only helper restart, fresh text in both directions is user-confirmed; native/capture/coordinator retain their identities and the same program image is reused. Current 8 MiB single-paste -43 remains unrooted despite protocol completion. Bounded HTTP portal counters pass isolated regression and packaging checks; candidate is not deployed. No target terminal or installation; no PCB. Physical speed, Finder cancellation and persistent portable autostart remain unaccepted.",
       "module_tags": [
         "portable",
         "ram_setup",

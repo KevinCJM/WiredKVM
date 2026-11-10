@@ -71,7 +71,7 @@ final class WKClipboardDiagnostics: @unchecked Sendable {
                 "code=UART_WRITE_TIMEOUT", "code=DISCONNECTED"]
             return words.count == 2 && codes.contains(words[1]) ? line : nil
         case "WKCLIP_DIAG":
-            allowed = Set("role event phase direction nonce baseline revision previousRevision observedRevision transfer acked total accepted ready token latestNonce completedNonce linkReady completedNonceMatches completedDirectionMatches latestNonceMatches latestDirectionMatches notCancelled revisionMatches notTransmitting peerAccepted noPending appliedNonce appliedRevision appliedNonceMatches appliedRevisionMatches code result usbMbps".split(separator: " ").map(String.init))
+            allowed = Set("role event phase direction nonce baseline revision previousRevision observedRevision transfer acked total accepted ready token latestNonce completedNonce linkReady completedNonceMatches completedDirectionMatches latestNonceMatches latestDirectionMatches notCancelled revisionMatches notTransmitting peerAccepted noPending appliedNonce appliedRevision appliedNonceMatches appliedRevisionMatches code result usbMbps davMetadata davMissing davWaiting davServed davFailed davMalformed davCapacity davProxy".split(separator: " ").map(String.init))
         case "CPP_CLIPBOARD_STATS":
             allowed = Set("unix_rx uart_rx unix_tx uart_tx crc_reject format_reject queue_drop no_client_drop uart_drop disconnect_drop_uart disconnect_drop_unix q_uart q_unix q_uart_max q_unix_max connections connected".split(separator: " ").map(String.init))
         case "CPP_CLIPBOARD_DISCONNECTED": allowed = ["reason", "errno"]

@@ -30,6 +30,7 @@ private final class WKPipelineMockPortal: WKFilePortalServing {
     var started = false
     var startError: Error?
     var isAvailable: Bool { started }
+    var diagnosticCounts: [UInt32]?
 #if WK_TREE
     var trees: [String: WKTreeManifest] = [:]
     var onTree: (() -> Void)?
@@ -74,6 +75,7 @@ private final class WKPipelineFixture {
     let time = WKTestClock()
     var dataReports = 0
     var usbRateReports = [0,0]
+    var portalRateReports = [0,0]
     let root: URL
     let aBoard: NSPasteboard
     let bBoard: NSPasteboard
@@ -153,6 +155,9 @@ private final class WKPipelineFixture {
         if WKReport(bytes, wireMagic: WKCompanion.magic)?.kind == .data { dataReports += 1 }
         if let report = WKReport(bytes, wireMagic: WKCompanion.magic), report.kind == .pong, report.flags == 0x40 {
             usbRateReports[fromA ? 0 : 1] += 1
+        }
+        if let report = WKReport(bytes, wireMagic: WKCompanion.magic), report.kind == .pong, report.flags == 0x41 {
+            portalRateReports[fromA ? 0 : 1] += 1
         }
         if dropReport?(fromA, bytes) == true { return }
         if holdBulk, WKReport(bytes, wireMagic: WKCompanion.fileMagic)?.kind == .data {
@@ -244,7 +249,59 @@ enum WKFilePipelineSelfTest {
 #endif
     // Injected USB stream endpoints exercise the real coordinator, private
     // pasteboards and background workers. No general pasteboard or mounts.
+    private static func repeatedStreamPastes(make: () -> (WKStreamIO, WKStreamIO, (Bool) -> Void)) throws {
+        for direction in ["OUT", "IN"] {
+            let (ioA, ioB, stall) = make()
+            let f = try WKPipelineFixture(streams: (WKStreamFiles { ioA }, WKStreamFiles { ioB }))
+            let target = direction == "OUT" ? f.bPortal : f.aPortal
+            let sourceBoard = direction == "OUT" ? f.aBoard : f.bBoard
+            let targetBoard = direction == "OUT" ? f.bBoard : f.aBoard
+            let body = Data(repeating: 0x69, count: 2 * 1024 * 1024)
+            try f.publishFile(direction: direction, nonce: "repeat", body: body)
+            guard let sourceURL = sourceBoard.string(forType: .fileURL), let url = URL(string: sourceURL) else {
+                throw WKPipelineTestFailure(description: "private source URL absent")
+            }
+            stall(true)
+            let first = f.paste(direction, id: "8201"); f.drive(150)
+            try wkPipelineExpect(f.replies.contains("WKCLIP_PASTE READY " + first) && target.offers.count == 1,
+                                 "first file URL did not become ready before body")
+            let firstIDs = Set(target.offers.keys)
+            let second = f.paste(direction, id: "8202"); f.drive(150)
+            try wkPipelineExpect(f.replies.contains("WKCLIP_PASTE READY " + second) && target.offers.count == 2,
+                                 "second V waited for old body")
+            sourceBoard.clearContents()
+            try wkPipelineExpect(sourceBoard.writeObjects([url as NSURL]), "private same-file recopy")
+            f.drive(30)
+            let third = f.paste(direction, id: "8203"); f.drive(150)
+            try wkPipelineExpect(f.replies.contains("WKCLIP_PASTE READY " + third) && target.offers.count == 3,
+                                 "same-file recopy lost its independent URL")
+            let latestURL = targetBoard.string(forType: .fileURL)
+            try wkPipelineExpect(target.streamFulfilled.isEmpty && target.failed.isEmpty,
+                                 "new paste failed a previously published URL")
+            try wkPipelineExpect(firstIDs.isSubset(of: target.retired), "old published URL was not retired")
+            stall(false)
+            for _ in 0..<50 { if target.streamFulfilled.count == 3 { break }; f.drive(100) }
+            try wkPipelineExpect(target.streamFulfilled.count == 3 && target.failed.isEmpty,
+                                 "overlapping paste snapshots did not all finish")
+            for file in target.streamFulfilled.values {
+                try wkPipelineExpect(file.size == UInt64(body.count) && file.sha256 == WKMessage.digest(body),
+                                     "overlapping file snapshot integrity")
+            }
+            try wkPipelineExpect(targetBoard.string(forType: .fileURL) == latestURL,
+                                 "late file completion overwrote the latest paste")
+            // Losing a file portal must not take down the independent text
+            // protocol or either local clipboard after failed Finder work.
+            target.started = false; f.drive(10)
+            f.publishText(direction, "fresh text after files")
+            let text = f.paste(direction, id: "8204"); f.drive(100)
+            try wkPipelineExpect(f.replies.contains("WKCLIP_PASTE READY " + text) &&
+                targetBoard.string(forType: .string) == "fresh text after files", "file portal failure blocked text")
+        }
+        wkLog("WKCLIP_TEST CH32-repeat-V-recopy-pending-file-snapshots-local-clipboard PASS")
+    }
+
     static func streamSuite(make: () -> (WKStreamIO, WKStreamIO, (Bool) -> Void)) throws {
+        try repeatedStreamPastes(make: make)
         do {
             let (ioA,ioB,_) = make(), streams = (WKStreamFiles { ioA }, WKStreamFiles { ioB })
             let f = try WKPipelineFixture(streams: streams, usbRates: (.high,.full))
@@ -273,6 +330,32 @@ enum WKFilePipelineSelfTest {
                 } catch is WKStreamError { }
             }
             wkLog("WKCLIP_TEST bounded-peer-stream-diagnostic PASS")
+        }
+        do {
+            let (ioA,ioB,_) = make()
+            let f = try WKPipelineFixture(streams: (WKStreamFiles { ioA }, WKStreamFiles { ioB }))
+            f.bPortal.diagnosticCounts = [3,2,1,1,0,0,0,0]; f.drive(110)
+            try wkPipelineExpect(f.logs.contains(where: { $0.contains("role=target event=PORTAL") && $0.contains("davMissing=2") }), "target portal counters missing")
+            let before = f.logs.filter { $0.contains("event=PORTAL") }.count
+            var valid = Data([0x57,0x4b,0x50,0x53,1]); (0..<8).forEach { valid.appendLE(UInt32($0)) }
+            for report in [
+                WKReport(kind: .pong, flags: 0x41, session: f.b.link.session &+ 1, payload: valid),
+                WKReport(kind: .pong, flags: 0x40, session: f.b.link.session, payload: valid),
+                WKReport(kind: .pong, flags: 0x41, session: f.b.link.session, sequence: 1, payload: valid),
+                WKReport(kind: .pong, flags: 0x41, session: f.b.link.session, transfer: 1, payload: valid),
+                WKReport(kind: .pong, flags: 0x41, session: f.b.link.session, payload: valid.dropLast()),
+                WKReport(kind: .pong, flags: 0x41, session: f.b.link.session, payload: Data([0x57,0x4b,0x50,0x53,2]) + valid.dropFirst(5))
+            ] { f.at.onReport(report.encode(wireMagic: WKCompanion.magic)) }
+            try wkPipelineExpect(f.logs.filter { $0.contains("event=PORTAL") }.count == before, "malformed portal diagnostic admitted")
+            for n in 0..<70 { f.bPortal.diagnosticCounts = [UInt32(n),0,0,0,0,0,0,0]; f.drive(110) }
+            try wkPipelineExpect(f.portalRateReports == [0,64], "portal report limit not enforced")
+            f.publishText("OUT", "text with exhausted diagnostics")
+            let token = f.paste("OUT", id: "8205"); f.drive(100)
+            try wkPipelineExpect(f.replies.contains("WKCLIP_PASTE READY " + token) &&
+                f.bBoard.string(forType: .string) == "text with exhausted diagnostics", "diagnostics blocked text")
+            try wkPipelineExpect(WKMetadata.line(role: "target", event: "PORTAL", fields: ["davMissing":"/private/file"]) == nil &&
+                WKMetadata.line(role: "target", event: "PORTAL", fields: ["davMissing":"4294967296"]) == nil, "unsafe portal log field admitted")
+            wkLog("WKCLIP_TEST bounded-peer-portal-counters-malformed-limit-text PASS")
         }
         for direction in ["OUT", "IN"] {
             let (ioA, ioB, stall) = make()
