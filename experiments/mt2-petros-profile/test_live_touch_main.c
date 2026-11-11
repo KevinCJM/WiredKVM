@@ -14,6 +14,14 @@ typedef struct __attribute__((packed)){signed short x:13; signed short y:13;unsi
 _Static_assert(sizeof(native_finger)==9,"Independent C packed ABI");
 #endif
 static uint8_t touch_bytes[64];
+#ifdef WK_BULK_RX_TEST
+static unsigned downloads[2][8],download_bytes[2][8];
+int usbd_download(usbd_handle_t *h,uint8_t ep,void *b,unsigned n){
+    assert(b==rx[h->port][ep]&&n<=512);
+    if(ep==(h->port?5u:4u))assert(n==(mock_speed==USB_SPEED_HIGH?512u:64u));
+    downloads[h->port][ep]++;download_bytes[h->port][ep]=n;return USB_RST_OK;
+}
+#endif
 #ifdef WK_BULK_BATCH_TEST
 static unsigned endpoint_flags[2][256],file_size[2],file_uploads[2];
 static uint8_t file_copy[2][4096];
@@ -175,6 +183,86 @@ static void stalled_batch_test(const uint8_t *cell) {
     puts("BULK_STALL_INPUT_PASS blocked_file_ms=800 keyboard_and_two_four_finger_progress=true no_device_access=true");
 }
 #endif
+#ifdef WK_BULK_RX_TEST
+static void continuous_rx_test(const uint8_t *cell) {
+    for(unsigned p=0;p<2;p++) {
+        unsigned ep=p?5:4;wk407_bulk_queue *q=&bridge.bulk[1-p];
+        complete(1-p,p?4:5);q->head=WK407_BULK_SLOTS-3;q->count=0;
+        bridge.cell_size[p]=0;unsigned before=downloads[p][ep];
+        for(unsigned i=0;i<WK407_BULK_SLOTS;i++) {
+            memcpy(rx[p][ep],cell,512);memset(rx[p][ep]+80,(int)(i+1),432);
+            endp_resp_e response=data_cb(handles[p],(uint8_t)ep,rx[p][ep],512);
+            assert(response==(i+1<WK407_BULK_SLOTS?ENDP_RESP_ACK:ENDP_RESP_NAK));
+            assert(armed[p][ep]==(i+1<WK407_BULK_SLOTS));
+        }
+        assert(downloads[p][ep]==before&&q->count==WK407_BULK_SLOTS);
+        memset(rx[p][ep],0,512); /* all receive storage is immediately reusable */
+        for(unsigned i=0;i<WK407_BULK_SLOTS;i++) {
+            const wk407_bulk_packet *v=&q->item[(q->head+i)%WK407_BULK_SLOTS];
+            assert(v->size==512&&!memcmp(v->bytes,cell,80));
+            for(unsigned j=80;j<512;j++)assert(v->bytes[j]==(uint8_t)(i+1));
+        }
+        pass(1,true);pass(1,true); /* drain, then explicit one-packet rearm */
+        assert(armed[p][ep]&&downloads[p][ep]==before+1&&download_bytes[p][ep]==512);
+        for(unsigned i=0;i<2;i++) {
+            reset_pending[i]=true;assert(!wk_file_rx_continue(p,ep));reset_pending[i]=false;
+            handles[i]->enumerated=false;assert(!wk_file_rx_continue(p,ep));handles[i]->enumerated=true;
+            bridge.online[i]=false;assert(!wk_file_rx_continue(p,ep));bridge.online[i]=true;
+            mock_usb *reg=i?&mock_usb2:&mock_usb1;uint8_t saved=reg->MIS_ST;
+            reg->MIS_ST|=USBHS_UDMS_SUSPEND;assert(!wk_file_rx_continue(p,ep));reg->MIS_ST=saved;
+        }
+        assert(wk_file_rx_continue(p,ep));
+        for(unsigned e=0;e<8;e++)if(e!=ep)assert(!wk_file_rx_continue(p,e));
+        q->head=q->count=0;
+    }
+    /* Full-speed uses eight 64-byte fragments per cell. A final complete cell
+     * must enqueue immediately, without a short packet or a 4 KiB fill wait. */
+    mock_speed=1;
+    for(unsigned p=0;p<2;p++) {
+        unsigned ep=p?5:4;wk407_bulk_queue *q=&bridge.bulk[1-p];
+        complete(1-p,p?4:5);q->head=q->count=0;bridge.cell_size[p]=0;
+        armed[p][ep]=false;arm(p,ep,64);unsigned before=downloads[p][ep];
+        for(unsigned i=0;i<4;i++)for(unsigned at=0;at<512;at+=64) {
+            memcpy(rx[p][ep],cell+at,64);
+            assert(data_cb(handles[p],(uint8_t)ep,rx[p][ep],64)==ENDP_RESP_ACK);
+        }
+        assert(q->count==4&&bridge.cell_size[p]==0&&downloads[p][ep]==before&&download_bytes[p][ep]==64);
+        for(unsigned i=0;i<6;i++)pass(1,true);assert(q->count==0);
+    }
+    mock_speed=USB_SPEED_HIGH;
+    assert(!wk_file_rx_continue(2,4));
+    uint8_t query[512]={0};memcpy(query,"WKIM",4);query[4]=1;
+    put32(query+508,image_crc(query,508));
+    assert(data_cb(handles[0],4,query,512)==ENDP_RESP_NAK);
+    assert(wk_cable_setup_pending()&&!armed[0][4]&&!wk_file_rx_continue(0,4));
+    pass(1,true);pass(1,true);assert(!wk_cable_setup_pending()&&armed[0][4]);
+    unsigned keys=packets[1][1],touches=packets[1][7];
+    for(unsigned i=0;i<200;i++) {
+        for(unsigned p=0;p<2;p++)for(unsigned n=0;n<8;n++) {
+            unsigned ep=p?5:4;assert(wk_file_rx_continue(p,ep));
+            assert(data_cb(handles[p],(uint8_t)ep,(void *)cell,512)==ENDP_RESP_ACK);
+        }
+        wk(63000+i,'T',4,(int)(i&1));gesture(2,i&1?4:2);pass(4,true);
+    }
+    assert(packets[1][1]>=keys+190&&packets[1][7]>=touches+190);
+    /* Cancel a queued old ID after callback continuation; a new ID must not
+     * wait for a cancelled queue, or be popped by an old DMA completion. */
+    for(unsigned p=0;p<2;p++) {
+        unsigned ep=p?5:4,peer=1-p;wk407_bulk_queue *q=&bridge.bulk[peer];
+        for(unsigned i=0;i<20;i++)pass(1,true);q->head=q->count=0;
+        bridge.transactions[p][0].generation=1;bridge.stream_generation[p]=1;
+        for(unsigned i=0;i<10;i++)assert(data_cb(handles[p],(uint8_t)ep,(void *)cell,512)==ENDP_RESP_ACK);
+        send_file_batch(peer,peer?5:4);assert(busy[peer][peer?5:4]&&q->count==2);
+        batch_control(peer,3,p,1,0x11);assert(q->count==0);
+        assert(data_cb(handles[p],(uint8_t)ep,(void *)cell,512)==ENDP_RESP_ACK&&q->count==0);
+        batch_control(peer,2,p,2,0x71+p);uint8_t next[512];memcpy(next,cell,512);memset(next+20,(int)(0x71+p),16);
+        assert(data_cb(handles[p],(uint8_t)ep,next,512)==ENDP_RESP_ACK&&q->count==1);
+        complete(peer,peer?5:4);assert(q->count==1);send_file_batch(peer,peer?5:4);
+        assert(file_size[peer]==512&&!memcmp(file_copy[peer],next,512));complete(peer,peer?5:4);
+    }
+    puts("BULK_RX_PASS bounded_one_packet=true full_queue_nak=true main_loop_rearm=true dma_copied=true loader_reply_nak=true reset_suspend_guards=true input_progress=true cancel_new_id=true physical_speed_verified=false");
+}
+#endif
 #ifdef WK_BULK_PROFILE_TEST
 static void bulk_profile_test(void) {
     for(unsigned p=0;p<2;p++) {
@@ -291,7 +379,13 @@ int main(void){
     gesture(1,2);unsigned old=touch_down;pass(4,true);assert(touch_down==old);
     gesture(2,4);pass(4,true);assert(touch_down==old+1);
 #ifdef WK_RAM_SETUP
+    #ifdef WK_BULK_RX_TEST
+    assert(!wk_file_rx_continue(0,4)&&!wk_file_rx_continue(1,5));
+    #endif
     program_test(pressure);
+    #ifdef WK_BULK_RX_TEST
+    continuous_rx_test(pressure);
+    #endif
 #endif
     // Long idle and mid-gesture loss, including host reset, release only touch.
     for(unsigned i=0;i<200;i++)pass(1,true);assert(wkmt2_live_faults()>0);

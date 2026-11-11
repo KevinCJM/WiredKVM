@@ -57,6 +57,26 @@ final class FirmwareIO: WKStreamIO {
     }
 }
 
+// A nonblocking OS may accept a short write while still having space. Keep
+// this distinct from a full device, which returns zero until its peer drains.
+private final class WriteProbeIO: WKStreamIO {
+    let underlying: FirmwareIO
+    var port: UInt8 { underlying.port }
+    var calls = 0, accepted = 0
+    var sinkLimit: Int?, blocked = false, invalid = false
+    init(_ shared: FirmwarePipe, _ port: UInt8) { underlying = FirmwareIO(shared, port) }
+    func forwardControl(_ data: Data) -> Bool { underlying.forwardControl(data) }
+    func read(maximum: Int) throws -> Data { try underlying.read(maximum: maximum) }
+    func close() { underlying.close() }
+    func write(_ data: Data) throws -> Int {
+        calls += 1
+        if invalid { return data.count + 1 }
+        if blocked { return 0 }
+        let n = try sinkLimit.map { min($0, data.count) } ?? underlying.write(data)
+        accepted += n; return n
+    }
+}
+
 @main struct CH32StreamTest {
     static func source(_ root: URL, _ name: String, _ size: UInt64, _ seed: UInt8) throws -> URL {
         let url = root.appendingPathComponent(name)
@@ -92,6 +112,7 @@ final class FirmwareIO: WKStreamIO {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("wk-ch32-stress-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
         defer { try? FileManager.default.removeItem(at: root) }
+        if CommandLine.arguments.contains("--io-benchmark") { try ioBenchmark(root); return }
 #if WK_TREE
         if CommandLine.arguments.contains("--collections") { try WKCollectionTransferSelfTest.run(root); return }
         if CommandLine.arguments.contains("--collection-pipeline") {
@@ -121,7 +142,7 @@ final class FirmwareIO: WKStreamIO {
             print("CH32_PIPELINE_PASS"); return
         }
         let count: UInt64 = CommandLine.arguments.contains("--gib") ? 1024 * 1024 * 1024 + 123 : large ? 8 * 1024 * 1024 * 1024 + 123 : 32 * 1024 * 1024 + 137
-        try faults(root)
+        try faults(root); try writeDrainBounds(root); try writeReadiness()
         let aURL = try source(root, "a.bin", count, 0xa3), bURL = try source(root, "b.bin", count + 17, 0x51)
         let asrc = try WKStreamSource(url: aURL, nonce: "100"), bsrc = try WKStreamSource(url: bURL, nonce: "101")
         let (pipe, a, b) = pair(root)
@@ -177,6 +198,111 @@ final class FirmwareIO: WKStreamIO {
         let data = try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted,.sortedKeys])
         if let index = CommandLine.arguments.firstIndex(of: "--result"), index + 1 < CommandLine.arguments.count { try data.write(to: URL(fileURLWithPath: CommandLine.arguments[index+1])) }
         print(String(decoding: data, as: UTF8.self)); a.stop(); b.stop(); print("CH32_STREAM_STRESS_PASS")
+    }
+    static func writeReadiness() throws {
+        let queue = DispatchQueue(label: "WK.test.write-readiness")
+        for initiallyEnabled in [false, true] {
+            var sockets: [Int32] = [-1, -1]
+            let result = sockets.withUnsafeMutableBufferPointer { socketpair(AF_UNIX, SOCK_STREAM, 0, $0.baseAddress!) }
+            try check(result == 0, "readiness socketpair")
+            defer { Darwin.close(sockets[0]); Darwin.close(sockets[1]) }
+            let woke = DispatchSemaphore(value: 0)
+            var calls = 0, observer: WKWriteReadiness?
+            try queue.sync {
+                observer = try WKWriteReadiness(fd: sockets[0], queue: queue) {
+                    calls += 1; observer?.setEnabled(false); woke.signal()
+                }
+            }
+            usleep(20_000)
+            try check(queue.sync { calls == 0 }, "idle write observer spun")
+            if initiallyEnabled {
+                queue.sync { observer?.setEnabled(true) }
+                try check(woke.wait(timeout: .now() + 1) == .success, "writable event was lost")
+                usleep(20_000)
+                try check(queue.sync { calls == 1 }, "one readiness turn spun")
+                queue.sync { observer?.setEnabled(true) }
+                try check(woke.wait(timeout: .now() + 1) == .success, "reenabling readiness lost an event")
+            }
+            let before = queue.sync { () -> Int in observer?.stop(); observer?.stop(); observer = nil; return calls }
+            usleep(20_000)
+            try check(queue.sync { calls == before }, "cancelled readiness source called old session")
+        }
+        print("CH32_WRITE_READINESS_PASS idle-no-spin reenable cancel-suspended no-old-callback physicalUSB=false")
+    }
+    static func writeDrainBounds(_ root: URL) throws {
+        let url = try source(root, "drain-bounds.bin", 256 * 1024, 0x31)
+        for mode in ["one-byte", "one-kib", "blocked", "invalid"] {
+            let pipe = FirmwarePipe()
+            // Use the same bridge for control admission and body I/O.
+            let io = WriteProbeIO(pipe, 0)
+            let a = WKStreamEngine(io: io, directory: root, inlineDisk: true)
+            let b = WKStreamEngine(io: FirmwareIO(pipe, 1), directory: root, inlineDisk: true)
+            defer { a.stop(); b.stop() }
+            a.onControl = { [weak b] in b?.control($0) }; b.onControl = { [weak a] in a?.control($0) }
+            a.setEpoch(9988); b.setEpoch(9988)
+            let src = try WKStreamSource(url: url, nonce: "124")
+            try a.add(src, now: 0); try b.expect(src.offer, now: 0); b.step(now: 0)
+            io.blocked = true; a.step(now: 0.001)
+            io.calls = 0; io.accepted = 0
+            io.sinkLimit = mode == "one-byte" ? 1 : 1024
+            io.blocked = mode == "blocked"; io.invalid = mode == "invalid"
+            a.step(now: 0.002)
+            try check(io.calls <= 32 && io.accepted <= 32768, "write drain exceeded bounded turn")
+            if mode == "one-byte" { try check(io.calls == 32 && io.accepted == 32, "one-byte short writes stalled or spun") }
+            if mode == "one-kib" { try check(io.accepted == 32768, "short write needlessly waited for next tick") }
+            if mode == "blocked" { try check(io.calls == 1 && io.accepted == 0 && !a.stopped, "backpressure spun or stopped stream") }
+            if mode == "invalid" { try check(io.calls == 1 && a.stopped, "invalid write count was accepted") }
+        }
+        print("CH32_WRITE_DRAIN_BOUNDS_PASS physicalUSB=false")
+    }
+    static func ioBenchmark(_ root: URL) throws {
+        let url = try source(root, "short-write-benchmark.bin", 4 * 1024 * 1024 + 137, 0x57)
+        let expected = try digest(url)
+        var directions: [[String: Any]] = []
+        for direction in 0..<2 {
+            let pipe = FirmwarePipe(); pipe.writeLimit = 1024
+            let ia = WriteProbeIO(pipe, 0), ib = WriteProbeIO(pipe, 1)
+            let a = WKStreamEngine(io: ia, directory: root, inlineDisk: true)
+            let b = WKStreamEngine(io: ib, directory: root, inlineDisk: true)
+            defer { a.stop(); b.stop() }
+            a.onControl = { [weak b] in b?.control($0) }; b.onControl = { [weak a] in a?.control($0) }
+            a.setEpoch(7654); b.setEpoch(7654)
+            let sender = direction == 0 ? a : b, receiver = direction == 0 ? b : a
+            let probe = direction == 0 ? ia : ib
+            let src = try WKStreamSource(url: url, nonce: "123")
+            var received: WKReceivedFile?, complete = false, failed = false
+            receiver.onFile = { _, file in received = file }
+            sender.onComplete = { _ in complete = true }
+            a.onFailure = { _ in failed = true }; b.onFailure = a.onFailure
+            a.onFault = { _ in failed = true }; b.onFault = a.onFault
+            try sender.add(src, now: 0); try receiver.expect(src.offer, now: 0)
+            var steps = 0, maxCalls = 0, maxBytes = 0
+            let started = ProcessInfo.processInfo.systemUptime
+            while !complete && !failed && steps < 100_000 {
+                let beforeCalls = probe.calls, beforeBytes = probe.accepted
+                let now = Double(steps) * 0.001
+                a.step(now: now); pipe.probe(UInt32(steps)); b.step(now: now)
+                maxCalls = max(maxCalls, probe.calls - beforeCalls)
+                maxBytes = max(maxBytes, probe.accepted - beforeBytes); steps += 1
+            }
+            try check(complete && !failed && received != nil, "short-write benchmark incomplete")
+            try check(received!.sha256 == expected && digest(received!) == expected, "benchmark integrity")
+            try check(pipe.failures == 0, "benchmark blocked HID")
+            let modelSeconds = Double(steps) * 0.001
+            directions.append(["sourcePort":direction, "bytes":src.offer.size, "steps":steps,
+                "nominalStepSeconds":0.001, "modeledSeconds":modelSeconds,
+                "modeledMBps":Double(src.offer.size) / modelSeconds / 1e6,
+                "wallSeconds":ProcessInfo.processInfo.systemUptime - started,
+                "maxWriteCallsPerStep":maxCalls, "maxWriteBytesPerStep":maxBytes,
+                "sha256":expected, "hidFailures":pipe.failures])
+        }
+        let report: [String: Any] = ["physicalUSB":false, "generalClipboardAccess":false,
+            "writeReturnLimit":1024, "clock":"deterministic 1 ms; not measured OS cadence", "directions":directions]
+        let data = try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted,.sortedKeys])
+        if let i = CommandLine.arguments.firstIndex(of: "--io-benchmark-result"), i + 1 < CommandLine.arguments.count {
+            try data.write(to: URL(fileURLWithPath: CommandLine.arguments[i+1]))
+        }
+        print(String(decoding:data,as:UTF8.self)); print("CH32_SHORT_WRITE_BENCHMARK_PASS")
     }
     static func cancellation(_ root: URL) throws {
         let oldURL = try source(root, "cancel-old.bin", 2*1024*1024+123, 71)
@@ -278,6 +404,38 @@ final class FirmwareIO: WKStreamIO {
         print("CH32_BLOCKED_DISK_PASS source-and-destination both-directions late-completion-discarded physicalUSB=false")
     }
     static func faults(_ root: URL) throws {
+#if WK_STREAM_PROFILE
+        do {
+            let url = try source(root, "profile-partial.bin", 192 * 1024, 0x36)
+            let src = try WKStreamSource(url:url,nonce:"3180"), (pipe,a,b) = pair(root)
+            defer { a.stop(); b.stop() }
+            pipe.writeLimit = 1024; pipe.readLimit = 512; pipe.stalled = [true,true]
+            var lines: [String] = [], complete = false, file: WKReceivedFile?
+            a.onDiagnostic = { if $0.contains("event=STREAM_IO ") { lines.append($0) } }
+            a.onComplete = { _ in complete = true }; b.onFile = { _,received in file = received }
+            try a.add(src,now:0); try b.expect(src.offer,now:0)
+            for i in 0..<2000 {
+                if i == 50 { pipe.stalled = [false,false] }
+                a.step(now:Double(i)/1000); b.step(now:Double(i)/1000)
+                if complete { break }
+            }
+            try check(complete && file?.size == src.offer.size,"profiling changed partial-write transfer")
+            let expected = SHA256.hash(data:try Data(contentsOf:url)).map { String(format:"%02x",$0) }.joined()
+            try check(file?.sha256 == expected,"profiled transfer hash mismatch")
+            let reports = lines.map { line in Dictionary(uniqueKeysWithValues:line.split(separator:" ").dropFirst().map { word in
+                let p=word.split(separator:"=",maxSplits:1);return (String(p[0]),String(p[1])) }) }
+            try check(!reports.isEmpty && reports.count<=64,"missing or unbounded IO reports")
+            try check(reports.contains { (UInt32($0["writePartial"] ?? "0") ?? 0)>0 && $0["writeMax"]=="1024" },"partial writes not measured")
+            try check(reports.contains { (UInt32($0["writeZero"] ?? "0") ?? 0)>0 && (UInt32($0["pendingMax"] ?? "0") ?? 0)>0 },"blocked writes or pending queue not measured")
+            try check(lines.allSatisfy { !$0.contains("profile-partial") && !$0.contains(src.offer.id) && !$0.contains(root.path) },"IO profile leaked file metadata")
+            let (blocked,x,y) = pair(root);defer { x.stop(); y.stop() };blocked.stalled=[true,true];x.timeout=1000;y.timeout=1000
+            var bounded:[String]=[];x.onDiagnostic={ if $0.contains("event=STREAM_IO "){bounded.append($0)} }
+            try x.add(src,now:0);try y.expect(src.offer,now:0)
+            for i in 0...120{x.step(now:Double(i));y.step(now:Double(i))}
+            try check(bounded.count==64,"IO diagnostics did not stop at the connection budget")
+            print("CH32_IO_PROFILE_PASS partial_writes=true blocked_writes=true hash_match=true numeric_only=true connection_records=64 physicalUSB=false")
+        }
+#endif
         // Model nonblocking CDC short reads: drain ready bytes in one turn,
         // stop at EAGAIN/empty, and never spin without a strict syscall limit.
         do {

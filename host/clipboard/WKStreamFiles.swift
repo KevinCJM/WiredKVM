@@ -192,17 +192,66 @@ final class WKStreamSource: @unchecked Sendable {
 
 protocol WKStreamIO: AnyObject {
     var port: UInt8 { get }
+    var writeDescriptor: Int32? { get }
     func forwardControl(_ data: Data) -> Bool
     func read(maximum: Int) throws -> Data
     func write(_ data: Data) throws -> Int
+    func write(_ data: Data, offset: Int) throws -> Int
     func close()
 }
 
 extension WKStreamIO {
+    var writeDescriptor: Int32? { nil }
+    // Compatibility for injected transports; the CDC implementation borrows
+    // the original batch so each short write does not copy its remaining body.
+    func write(_ data: Data, offset: Int) throws -> Int {
+        guard (0...data.count).contains(offset) else { throw WKStreamError.invalid }
+        return try write(offset == 0 ? data : Data(data.dropFirst(offset)))
+    }
     // Real control travels through WKTransport. An injected USB simulator can
     // apply firmware filtering here before forwarding the report to the peer.
     func forwardControl(_ data: Data) -> Bool { true }
 }
+
+#if WK_STREAM_PROFILE
+// Opt-in observability only: retain the same calls, bytes, return values and
+// scheduling. No contents, filenames, UUIDs, extra device reads or busy waits.
+final class WKStreamProfileIO: WKStreamIO {
+    struct Counts {
+        var readCalls: UInt64 = 0, readBytes: UInt64 = 0, readZero: UInt64 = 0, readMax: UInt64 = 0
+        var writeCalls: UInt64 = 0, writeWanted: UInt64 = 0, writeBytes: UInt64 = 0
+        var writeZero: UInt64 = 0, writePartial: UInt64 = 0, writeMax: UInt64 = 0
+    }
+    let underlying: WKStreamIO
+    var counts = Counts()
+    var port: UInt8 { underlying.port }
+    var writeDescriptor: Int32? { underlying.writeDescriptor }
+    init(_ underlying: WKStreamIO) { self.underlying = underlying }
+    func forwardControl(_ data: Data) -> Bool { underlying.forwardControl(data) }
+    func close() { underlying.close() }
+    func read(maximum: Int) throws -> Data {
+        counts.readCalls &+= 1
+        let data = try underlying.read(maximum: maximum), n = UInt64(data.count)
+        counts.readBytes &+= n; counts.readMax = max(counts.readMax, n)
+        if n == 0 { counts.readZero &+= 1 }; return data
+    }
+    func write(_ data: Data) throws -> Int {
+        try write(data, offset: 0)
+    }
+    func write(_ data: Data, offset: Int) throws -> Int {
+        guard (0...data.count).contains(offset) else { throw WKStreamError.invalid }
+        let wanted = data.count - offset
+        counts.writeCalls &+= 1; counts.writeWanted &+= UInt64(wanted)
+        let n = try underlying.write(data, offset: offset)
+        if n >= 0 && n <= wanted {
+            counts.writeBytes &+= UInt64(n); counts.writeMax = max(counts.writeMax, UInt64(n))
+            if n == 0 { counts.writeZero &+= 1 }
+            else if n < wanted { counts.writePartial &+= 1 }
+        }
+        return n // the engine retains its existing validation/error policy
+    }
+}
+#endif
 
 // Discovery is identity- AND interface-bound. Never open an arbitrary serial
 // adapter simply because its filename contains usbmodem.
@@ -213,9 +262,36 @@ enum WKCH32Device {
 }
 // Darwin imports `struct flock` with the same name as the BSD function.
 @_silgen_name("flock") private func wkStreamFileLock(_ fd: Int32, _ operation: Int32) -> Int32
+
+// Owned by the file worker. A duplicate pins this exact open file description
+// until the dispatch cancellation handler has run; a reused fd cannot receive
+// an old readiness callback. No source is active while there is no pending data.
+final class WKWriteReadiness {
+    private let source: DispatchSourceWrite
+    private var enabled = false, stopped = false
+    init(fd: Int32, queue: DispatchQueue, ready: @escaping () -> Void) throws {
+        let copy = fcntl(fd, F_DUPFD_CLOEXEC, 0)
+        guard copy >= 0 else { throw WKStreamError.system(errno) }
+        source = DispatchSource.makeWriteSource(fileDescriptor: copy, queue: queue)
+        source.setEventHandler(handler: ready)
+        source.setCancelHandler { Darwin.close(copy) }
+    }
+    func setEnabled(_ value: Bool) {
+        guard !stopped, value != enabled else { return }
+        enabled = value
+        if value { source.resume() } else { source.suspend() }
+    }
+    func stop() {
+        guard !stopped else { return }; stopped = true
+        if !enabled { source.resume() }
+        source.cancel()
+    }
+    deinit { stop() }
+}
 final class WKCDCStreamIO: WKStreamIO {
     private var fd: Int32 = -1
     let port: UInt8
+    var writeDescriptor: Int32? { fd >= 0 ? fd : nil }
     init(path: String, role: String) throws {
         port = role == "host" ? 0 : 1
         guard WKCH32Device.matches(path: path, role: role) else { throw WKStreamError.invalid }
@@ -245,8 +321,13 @@ final class WKCDCStreamIO: WKStreamIO {
         data.count = n; return data
     }
     func write(_ data: Data) throws -> Int {
+        try write(data, offset: 0)
+    }
+    func write(_ data: Data, offset: Int) throws -> Int {
         guard fd >= 0 else { throw WKStreamError.disconnected }
-        let n = data.withUnsafeBytes { Darwin.write(fd, $0.baseAddress!, $0.count) }
+        guard (0...data.count).contains(offset) else { throw WKStreamError.invalid }
+        if offset == data.count { return 0 }
+        let n = data.withUnsafeBytes { Darwin.write(fd, $0.baseAddress!.advanced(by: offset), $0.count - offset) }
         if n < 0 && [EAGAIN, EWOULDBLOCK, EINTR].contains(errno) { return 0 }
         guard n >= 0 else { throw WKStreamError.system(errno) }; return n
     }
@@ -262,11 +343,11 @@ private enum WKDiskBudget {
 }
 private final class WKDiskTask<T> {
     private let lock = NSLock(); private var value: Result<T, Error>?
-    init(inline: Bool, gate: (() -> Void)?, work: @escaping () throws -> T) {
+    init(inline: Bool, gate: (() -> Void)?, notify: (() -> Void)? = nil, work: @escaping () throws -> T) {
         guard WKDiskBudget.take() else { value = .failure(WKStreamError.capacity); return }
         let run = { [self] in
             gate?(); let result = Result { try work() }
-            lock.lock(); value = result; lock.unlock(); WKDiskBudget.release()
+            lock.lock(); value = result; lock.unlock(); WKDiskBudget.release(); notify?()
         }
         if inline { run() } else { DispatchQueue.global(qos: .utility).async(execute: DispatchWorkItem(block: run)) }
     }
@@ -353,6 +434,8 @@ final class WKStreamEngine {
     private var outgoing: [String: Outgoing] = [:], incoming: [String: Incoming] = [:]
     private(set) var epoch: UInt64 = 0
     private(set) var maxBuffered = 0, stopped = false
+    private(set) var lastWriteProgress = 0
+    var onWorkAvailable: (() -> Void)?
     var timeout: Double = 60
     var onFile: (String, WKReceivedFile) -> Void = { _, _ in }
 #if WK_TREE
@@ -366,7 +449,52 @@ final class WKStreamEngine {
         // Fixed enums/numbers only: no path, UUID, frame bytes or error description.
         onDiagnostic("WKCLIP_DIAG role=\(io.port == 0 ? "host" : "target") event=ERROR code=\(streamErrorCode(error)) phase=\(phase)")
     }
-    init(io: WKStreamIO, directory: URL, inlineDisk: Bool = false) { self.io = io; self.directory = directory; self.inlineDisk = inlineDisk }
+    init(io: WKStreamIO, directory: URL, inlineDisk: Bool = false) {
+#if WK_STREAM_PROFILE
+        self.io = WKStreamProfileIO(io)
+#else
+        self.io = io
+#endif
+        self.directory = directory; self.inlineDisk = inlineDisk
+    }
+#if WK_STREAM_PROFILE
+    private var profileStart: Double?, profileLast: Double?
+    private var profileSteps: UInt64 = 0, profileGap: UInt64 = 0, profilePending: UInt64 = 0
+    private var profileFlight: UInt64 = 0, profileReadWait: UInt64 = 0, profileWindowFull: UInt64 = 0
+    private var profileRecords = 0
+    private func profileBegin(_ now: Double) {
+        guard profileRecords < 64, let measured = io as? WKStreamProfileIO else { return }
+        guard profileStart != nil || activeCount > 0 || !output.isEmpty else { return }
+        if profileStart == nil { profileStart = now; profileLast = now; measured.counts = .init() }
+        if let previous = profileLast { profileGap = max(profileGap, Self.profileMicros(now - previous)) }
+        profileLast = now; profileSteps &+= 1
+        let flight = outgoing.values.reduce(UInt64(0)) { $0 + ($1.offset - $1.acked) }
+        profileFlight = max(profileFlight, flight)
+        if outgoing.values.contains(where: { $0.reader != nil && $0.prefetched.isEmpty }) { profileReadWait &+= 1 }
+        if outgoing.values.contains(where: { $0.offset - $0.acked >= UInt64(Self.chunk * Self.window) }) { profileWindowFull &+= 1 }
+    }
+    private static func profileMicros(_ seconds: Double) -> UInt64 {
+        UInt64(min(Double(UInt32.max), max(0, seconds * 1_000_000)))
+    }
+    private func profileEnd(_ now: Double) {
+        guard profileRecords < 64, let started = profileStart, let measured = io as? WKStreamProfileIO else { return }
+        profilePending = max(profilePending, UInt64(outputBytes))
+        let active = activeCount > 0 || !output.isEmpty
+        guard now - started >= 1 || !active else { return }
+        let c = measured.counts
+        let values: [String: UInt64] = ["steps":profileSteps, "elapsedUs":Self.profileMicros(now-started),
+            "gapMaxUs":profileGap, "pendingMax":profilePending, "inFlightMax":profileFlight,
+            "readWaitSteps":profileReadWait, "windowFullSteps":profileWindowFull,
+            "readCalls":c.readCalls, "readBytes":c.readBytes, "readZero":c.readZero, "readMax":c.readMax,
+            "writeCalls":c.writeCalls, "writeWanted":c.writeWanted, "writeBytes":c.writeBytes,
+            "writeZero":c.writeZero, "writePartial":c.writePartial, "writeMax":c.writeMax]
+        let fields = values.keys.sorted().map { "\($0)=\(min(values[$0]!,UInt64(UInt32.max)))" }.joined(separator:" ")
+        onDiagnostic("WKCLIP_DIAG role=\(io.port == 0 ? "host" : "target") event=STREAM_IO phase=\(active ? "PROGRESS" : "RESULT") \(fields)")
+        profileRecords += 1; profileStart = active ? now : nil; profileLast = active ? now : nil
+        profileSteps = 0; profileGap = 0; profilePending = 0; profileFlight = 0; profileReadWait = 0; profileWindowFull = 0
+        measured.counts = .init()
+    }
+#endif
     func setEpoch(_ value: UInt64) {
         guard value != epoch else { return }; cancelAll(); epoch = value; input.removeAll(); output.removeAll()
         grants.removeAll(); pendingControls.removeAll(); lastSession = -10
@@ -471,7 +599,7 @@ final class WKStreamEngine {
                 if item.manifestData.count == length {
                     let bytes = item.manifestData, total = item.offer.size, digest = item.offer.manifestSHA256
                     item.manifestData = Data()
-                    item.manifestTask = WKDiskTask(inline: inlineDisk, gate: nil) {
+                    item.manifestTask = WKDiskTask(inline: inlineDisk, gate: nil, notify: onWorkAvailable) {
                         guard SHA256.hash(data: bytes).map({ String(format: "%02x", $0) }).joined() == digest else { throw WKStreamError.integrity }
                         return try WKTreeManifest(bytes, total: total)
                     }
@@ -513,7 +641,7 @@ final class WKStreamEngine {
                 if item.writer == nil && !item.staged.isEmpty {
                     let bytes = Data(item.staged.prefix(32768)), offset = item.written
                     item.staged = Data(item.staged.dropFirst(bytes.count))
-                    item.writer = WKDiskTask(inline: inlineDisk, gate: diskGate) { [item] in
+                    item.writer = WKDiskTask(inline: inlineDisk, gate: diskGate, notify: onWorkAvailable) { [item] in
                         let n = bytes.withUnsafeBytes { pwrite(item.fd, $0.baseAddress!, $0.count, off_t(offset)) }
                         guard n == bytes.count else { throw WKStreamError.system(errno) }; return n
                     }
@@ -527,7 +655,7 @@ final class WKStreamEngine {
                     let available = UInt64(Self.chunk*Self.window) - (item.offset-item.acked)
                     let n = Int(min(32768, min(available, item.source.offer.size-item.offset))), offset = item.offset
                     if n > 0 {
-                        item.reader = WKDiskTask(inline: inlineDisk, gate: diskGate) { [source = item.source] in
+                        item.reader = WKDiskTask(inline: inlineDisk, gate: diskGate, notify: onWorkAvailable) { [source = item.source] in
                             try source.read(offset: offset, count: n)
                         }
                     }
@@ -552,6 +680,10 @@ final class WKStreamEngine {
     }
     func step(now: Double) {
         guard !stopped else { return }
+        lastWriteProgress = 0
+#if WK_STREAM_PROFILE
+        profileBegin(now); defer { profileEnd(now) }
+#endif
         do {
             if epoch != 0 && now - lastSession >= 0.1 {
                 emitControl(WKBulkControl(kind: .session, origin: io.port, epoch: epoch).encode()); lastSession = now
@@ -604,7 +736,7 @@ final class WKStreamEngine {
                     } else if item.offset == item.source.offer.size && item.acked == item.offset && !item.finished {
                         if item.finalCheck == nil {
                             let digest = Data(item.hash.finalize()); item.finalHash = digest
-                            item.finalCheck = WKDiskTask(inline: inlineDisk, gate: diskGate) { [source = item.source] in source.validationFailure(expectedHash: digest) }
+                            item.finalCheck = WKDiskTask(inline: inlineDisk, gate: diskGate, notify: onWorkAvailable) { [source = item.source] in source.validationFailure(expectedHash: digest) }
                         }
                         guard let result = item.finalCheck?.result() else { continue }
                         do {
@@ -620,10 +752,22 @@ final class WKStreamEngine {
                 }
             }
             for (id, item) in incoming where now-item.activity >= timeout { cancel(id); onFailure(id) }
-            // Batch up to 32 KiB; track the single partial cell for safe pruning.
+            // A short nonblocking write is not backpressure: Darwin CDC may
+            // accept only 1 KiB even while its queue can accept another write.
+            // Drain one bounded batch now, stopping on zero/EAGAIN or 32 calls.
+            // Keep the same byte budget and preserve partial-cell cancellation.
             if !output.isEmpty {
                 var batch = Data(); for p in output { if batch.count+p.bytes.count > 32768 { break }; batch.append(p.bytes) }
-                var n = try io.write(batch); guard n >= 0 && n <= batch.count else { throw WKStreamError.invalid }
+                var sent = 0
+                for _ in 0..<32 {
+                    if sent == batch.count { break }
+                    let n = try io.write(batch, offset: sent)
+                    guard n >= 0 && n <= batch.count - sent else { throw WKStreamError.invalid }
+                    if n == 0 { break }
+                    sent += n
+                }
+                lastWriteProgress = sent
+                var n = sent
                 while n > 0 {
                     if n >= output[0].bytes.count { n -= output[0].bytes.count; output.removeFirst() }
                     else { output[0].bytes = Data(output[0].bytes.dropFirst(n)); output[0].started = true; n = 0 }
@@ -664,6 +808,7 @@ final class WKStreamFiles {
     private var imageJobs = 0 // main-thread admission, at most two resident conversions
     private let worker = DispatchQueue(label: "WiredKVM.CH32.files", qos: .utility)
     private var engine: WKStreamEngine?, timer: DispatchSourceTimer?
+    private var writeReady: WKWriteReadiness?, connectionGeneration: UInt64 = 0
     private let connect: () throws -> WKStreamIO
     private var directory: URL?, desiredEpoch: UInt64 = 0
     private var running = false, nextAttempt: Double = 0
@@ -691,13 +836,28 @@ final class WKStreamFiles {
             } catch { DispatchQueue.main.async { wkLog("WKCLIP_STATUS ERROR ch32-file-channel-unavailable") } }
         }
     }
-    private func service() {
+    private func service(writeWake: Bool = false) {
         guard running, let directory else { return }
         let now = ProcessInfo.processInfo.systemUptime
         if engine == nil || engine?.stopped == true {
             guard now >= nextAttempt else { return }; nextAttempt = now + 0.5
             do {
-                let e = WKStreamEngine(io: try connect(), directory: directory); engine = e; e.setEpoch(desiredEpoch)
+                writeReady?.stop(); writeReady = nil
+                let io = try connect(), e = WKStreamEngine(io: io, directory: directory)
+                connectionGeneration &+= 1; let generation = connectionGeneration
+                engine = e; e.setEpoch(desiredEpoch)
+                e.onWorkAvailable = { [weak self] in
+                    self?.worker.async { [weak self] in
+                        guard let self, self.connectionGeneration == generation else { return }
+                        self.service()
+                    }
+                }
+                if let fd = io.writeDescriptor {
+                    writeReady = try? WKWriteReadiness(fd: fd, queue: worker) { [weak self] in
+                        guard let self, self.connectionGeneration == generation else { return }
+                        self.service(writeWake: true)
+                    }
+                }
                 e.onControl = { [weak self] data in DispatchQueue.main.async { self?.onControl(data) } }
                 e.onDiagnostic = { [weak self] line in
                     wkLog(line)
@@ -728,6 +888,11 @@ final class WKStreamFiles {
             } catch { DispatchQueue.main.async { [weak self] in self?.isReady = false }; return }
         }
         engine?.step(now: now)
+        if let e = engine, !e.stopped {
+            // A driver can report writable yet return EAGAIN. Disable that
+            // readiness turn on zero progress; the health timer retries later.
+            writeReady?.setEnabled(e.outputBytes > 0 && (!writeWake || e.lastWriteProgress > 0))
+        } else { writeReady?.stop(); writeReady = nil }
     }
     func setEpoch(_ epoch: UInt64) { worker.async { [self] in desiredEpoch = epoch; engine?.setEpoch(epoch) } }
     func prepare(url: URL, nonce: String, completion: @escaping (Result<WKStreamSource, Error>) -> Void) {
@@ -775,5 +940,5 @@ final class WKStreamFiles {
     } }
     func control(_ data: Data) { worker.async { [self] in engine?.control(data) } }
     func cancel(_ id: String) { worker.async { [self] in engine?.cancel(id) } }
-    func stop() { worker.async { [self] in running = false; timer?.cancel(); timer = nil; engine?.stop(); engine = nil; if let directory { try? FileManager.default.removeItem(at: directory) }; directory = nil; DispatchQueue.main.async { self.isReady = false } } }
+    func stop() { worker.async { [self] in running = false; connectionGeneration &+= 1; timer?.cancel(); timer = nil; writeReady?.stop(); writeReady = nil; engine?.stop(); engine = nil; if let directory { try? FileManager.default.removeItem(at: directory) }; directory = nil; DispatchQueue.main.async { self.isReady = false } } }
 }

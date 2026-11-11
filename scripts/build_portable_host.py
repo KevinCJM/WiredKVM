@@ -26,9 +26,12 @@ def main():
         parser.add_argument('--'+name,type=Path,required=True)
     parser.add_argument('--media-companion-build',type=Path,
         help='explicit older target artifact, when only the Book companion is updated')
+    parser.add_argument('--module-cache',type=Path,help='explicit shared Swift cache below project/build')
     args=parser.parse_args();out=args.output.resolve()
     if not out.is_relative_to(ROOT/'build'):
         raise ValueError('output must be a fresh project build directory')
+    cache=args.module_cache.resolve() if args.module_cache else out/'swift-cache'
+    if not cache.is_relative_to(ROOT/'build') or cache==ROOT/'build':raise ValueError('module cache must be below project/build')
     companion=json.loads((args.companion_build/'manifest.json').read_text())
     target_build=args.media_companion_build or args.companion_build
     target=json.loads((target_build/'manifest.json').read_text())
@@ -66,7 +69,7 @@ def main():
     host=out/'wiredkvm-ch32-host'
     run(['/usr/bin/swiftc','-D','WK_PORTABLE','-D','WK_TREE','-D','WK_CH32_TEST','-O','-parse-as-library',
          '-target',platform.machine()+'-apple-macosx13.0',
-         '-module-cache-path',out/'swift-cache','-I',crate/'include','-framework','AppKit','-framework','IOKit','-lcompression',
+         '-module-cache-path',cache,'-I',crate/'include','-framework','AppKit','-framework','IOKit','-lcompression',
          *sources,archive,'-o',host])
     run(['/usr/bin/codesign','--force','--sign','-','--identifier','com.wiredkvm.ch32.portable-host',host])
     config={'native':str(native),'companion':str(relay),'capture':str(args.capture.resolve()),
@@ -76,7 +79,7 @@ def main():
     for path,digest in source_hashes.items():
         if sha(ROOT/path)!=digest:raise ValueError('source changed during build: '+path)
     manifest={'host':str(host),'hostSHA256':sha(host),'runtime':config,'launched':False,'autostartChanged':False,
-              'inputFirst':True,'programUploadUsesSeparateCDC':True,
+              'inputFirst':True,'programUploadUsesSeparateCDC':True,'moduleCache':str(cache),'streamProfile':companion.get('streamProfile',False),
               'targetArtifact':str(target_binary),'targetArtifactSHA256':target['sha256'],
               'targetSourceHashesCheckedAgainstCurrentTree':args.media_companion_build is None,
               'sources':source_hashes}

@@ -11,7 +11,15 @@
 #define WK407_BULK_PACKET 512
 #define WK407_CONTROL_SLOTS 32
 #define WK407_HID_SLOTS 64
-typedef struct { uint16_t size; uint8_t bytes[512]; } wk407_bulk_packet;
+#ifdef __cplusplus
+#define WK407_ALIGN4 alignas(4)
+#else
+#define WK407_ALIGN4 _Alignas(4)
+#endif
+/* Align every slot, not only the first array element. The safe QingKe libc
+ * can use word copies only when both payload pointers have matching alignment. */
+typedef struct { uint16_t size; WK407_ALIGN4 uint8_t bytes[512]; } wk407_bulk_packet;
+#undef WK407_ALIGN4
 typedef struct { uint16_t size; uint8_t bytes[144]; } wk407_control_packet;
 typedef struct { uint8_t size, endpoint; uint8_t bytes[16]; } wk407_hid_packet;
 typedef struct { unsigned head, count; wk407_bulk_packet item[WK407_BULK_SLOTS]; } wk407_bulk_queue;

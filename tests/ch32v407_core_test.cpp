@@ -10,6 +10,12 @@ extern "C" {
 }
 #include "desktop_pointer.hpp"
 #include "clipboard_channel.hpp"
+#ifdef WK407_COPY_BUDGET
+static uint64_t copied_bytes, copy_calls;
+extern "C" void *wk407_test_memcpy(void *d,const void *s,size_t n) {
+    copied_bytes+=n;copy_calls++;return std::memcpy(d,s,n);
+}
+#endif
 static void command(wk407_bridge &b,unsigned seq,char kind,int a,int c,uint32_t now,bool ack=true) {
     char p[96];int n=snprintf(p,sizeof(p),"WK1,%u,%c,%d,%d",seq,kind,a,c);
     uint8_t crc=wk_crc8(reinterpret_cast<uint8_t*>(p),size_t(n));n+=snprintf(p+n,sizeof(p)-size_t(n),",%02x\n",crc);
@@ -45,7 +51,30 @@ static void bulk_boundaries() {
     }
     std::cout<<"BULK_BOUNDARIES_PASS splits=1026 noise_resync=true byte_fragments=true input_retained=true\n";
 }
-int main() {
+int main(int argc,char **argv) {
+#ifdef WK407_COPY_BUDGET
+    if(argc==2&&!std::strcmp(argv[1],"--copy-budget")) {
+        for(unsigned source=0;source<2;source++) {
+            wk407_bridge b;wk407_init(&b);wk407_connected(&b,0,true,0);wk407_connected(&b,1,true,0);
+            assert(control(b,0,1,0)&&control(b,1,1,1)&&control(b,1-source,2,source));
+            alignas(4) uint8_t packet[512]={};memcpy(packet,"WKS5",4);little(packet+4,512,4);packet[8]=1;
+            little(packet+12,12345,8);memset(packet+20,7,16);little(packet+44,432,4);
+            for(unsigned i=80;i<512;i++)packet[i]=uint8_t(i*37);
+            for(unsigned i=0;i<32;i++) {
+                copied_bytes=copy_calls=0;assert(wk407_bulk_accept(&b,source,packet,512));
+                assert(copied_bytes==512&&copy_calls==1);
+                auto p=&b.bulk[1-source].item[i];assert(!(reinterpret_cast<uintptr_t>(p->bytes)&3));
+                assert(p->size==512&&!memcmp(p->bytes,packet,512));
+            }
+            assert(!wk407_bulk_accept(&b,source,packet,512));
+            command(b,99,'A',13,17,1);drain(b);
+        }
+        std::cout<<"BULK_COPY_BUDGET_PASS directions=2 slots=32 copiesPerFullCell=1 copiedBytes=512 payloadAlignment=4 input_retained=true physicalUSB=false\n";
+        return 0;
+    }
+#else
+    (void)argc;(void)argv;
+#endif
     bulk_boundaries();
     wk407_bridge b;wk407_init(&b);wk407_connected(&b,0,true,0);wk407_connected(&b,1,true,0);
     assert(!wk407_hid_peek(&b)); // attaching a fresh keyboard must not warp the pointer

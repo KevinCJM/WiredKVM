@@ -19,11 +19,14 @@ SOURCES = ["WKClipboardProtocol", "WKOnboarding", "WKFnKey", "WKScrollRelay",
            "WKOnDemandClipboard", "WiredKVMCompanion"]
 
 
-def build(out: Path, arches: list[str]) -> dict:
+def build(out: Path, arches: list[str], stream_profile: bool = False, module_cache: Path | None = None) -> dict:
     out = out.resolve()
     if not out.is_relative_to(ROOT / "build"):
         raise ValueError("output must be a new directory under project/build")
     out.mkdir(parents=True, exist_ok=False)
+    cache = module_cache.resolve() if module_cache else out / "swift-cache"
+    if not cache.is_relative_to(ROOT / "build") or cache == ROOT / "build":
+        raise ValueError("module cache must be below project/build")
     sources = [ROOT / "host/clipboard" / (s + ".swift") for s in SOURCES]
     crate = ROOT / "native/transfer-tree"
     inputs = sources + [ROOT/"host/gui/Companion-Info.plist"] + [crate / p for p in ["Cargo.toml", "Cargo.lock", "build.rs", "src/lib.rs", "src/dir_list.c",
@@ -53,8 +56,8 @@ def build(out: Path, arches: list[str]) -> dict:
         run(["cargo", "build", "--offline", "--locked", "--release", "--manifest-path", crate / "Cargo.toml",
              "--target", target, "--target-dir", out / "rust-target"])
         archive = out / "rust-target" / target / "release/libwiredkvm_transfer_tree.a"
-        run(["/usr/bin/swiftc", "-D", "WK_PORTABLE", "-D", "WK_TREE", "-O", "-parse-as-library",
-             "-target", f"{arch}-apple-macosx13.0", "-module-cache-path", out / "swift-cache",
+        run(["/usr/bin/swiftc", "-D", "WK_PORTABLE", "-D", "WK_TREE", *(["-D", "WK_STREAM_PROFILE"] if stream_profile else []), "-O", "-parse-as-library",
+             "-target", f"{arch}-apple-macosx13.0", "-module-cache-path", cache,
              "-I", crate / "include", "-Xlinker", "-dead_strip",
              "-framework", "AppKit", "-framework", "IOKit", "-lcompression",
              *sources, archive, "-o", out / ("portable-" + arch)])
@@ -71,7 +74,7 @@ def build(out: Path, arches: list[str]) -> dict:
             raise RuntimeError("portable binary contains installed-only symbol: " + forbidden)
     if before!={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}:
         raise RuntimeError("build inputs changed during compilation; candidate is not publishable")
-    manifest = dict(mode="portable", architectures=arches, collections=True, binaryBulk=True,
+    manifest = dict(mode="portable", architectures=arches, collections=True, binaryBulk=True, streamProfile=stream_profile, moduleCache=str(cache),
                     legacyInputRelay=False, launched=False, installed=False,
                     deviceAccess=False, clipboardAccess=False, firmwareChanged=False,
                     binary=str(exe), bytes=exe.stat().st_size,
@@ -90,6 +93,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--arch", choices=["arm64", "x86_64"], action="append")
+    parser.add_argument("--stream-profile", action="store_true", help="opt-in bounded numeric stream I/O diagnostics; no transport algorithm changes")
+    parser.add_argument("--module-cache", type=Path, help="explicit shared Swift cache below project/build")
     args = parser.parse_args()
-    result = build(args.output, args.arch or ["arm64", "x86_64"])
+    result = build(args.output, args.arch or ["arm64", "x86_64"], args.stream_profile, args.module_cache)
     print(json.dumps({k: result[k] for k in ["mode", "architectures", "binary", "bytes", "sha256", "launched"]}, ensure_ascii=False))

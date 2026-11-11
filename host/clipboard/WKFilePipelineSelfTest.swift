@@ -320,6 +320,15 @@ enum WKFilePipelineSelfTest {
             }
             try wkPipelineExpect(f.logs.count == count && f.a.link.ready && f.b.link.ready, "invalid USB diagnostic changed state or entered logs")
             try wkPipelineExpect(WKMetadata.line(role:"target",event:"TRANSPORT",fields:["usbMbps":"625"]) == nil,"arbitrary speed admitted")
+            var ioFields=Dictionary(uniqueKeysWithValues:"steps elapsedUs gapMaxUs pendingMax inFlightMax readWaitSteps windowFullSteps readCalls readBytes readZero readMax writeCalls writeWanted writeBytes writeZero writePartial writeMax".split(separator:" ").map { (String($0),"1") })
+            ioFields["phase"]="RESULT"
+            try wkPipelineExpect(WKMetadata.line(role:"host",event:"STREAM_IO",fields:ioFields) != nil,"numeric IO profile rejected")
+            for (key,value) in [("writeMax","/Users/private/file"),("writeMax","-1"),("writeMax","4294967296"),("payload","PRIVATE_CONTENT"),("phase","PRIVATE_CONTENT")] {
+                var invalid=ioFields;invalid[key]=value
+                try wkPipelineExpect(WKMetadata.line(role:"host",event:"STREAM_IO",fields:invalid) == nil,"invalid IO diagnostics admitted")
+            }
+            ioFields.removeValue(forKey:"steps")
+            try wkPipelineExpect(WKMetadata.line(role:"host",event:"STREAM_IO",fields:ioFields) == nil,"incomplete IO diagnostic admitted")
             wkLog("WKCLIP_TEST bounded-peer-usb-negotiated-rate PASS")
             streams.1.onDiagnostic("stream-source-ctime-changed"); f.drive(100)
             try wkPipelineExpect(f.logs.contains("WKCLIP_DIAG role=target event=ERROR code=stream-source-ctime-changed"), "peer failure reason did not cross the control channel")

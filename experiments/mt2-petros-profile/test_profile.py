@@ -224,6 +224,25 @@ port=1;for(unsigned i=0;i<3;i++){usb_req_t r={.wValue=0x2200,.wIndex=(uint16_t)i
             with self.assertRaisesRegex(ValueError,message):profile.generate(invalid,**args)
             self.assertFalse(invalid.exists())
 
+    def test_continuous_file_out_is_opt_in_and_preserves_usb_descriptors(self):
+        options=dict(pointer_collections=True,absolute_mouse_logical=True,live_touch=True,
+                     native_format=True,ram_setup=True,bulk_batch=True,bulk_profile=True)
+        baseline=self.work/'bulk-baseline';profile.generate(baseline,**options)
+        variant=self.work/'bulk-rx';manifest=profile.generate(variant,**options,bulk_continuous_out=True)
+        self.assertEqual((baseline/'generated/descriptors.c').read_bytes(),
+                         (variant/'generated/descriptors.c').read_bytes())
+        self.assertNotIn('wk_file_rx_continue', (baseline/'generated/main.c').read_text())
+        self.assertTrue(manifest['bulk_continuous_out'])
+        self.assertFalse(manifest['file_out_continuation']['physical_speed_verified'])
+        self.assertEqual(manifest['file_out_continuation']['receive_bytes_high_speed'],512)
+        self.assertEqual(manifest['file_out_continuation']['receive_bytes_full_speed'],64)
+        self.assertIn('experiments/mt2-petros-profile/bulk_rx.h',manifest['production_inputs'])
+        self.assertIn('firmware/ch32v407/bridge.h',manifest['production_inputs'])
+        for missing in ['native_format','ram_setup','bulk_batch','bulk_profile']:
+            bad=dict(options);bad[missing]=False;out=self.work/('reject-rx-'+missing)
+            with self.assertRaises(ValueError):profile.generate(out,**bad,bulk_continuous_out=True)
+            self.assertFalse(out.exists())
+
     def test_control_segmentation_overflow_feature_lengths_and_no_live_touch(self):
         body=r'''
 #include <assert.h>

@@ -204,8 +204,10 @@ def bulk_profile_overlay(main):
               'else if(diagnostic){uint8_t record[512];size_t n=wk_bulk_profile_line(diagnostic,diagnostic_size,record,sizeof(record),SystemCoreClock/8,now);\n            if(n)send(0,2,7,record,(unsigned)n);}')
     return main
 
-def generate(out,pointer_collections=False,absolute_no_preferred=False,absolute_mouse_logical=False,single_port_probe=False,live_touch=False,native_format=False,ram_setup=False,bulk_batch=False,bulk_profile=False):
+def generate(out,pointer_collections=False,absolute_no_preferred=False,absolute_mouse_logical=False,single_port_probe=False,live_touch=False,native_format=False,ram_setup=False,bulk_batch=False,bulk_profile=False,bulk_continuous_out=False):
     if bulk_profile and not (bulk_batch and native_format):raise ValueError("Bulk profiling requires the native live-touch/bulk-batch profile")
+    if bulk_continuous_out and not (ram_setup and bulk_batch and bulk_profile and native_format):
+        raise ValueError("Continuous file OUT requires RAM setup and the native bulk-batch/profile candidate")
     main_path=ROOT/"firmware/ch32v407/main.c";descriptor_path=ROOT/"firmware/ch32v407/descriptors.c"
     main,descriptors=overlays(main_path.read_text(),descriptor_path.read_text(),pointer_collections,absolute_no_preferred,absolute_mouse_logical,single_port_probe)
     if live_touch:
@@ -237,10 +239,17 @@ def generate(out,pointer_collections=False,absolute_no_preferred=False,absolute_
         main=once(main,'const wk407_bulk_packet *v=wk407_bulk_peek(&bridge,p);if(v)send(p,ep,1,v->bytes,v->size);','send_file_batch(p,ep);')
         main=once(main,'/* At most one 512-byte operation per file direction per pass. */','/* One 512-byte OUT arm and one bounded IN batch per direction; no fill wait. */')
     if bulk_profile:main=bulk_profile_overlay(main)
+    if bulk_continuous_out:
+        main=once(main,'static uint32_t touch_at;','static uint32_t touch_at;\n#include "bulk_rx.h"')
+        main=once(main,'else (void)wk407_bulk_accept(&bridge,p,buf,size);',
+                  'else (void)wk407_bulk_accept(&bridge,p,buf,size);\n'
+                  '        if(wk_file_rx_continue(p,e)){armed[p][e]=true;return ENDP_RESP_ACK;}')
     out.mkdir(exist_ok=False)
     (out/"generated").mkdir();(out/"obj").mkdir()
     (out/"generated/main.c").write_text(main);(out/"generated/descriptors.c").write_text(descriptors)
     manifest={"experiment_only":True,"device_access":False,"target_identity":"05ac:0265 research only; no commercial identity authorization", "host_identity":"1a86:4070 unchanged", "added_interface":6,"added_endpoint":"0x87 interrupt IN 64 bytes 1ms", "retained_interfaces":[0,1,2,3,4,5],"stage":"enumeration and Feature handshake; no live touch ingress", "production_inputs":{str(p.relative_to(ROOT)):sha(p) for p in [main_path,descriptor_path]},"limits":["Apple driver composite-layout binding unverified","Target vendor-HID discovery requires experimental Apple identity support","External NOR absent on Petros: MSC no-medium adapter","No actuator interface in stage 1","No board access or flash performed"]}
+    # Queue layout changes object/DMA addresses even when bridge.c is unchanged.
+    manifest["production_inputs"]["firmware/ch32v407/bridge.h"]=sha(ROOT/"firmware/ch32v407/bridge.h")
     manifest.update(pointer_collections=pointer_collections,absolute_no_preferred=absolute_no_preferred,absolute_mouse_logical=absolute_mouse_logical,target_bcd_device="0x026b" if absolute_mouse_logical else ("0x026a" if absolute_no_preferred else ("0x0269" if pointer_collections else "0x0268")))
     manifest["single_port_probe"]=single_port_probe
     if single_port_probe:
@@ -255,6 +264,10 @@ def generate(out,pointer_collections=False,absolute_no_preferred=False,absolute_
     manifest["ram_setup"]=ram_setup
     manifest["bulk_batch"]=bulk_batch
     manifest["bulk_profile"]=bulk_profile
+    manifest["bulk_continuous_out"]=bulk_continuous_out
+    if bulk_continuous_out:
+        manifest["file_out_continuation"]={"receive_bytes_high_speed":512,"receive_bytes_full_speed":64,"bounded_copy_before_ack":True,"loader_unchanged":True,"physical_speed_verified":False}
+        manifest["production_inputs"][str((HERE/"bulk_rx.h").relative_to(ROOT))]=sha(HERE/"bulk_rx.h")
     if bulk_profile:
         manifest["bulk_diagnostics"]={"transport":"existing MT2 status suffix","contents":False,"counter_bits":32,"physical_measurement":False}
         manifest["production_inputs"][str((HERE/"bulk_profile.h").relative_to(ROOT))]=sha(HERE/"bulk_profile.h")
@@ -349,6 +362,7 @@ def main():
     parser.add_argument("--native-format",action="store_true",help="native three-bit finger/state fields and full clock; protocol v2")
     parser.add_argument("--bulk-batch",action="store_true",help="experimental bounded 4 KiB file IN DMA batches; input endpoints unchanged")
     parser.add_argument("--bulk-profile",action="store_true",help="opt-in bounded numeric counters on existing MT2 status; requires --bulk-batch and --native-format")
+    parser.add_argument("--bulk-continuous-out",action="store_true",help="experimental one-packet file OUT continuation; requires RAM setup, bulk batch and profile")
     args=parser.parse_args();out=args.output
     if args.absolute_no_preferred and not args.pointer_collections:parser.error("--absolute-no-preferred requires --pointer-collections")
     if args.absolute_mouse_logical and not args.pointer_collections:parser.error("--absolute-mouse-logical requires --pointer-collections")
@@ -359,7 +373,7 @@ def main():
     out=out.parent.resolve(strict=True)/out.name
     if out.exists() or out.is_symlink():raise SystemExit("Output must be new; no overwrite/cleanup")
     if not out.is_relative_to(HERE):raise SystemExit("Output must be inside experiments/mt2-petros-profile")
-    manifest=generate(out,args.pointer_collections,args.absolute_no_preferred,args.absolute_mouse_logical,args.single_port_probe,args.live_touch,args.native_format,args.ram_setup,args.bulk_batch,args.bulk_profile)
+    manifest=generate(out,args.pointer_collections,args.absolute_no_preferred,args.absolute_mouse_logical,args.single_port_probe,args.live_touch,args.native_format,args.ram_setup,args.bulk_batch,args.bulk_profile,args.bulk_continuous_out)
     if args.build:
         if not args.sdk or not args.gcc_prefix:raise SystemExit("--build needs explicit patched SDK and GCC prefix")
         build(out,args.sdk.resolve(strict=True),args.gcc_prefix,manifest)

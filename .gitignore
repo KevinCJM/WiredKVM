@@ -31,6 +31,7 @@
 /experiments/mt2-petros-profile/live-main-test-*/
 /experiments/mt2-petros-profile/mt2-profile-test-*/
 /experiments/mt2-petros-profile/sdk-abort-test-*/
+/experiments/mt2-petros-profile/sdk-bulk-rx-test-*/
 /experiments/mt2-petros-profile/single-port-core-test-*/
 /experiments/mt2-petros-profile/native-object-probe*/
 

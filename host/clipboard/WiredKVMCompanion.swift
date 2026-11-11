@@ -8,7 +8,7 @@ func wkReply(_ message: String) { FileHandle.standardOutput.write(Data((message 
 // companion. Error userInfo/description, pasteboard types and file metadata are
 // never formatted. This also makes GUI persistence safe to allowlist independently.
 enum WKMetadata {
-    static let events: Set<String> = ["COPY", "ARM", "CANCEL", "REVISION", "LINK", "TRANSPORT", "PORTAL", "TX", "RX", "FILE_TX", "FILE_RX", "BULK_TX", "BULK_RX", "TX_BIND", "APPLY", "COMPLETE", "PASTE", "CHECK", "ERROR"]
+    static let events: Set<String> = ["COPY", "ARM", "CANCEL", "REVISION", "LINK", "TRANSPORT", "PORTAL", "STREAM_IO", "TX", "RX", "FILE_TX", "FILE_RX", "BULK_TX", "BULK_RX", "TX_BIND", "APPLY", "COMPLETE", "PASTE", "CHECK", "ERROR"]
     static let errorCodes: Set<String> = [
         "image-over-64MiB", "image-source-over-128MiB", "item-too-large", "invalid-envelope-size", "envelope-checksum-mismatch", "content-integrity-check-failed",
         "invalid-control", "invalid-utf8", "invalid-png", "invalid-filename", "unsupported-content", "single-file-only",
@@ -53,6 +53,10 @@ enum WKMetadata {
     }
     static func line(role: String, event: String, fields: [String: String]) -> String? {
         guard ["host", "target"].contains(role), events.contains(event), fields.count <= 32 else { return nil }
+        if event == "STREAM_IO" {
+            let numeric = Set("steps elapsedUs gapMaxUs pendingMax inFlightMax readWaitSteps windowFullSteps readCalls readBytes readZero readMax writeCalls writeWanted writeBytes writeZero writePartial writeMax".split(separator:" ").map(String.init))
+            guard Set(fields.keys) == numeric.union(["phase"]), ["PROGRESS", "RESULT"].contains(fields["phase"] ?? "") else { return nil }
+        }
         for (key, value) in fields {
             guard !value.isEmpty, value.utf8.count <= 80 else { return nil }
             let valid: Bool
@@ -73,6 +77,9 @@ enum WKMetadata {
                 case "code": valid = safeCode(value)
                 case "usbMbps": valid = ["unknown", "1.5", "12", "480"].contains(value)
                 case "davMetadata", "davMissing", "davWaiting", "davServed", "davFailed", "davMalformed", "davCapacity", "davProxy":
+                    valid = WKMessage.validNonce(value) && UInt32(value) != nil
+                case "steps", "elapsedUs", "gapMaxUs", "pendingMax", "inFlightMax", "readWaitSteps", "windowFullSteps",
+                     "readCalls", "readBytes", "readZero", "readMax", "writeCalls", "writeWanted", "writeBytes", "writeZero", "writePartial", "writeMax":
                     valid = WKMessage.validNonce(value) && UInt32(value) != nil
                 default: valid = false
                 }

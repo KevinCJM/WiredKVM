@@ -71,7 +71,24 @@ final class WKClipboardDiagnostics: @unchecked Sendable {
                 "code=UART_WRITE_TIMEOUT", "code=DISCONNECTED"]
             return words.count == 2 && codes.contains(words[1]) ? line : nil
         case "WKCLIP_DIAG":
-            allowed = Set("role event phase direction nonce baseline revision previousRevision observedRevision transfer acked total accepted ready token latestNonce completedNonce linkReady completedNonceMatches completedDirectionMatches latestNonceMatches latestDirectionMatches notCancelled revisionMatches notTransmitting peerAccepted noPending appliedNonce appliedRevision appliedNonceMatches appliedRevisionMatches code result usbMbps davMetadata davMissing davWaiting davServed davFailed davMalformed davCapacity davProxy".split(separator: " ").map(String.init))
+            allowed = Set("role event phase direction nonce baseline revision previousRevision observedRevision transfer acked total accepted ready token latestNonce completedNonce linkReady completedNonceMatches completedDirectionMatches latestNonceMatches latestDirectionMatches notCancelled revisionMatches notTransmitting peerAccepted noPending appliedNonce appliedRevision appliedNonceMatches appliedRevisionMatches code result usbMbps davMetadata davMissing davWaiting davServed davFailed davMalformed davCapacity davProxy steps elapsedUs gapMaxUs pendingMax inFlightMax readWaitSteps windowFullSteps readCalls readBytes readZero readMax writeCalls writeWanted writeBytes writeZero writePartial writeMax".split(separator: " ").map(String.init))
+            if words.contains("event=STREAM_IO") {
+                let numeric = Set("steps elapsedUs gapMaxUs pendingMax inFlightMax readWaitSteps windowFullSteps readCalls readBytes readZero readMax writeCalls writeWanted writeBytes writeZero writePartial writeMax".split(separator:" ").map(String.init))
+                var seen = Set<String>()
+                var values: [String:String] = [:]
+                for word in words.dropFirst() {
+                    let pair = word.split(separator:"=",maxSplits:1,omittingEmptySubsequences:false)
+                    guard pair.count == 2, seen.insert(String(pair[0])).inserted else { return nil }
+                    values[String(pair[0])] = String(pair[1])
+                    if numeric.contains(String(pair[0])) {
+                        guard !pair[1].isEmpty, pair[1].utf8.allSatisfy({ $0 >= 48 && $0 <= 57 }), UInt32(pair[1]) != nil else { return nil }
+                    } else {
+                        guard ["role", "event", "phase"].contains(String(pair[0])) else { return nil }
+                    }
+                }
+                guard seen == numeric.union(["role", "event", "phase"]), ["host", "target"].contains(values["role"] ?? ""),
+                      ["PROGRESS", "RESULT"].contains(values["phase"] ?? "") else { return nil }
+            }
         case "CPP_CLIPBOARD_STATS":
             allowed = Set("unix_rx uart_rx unix_tx uart_tx crc_reject format_reject queue_drop no_client_drop uart_drop disconnect_drop_uart disconnect_drop_unix q_uart q_unix q_uart_max q_unix_max connections connected".split(separator: " ").map(String.init))
         case "CPP_CLIPBOARD_DISCONNECTED": allowed = ["reason", "errno"]
@@ -138,6 +155,15 @@ final class WKClipboardDiagnostics: @unchecked Sendable {
         log.record("CPP_WIREDKVM_ERROR PRIVATE_CONTENT")
         let status = "CPP_RAW_TOUCH_STATUS MT2,version=2,enabled=1,faults=0,rx=10,max_contacts=4,resets=1,gets=1,sets=1,get_ids=1,set_ids=1,errors=0,inputs=10"
         let profile = status + ",bp=1,bpl=ffff,bpg=10,bph=17d7840,bpm=ffff,bp0=200:1:200:1:1:0:1:0:0,bp1=200:1:200:1:1:0:1:0:0"
+        let numericIO = "steps elapsedUs gapMaxUs pendingMax inFlightMax readWaitSteps windowFullSteps readCalls readBytes readZero readMax writeCalls writeWanted writeBytes writeZero writePartial writeMax".split(separator:" ").map { "\($0)=1" }.joined(separator:" ")
+        let streamIO = "WKCLIP_DIAG role=host event=STREAM_IO phase=RESULT " + numericIO
+        precondition(Self.filtered(streamIO) == streamIO)
+        for invalid in [streamIO + " payload=PRIVATE_CONTENT", streamIO + " steps=2",
+                        streamIO.replacingOccurrences(of:"writeMax=1",with:"writeMax=PRIVATE_CONTENT"),
+                        streamIO.replacingOccurrences(of:"writeMax=1",with:"writeMax=4294967296"),
+                        streamIO.replacingOccurrences(of:"writeMax=1",with:"writeMax=-1"),
+                        streamIO.replacingOccurrences(of:"phase=RESULT",with:"phase=PRIVATE_CONTENT"),
+                        streamIO.replacingOccurrences(of:"readMax=1 ",with:"")] { precondition(Self.filtered(invalid) == nil) }
         precondition(Self.filtered(status) == status && Self.filtered(profile) == profile)
         for invalid in [profile + ",payload=PRIVATE_CONTENT", profile + ",bp=1", profile + ",path=/private/secret",
                         profile.replacingOccurrences(of: "bpl=ffff", with: "bpl=PRIVATE_CONTENT"),

@@ -27,6 +27,8 @@ ACCEPTED={
     'ram-power-v3':('candidate-ram-setup-20261109-power-v3','28c576763fe4f8a3588705945c4f53e5bf7be0a61c03fe9f51b205d7f2178f93'),
     'bulk-batch-v1':('candidate-bulk-batch-20261110','6fdfccd6c45686444aea213ec81022be3c90594a13aec80fca54c353a7c21250'),
     'bulk-profile-v1':('candidate-bulk-profile-20261110','6caef7f682024f1b2b3f94859e714180aa610782ae866d8acf8aa9a9658cb604'),
+    'bulk-continuous-out-v1':('candidate-bulk-continuous-out-20261110','ac118ce1fae43c044242d6e6cbb6ce46fe3a6e8e7776af5ff18d54232faea3e1'),
+    'aligned-cells-v1':('candidate-aligned-cells-20261111','4cbd040747e6ab0c15c8dca1df2591aa24db41b3c7a3d2a8c6f04351738761b3'),
 }
 BACKUP_BYTES=576*1024
 

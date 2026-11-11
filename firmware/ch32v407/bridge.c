@@ -205,9 +205,20 @@ static bool admitted(const wk407_bridge *b,unsigned source,const uint8_t *cell) 
     for(unsigned i=0;i<4;i++)if(b->transactions[origin][i].used&&!memcmp(b->transactions[origin][i].id,cell+20,16))return true;
     return false;
 }
+static void bulk_put_cell(wk407_bridge *b,unsigned source,const uint8_t *cell) {
+    wk407_bulk_queue *q=&b->bulk[1-source];wk407_bulk_packet *v=&q->item[(q->head+q->count)%WK407_BULK_SLOTS];
+    memcpy(v->bytes,cell,512);v->size=512;q->count++;
+    if(q->count>b->bulk_high_water)b->bulk_high_water=q->count;
+}
 bool wk407_bulk_accept(wk407_bridge *b,unsigned source,const void *data,size_t n) {
     if(!wk407_bulk_space(b,source)||n>512)return false;
     const uint8_t *p=data;size_t i=0;uint8_t *cell=b->cell[source];unsigned used=b->cell_size[source];
+    /* A complete, synchronized USB cell needs no assembly-buffer copy. Keep
+     * the original fragment/resynchronization path for every other case. */
+    if(!used&&n==512&&!memcmp(p,"WKS5",4)) {
+        if(admitted(b,source,p))bulk_put_cell(b,source,p);
+        return true;
+    }
     while(i<n) {
         /* Synchronize only the prefix. Once matched, copy the bounded remainder
          * without rechecking the same four bytes for every payload byte. */
@@ -217,9 +228,7 @@ bool wk407_bulk_accept(wk407_bridge *b,unsigned source,const void *data,size_t n
         memcpy(cell+used,p+i,take);used+=(unsigned)take;i+=take;
         if(used==512) {
             if(admitted(b,source,cell)) {
-                wk407_bulk_queue *q=&b->bulk[1-source];wk407_bulk_packet *v=&q->item[(q->head+q->count)%WK407_BULK_SLOTS];
-                memcpy(v->bytes,cell,512);v->size=512;q->count++;
-                if(q->count>b->bulk_high_water)b->bulk_high_water=q->count;
+                bulk_put_cell(b,source,cell);
             }
             used=0;
         }
