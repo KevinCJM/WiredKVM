@@ -337,7 +337,7 @@ final class WKClipboardProcess {
     }
 
     static func canWithdrawSetup(connected: Bool, peerBuild: UInt32) -> Bool {
-        connected && peerBuild >= 12
+        connected && peerBuild >= 16
     }
 
     func prepare() throws -> URL {
@@ -396,7 +396,7 @@ final class WKClipboardProcess {
     }
 
     func sendIntent(_ line: String) {
-        guard line.hasPrefix("C "), line.utf8.count <= 128,
+        guard Self.validIntent(line), line.utf8.count <= 192,
               !line.contains("\n"), !line.contains("\r"),
               let input, process?.isRunning == true else { return }
         if !Self.writeLine(String(line.dropFirst(2)), to: input) {
@@ -406,6 +406,9 @@ final class WKClipboardProcess {
             let words=line.split(separator:" ").map(String.init)
             if words.count==4, words[1]=="PASTE", ["IN","OUT"].contains(words[2]), Self.validToken(words[3]) {
                 let value=WKPasteProgress(token:words[3],remote:words[2]=="OUT",phase:.started)
+                pasteProgress=value; onPasteProgress?(value)
+            } else if words.count==7, words[1]=="PASTE" {
+                let value=WKPasteProgress(token:words[2],remote:words[3]=="1",phase:.started)
                 pasteProgress=value; onPasteProgress?(value)
             } else if words.count==3,words[1]=="CANCEL" {
                 finishProgress(words[2]=="0" ? nil : words[2],completed:false)
@@ -469,6 +472,19 @@ final class WKClipboardProcess {
             }
             if parts.count == 2 && parts[0] == "WKCLIP_LINK" && parts[1] == "1" {
                 onControl?("CLIPBOARD STATE 1"); continue
+            }
+            if parts.count == 2, parts[0] == "WKCLIP_ROUTE", Self.validRoute(String(parts[1])) {
+                onControl?("CLIPBOARD ROUTE \(parts[1])"); continue
+            }
+            if parts.count == 4, parts[0] == "WKCLIP_RESULT", Self.validNumber(String(parts[1])),
+               parts[2] == "ready", Self.validNumber(String(parts[3])) {
+                finishProgress(String(parts[1]), completed: true)
+                onControl?("CLIPBOARD RESULT \(parts[1]).ready.\(parts[3])"); continue
+            }
+            if parts.count == 3, parts[0] == "WKCLIP_RESULT", Self.validNumber(String(parts[1])),
+               ["blocked", "cancelled"].contains(String(parts[2])) {
+                finishProgress(String(parts[1]), completed: false)
+                onControl?("CLIPBOARD RESULT \(parts[1]).\(parts[2])"); continue
             }
             if parts.count == 3 && parts[0] == "WKCLIP_ORIGIN" &&
                 ["IN", "OUT"].contains(String(parts[1])) && Self.validToken(String(parts[2])) && !parts[2].contains(".") {
@@ -544,6 +560,28 @@ final class WKClipboardProcess {
         }
     }
 
+    static func validNumber(_ word: String) -> Bool {
+        !word.isEmpty && word.utf8.count <= 20 && word.utf8.allSatisfy { (48...57).contains($0) } && UInt64(word) != nil
+    }
+    static func validRoute(_ route: String) -> Bool {
+        let f=route.split(separator:",",omittingEmptySubsequences:false).map(String.init)
+        return f.count==9 && f.allSatisfy(validNumber) && UInt64(f[0])! > 0 &&
+            UInt64(f[2])! <= 2 && UInt64(f[7])! <= 1 && UInt64(f[8])! <= 3
+    }
+    static func validIntent(_ line: String) -> Bool {
+        guard !line.contains("\n"), !line.contains("\r") else { return false }
+        let f=line.split(separator:" ").map(String.init)
+        guard f.count>=2, f[0]=="C" else { return false }
+        if f[1]=="CANCEL" { return f.count==3 && validToken(f[2]) }
+        if f[1]=="CONTEXT" { return f.count==5 && validNumber(f[2]) && ["0","1"].contains(f[3]) && validNumber(f[4]) }
+        if f[1]=="SELECT" { return f.count==7 && validNumber(f[2]) && ["0","1"].contains(f[3]) &&
+            ["copy","cut"].contains(f[4]) && validNumber(f[5]) && validNumber(f[6]) }
+        if f[1]=="PASTE", f.count==7 { return validNumber(f[2]) && ["0","1"].contains(f[3]) && f[4...6].allSatisfy(validNumber) }
+        // Old tests and pre-upgrade producers may send these; version gating
+        // still prevents old peers from enabling the v2 clipboard route.
+        return (f[1]=="COPY" || f[1]=="PASTE") && f.count==4 && ["IN","OUT"].contains(f[2]) && validToken(f[3])
+    }
+
     func stop(removeDirectory: Bool = true) {
         finishProgress(completed:false)
         onControl?("CLIPBOARD CANCEL 0")
@@ -569,6 +607,10 @@ final class WKClipboardProcess {
         try WKClipboardDiagnostics.selfTest()
         precondition(validToken("12") && validToken("12.34"))
         precondition(!validToken("12..34") && !validToken("12\n34") && !validToken("-1"))
+        precondition(validRoute("1,2,0,12,34,0,0,0,1") && !validRoute("1,2,3,12,34,0,0,0,1"))
+        precondition(!validRoute("1,2,0,12,34,0,0,0,4") && !validRoute("1,2,0,12,34,0,0,0,1,"))
+        precondition(validIntent("C SELECT 2 0 copy 12 1") && validIntent("C PASTE 5 1 2 0 1"))
+        precondition(!validIntent("C SELECT 2 2 copy 12 1") && !validIntent("C PASTE 5 1 18446744073709551616 0 1"))
         let bridge = WKClipboardProcess()
         let socket = try bridge.prepare()
         // A failed helper launch must preserve the already-bound native socket
@@ -593,6 +635,9 @@ final class WKClipboardProcess {
         bridge.onStatus = { status = $0 }
         bridge.onPeerVersion = { peerBuilds.append($0) }
         bridge.onReady = { ready = $0 }
+        bridge.consume("WKCLIP_ROUTE 1,2,0,12,34,0,0,0,1\nWKCLIP_RESULT 5 ready 17\nWKCLIP_ROUTE 1,2,9,12,34,0,0,0,1\nWKCLIP_RESULT 5 arbitrary\nWKCLIP_RESULT 5 ready\n")
+        precondition(controls == ["CLIPBOARD ROUTE 1,2,0,12,34,0,0,0,1", "CLIPBOARD RESULT 5.ready.17"])
+        controls.removeAll()
         bridge.consume("WKCLIP_LINK 1\nWKCLIP_ORIGIN OUT 7319\nWKCLIP_ORIGIN IN 8426\nWKCLIP_ORIGIN IN bad\nWKCLIP_RESET 0\n")
         precondition(controls == ["CLIPBOARD STATE 1", "CLIPBOARD ORIGIN_OUT 7319", "CLIPBOARD ORIGIN_IN 8426", "CLIPBOARD STATE 0"])
         controls.removeAll()
@@ -622,6 +667,31 @@ final class WKClipboardProcess {
         precondition(progress.last?.percent == 50)
         bridge.consume("WKCLIP_RESET 0\n")
         print("CLIPBOARD_GUI_PASTE_PROGRESS_PASS outgoing_percent=true incoming_bytes=true stale_token_ignored=true reset_closes=true")
+        // Exercise the public sendIntent path with a pipe and a process-state
+        // stub. No subprocess is launched and no runtime channel is accessed.
+        final class RunningProcessFixture: Process, @unchecked Sendable {
+            override var isRunning: Bool { true }
+        }
+        let intentPipe=Pipe();prepareWriter(intentPipe)
+        bridge.input=intentPipe;bridge.process=RunningProcessFixture()
+        bridge.sendIntent("C PASTE 77 1 6 0 2")
+        precondition(bridge.pasteProgress?.token=="77" && bridge.pasteProgress?.remote==true && progress.last?.phase == .started)
+        var commandBytes=[UInt8](repeating:0,count:192)
+        let written=Darwin.read(intentPipe.fileHandleForReading.fileDescriptor,&commandBytes,commandBytes.count)
+        precondition(written>0 && String(decoding:commandBytes.prefix(written),as:UTF8.self)=="PASTE 77 1 6 0 2\n")
+        bridge.consume("WKCLIP_RESULT 76 ready 17\n")
+        precondition(bridge.pasteProgress?.token=="77")
+        bridge.consume("WKCLIP_RESULT 77 ready 17\n")
+        precondition(bridge.pasteProgress==nil && progress.last?.phase == .completed)
+        bridge.sendIntent("C PASTE 88 0 7 17 2")
+        precondition(bridge.pasteProgress?.token=="88" && bridge.pasteProgress?.remote==false)
+        bridge.consume("WKCLIP_RESULT 88 cancelled\n")
+        precondition(bridge.pasteProgress==nil && progress.last?.phase == .cancelled)
+        bridge.sendIntent("C PASTE 89 2 7 17 2")
+        precondition(bridge.pasteProgress==nil,"invalid destination must not create progress")
+        bridge.process=nil;bridge.input=nil
+        try? intentPipe.fileHandleForWriting.close();try? intentPipe.fileHandleForReading.close()
+        print("CLIPBOARD_GUI_V2_INTENT_PROGRESS_PASS pipe_only=true new_format=true stale_result_ignored=true cancelled=true")
         bridge.consume("WKCLIP_STATUS READY mac\nWKCLIP_STATUS PEER_VER")
         precondition(ready && peerBuilds.isEmpty)
         let connectedText = status
@@ -640,7 +710,9 @@ final class WKClipboardProcess {
         precondition(!canWithdrawSetup(connected: true, peerBuild: 9))
         precondition(!canWithdrawSetup(connected: true, peerBuild: 10))
         precondition(!canWithdrawSetup(connected: true, peerBuild: 11))
-        precondition(canWithdrawSetup(connected: true, peerBuild: 12))
+        precondition(!canWithdrawSetup(connected: true, peerBuild: 12))
+        precondition(!canWithdrawSetup(connected: true, peerBuild: 15))
+        precondition(canWithdrawSetup(connected: true, peerBuild: 16))
         bridge.consume("WKCLIP_STATUS PEER_VERSION 8\nWKCLIP_STATUS DISCONNECTED\n")
         precondition(!ready && peerBuilds.last == 0)
         bridge.consume("WKCLIP_STATUS READY mac\n")

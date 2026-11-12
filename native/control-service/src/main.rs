@@ -203,7 +203,8 @@ impl Config {
         if let Some((host,runtime))=&self.portable { entries.extend([("portable_host_sha256",host),("portable_runtime_sha256",runtime)]); }
         else {entries.push(("relay_sha256",&self.relay));}
         for (key,path) in entries {
-            let (ok, out) = bounded(self, "/usr/bin/shasum", &["-a", "256", path], 5)?;
+            let (ok, out) = bounded(self, "/usr/bin/shasum", &["-a", "256", path], 5)
+                .map_err(|e| format!("Hash check failed for {key}: {e}"))?;
             if !ok || out.split_whitespace().next() != self.hashes.get(key).map(String::as_str) {
                 return Err(format!("Binary hash mismatch: {key}").into());
             }
@@ -354,12 +355,18 @@ impl Session {
         let _ = fs::remove_file(c.state.join("session.tsv"));
     }
 }
-fn start(c: &Config, d: &Device) -> Result<Session> {
+// Read-only admission, also usable from launchd before replacing a live service.
+// It does not enumerate/open USB, start input capture, or acquire a service lock.
+fn preflight(c: &Config) -> Result<()> {
     c.verify()?;
     let (ok, out) = bounded(c, &c.capture, &["--check-permission"], 5)?;
     if !ok || !out.contains("ACCESSIBILITY_TRUSTED=true") {
         return Err("Accessibility permission unavailable".into());
     }
+    Ok(())
+}
+fn start(c: &Config, d: &Device) -> Result<Session> {
+    preflight(c)?;
     let (ok, held) = bounded(c, "/usr/sbin/lsof", &["-t", &d.port], 3)?;
     if ok || !held.trim().is_empty() {
         return Err("USB control port is occupied or cannot be checked".into());
@@ -610,6 +617,11 @@ fn main() -> Result<()> {
     let args: Vec<_> = std::env::args().collect();
     match args.get(1).map(String::as_str) {
         Some("inventory")=>{println!("console_active={}",unsafe{wk_console_active()});for d in devices()?{println!("{}\t{}\t{}",d.entry,d.location,d.port)}Ok(())},
+        Some("check") if args.len()==3=>{
+            let c=Config::load(Path::new(&args[2]))?;
+            preflight(&c)?;
+            println!("PREFLIGHT_READY no_usb_access=true no_input_capture=true");Ok(())
+        },
         Some("run") if args.len()==3=>run(Config::load(Path::new(&args[2]))?),
         Some("seed-portable") if args.len()==4=>{
             let c=Config::load(Path::new(&args[2]))?;c.verify()?;
@@ -644,7 +656,7 @@ fn main() -> Result<()> {
             if identity(members[2].pid).map(|p|p.1)!=Some(members[0].pid){return Err("Capture parent mismatch".into())}
             Session{device:ds[0].clone(),members,children:vec![]}.save(&c)?;println!("Existing runtime adoption recorded");Ok(())
         },
-        _=>Err("Usage: wiredkvm-control-service inventory | run CONFIG | seed CONFIG NATIVE_PID RELAY_PID CAPTURE_PID".into())
+        _=>Err("Usage: wiredkvm-control-service inventory | check CONFIG | run CONFIG | seed CONFIG NATIVE_PID RELAY_PID CAPTURE_PID".into())
     }
 }
 
@@ -680,17 +692,39 @@ mod platform_tests {
     #[test]
     fn lock_is_single_instance() {
         let c = config("lock");
-        let p = c.state.join("lock");
-        let a = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&p)
-            .unwrap();
-        let b = OpenOptions::new().write(true).open(&p).unwrap();
-        assert_eq!(unsafe { wk_lock(a.as_raw_fd()) }, 0);
-        assert_ne!(unsafe { wk_lock(b.as_raw_fd()) }, 0);
-        drop(a);
-        assert_eq!(unsafe { wk_lock(b.as_raw_fd()) }, 0);
+        // Keep the owning descriptor in another process. Parallel tests may
+        // fork between locking and close; their transient inherited fd must
+        // not change what this test considers the lock owner's lifetime.
+        let mut child=Command::new(std::env::current_exe().unwrap())
+            .args(["--exact","platform_tests::lock_holder_process"])
+            .env("WK_TEST_LOCK_ROOT",&c.state).stdout(Stdio::null()).stderr(Stdio::null()).spawn().unwrap();
+        let result=(||->Result<()> {
+            let deadline=Instant::now()+Duration::from_secs(5);
+            while !c.state.join("ready").exists() {
+                if child.try_wait()?.is_some() || Instant::now()>=deadline { return Err("Lock fixture did not become ready".into()); }
+                thread::sleep(Duration::from_millis(10));
+            }
+            let b=OpenOptions::new().write(true).open(c.state.join("lock"))?;
+            if unsafe {wk_lock(b.as_raw_fd())}==0 {return Err("A second process acquired the held lock".into());}
+            fs::write(c.state.join("release"),b"release")?;
+            let deadline=Instant::now()+Duration::from_secs(5);
+            loop {
+                if let Some(status)=child.try_wait()? {if !status.success(){return Err("Lock fixture failed".into());}break;}
+                if Instant::now()>=deadline {return Err("Lock fixture did not exit".into());}
+                thread::sleep(Duration::from_millis(10));
+            }
+            if unsafe {wk_lock(b.as_raw_fd())}!=0 {return Err("Lock did not release after owner exit".into());}
+            Ok(())
+        })();
+        let _=child.kill();let _=child.wait();result.unwrap();
+    }
+    #[test]
+    fn lock_holder_process() {
+        let Some(root)=std::env::var_os("WK_TEST_LOCK_ROOT") else{return};let root=PathBuf::from(root);
+        let owner=OpenOptions::new().create_new(true).write(true).open(root.join("lock")).unwrap();
+        assert_eq!(unsafe {wk_lock(owner.as_raw_fd())},0);fs::write(root.join("ready"),b"ready").unwrap();
+        let deadline=Instant::now()+Duration::from_secs(5);
+        while !root.join("release").exists() {assert!(Instant::now()<deadline,"Lock fixture release timeout");thread::sleep(Duration::from_millis(10));}
     }
     #[test]
     fn stale_pid_cannot_be_adopted_and_live_session_roundtrips() {
@@ -774,5 +808,26 @@ mod platform_tests {
             c.hashes.insert(key.into(),String::from_utf8(output.stdout).unwrap().split_whitespace().next().unwrap().into());
         }
         assert!(c.verify().is_ok());c.portable=None;assert!(c.verify().is_err());
+    }
+    #[test]
+    fn preflight_rejects_bad_pins_and_permission_without_starting_input() {
+        let mut c=config("preflight");
+        let capture=c.state.join("capture-fixture");
+        fs::write(&capture,"#!/bin/sh\n[ \"$1\" = --check-permission ] || exit 7\nprintf 'ACCESSIBILITY_TRUSTED=true\\n'\n").unwrap();
+        fs::set_permissions(&capture,fs::Permissions::from_mode(0o700)).unwrap();
+        c.capture=capture.to_str().unwrap().into();
+        for (key,path) in [("native_sha256",&c.native),("relay_sha256",&c.relay),("capture_sha256",&c.capture)] {
+            let output=Command::new("/usr/bin/shasum").args(["-a","256",path]).output().unwrap();
+            assert!(output.status.success());c.hashes.insert(key.into(),String::from_utf8(output.stdout).unwrap().split_whitespace().next().unwrap().into());
+        }
+        assert!(preflight(&c).is_ok());
+        for name in ["service.lock","session.tsv","control.log","status.txt"] { assert!(!c.state.join(name).exists()); }
+        c.hashes.insert("native_sha256".into(),"0".repeat(64));
+        assert!(preflight(&c).unwrap_err().to_string().contains("native_sha256"));
+        c.capture="/usr/bin/false".into();
+        let output=Command::new("/usr/bin/shasum").args(["-a","256",&c.native]).output().unwrap();
+        c.hashes.insert("native_sha256".into(),String::from_utf8(output.stdout).unwrap().split_whitespace().next().unwrap().into());
+        let digest=c.hashes["relay_sha256"].clone();c.hashes.insert("capture_sha256".into(),digest);
+        assert!(preflight(&c).unwrap_err().to_string().contains("Accessibility permission unavailable"));
     }
 }

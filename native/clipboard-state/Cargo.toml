@@ -1,0 +1,13 @@
+[package]
+name = "wiredkvm-clipboard-state"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[dependencies]
+
+[profile.release]
+panic = "abort"

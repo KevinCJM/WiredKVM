@@ -226,3 +226,23 @@ python3 experiments/mt2-petros-profile/test_live_touch.py --native-format --ram-
 本版本已备份、刷入并独立读回，Book 已实际收到数字状态；8 MiB 短测正文尚未开始时
 USB1 断开，原因未定。当前等待完整断电重连，不能视为输入/吞吐验收。
 构建信息和实机边界见 [吞吐诊断记录](../../docs/research/BULK_THROUGHPUT_20261110.md)。
+
+## 单包 OUT 连续接收候选（未刷入）
+
+`--bulk-continuous-out` 默认关闭，须同时启用原生触点、RAM 程序盘、
+`--bulk-batch --bulk-profile`。它只在文件 OUT 包已复制、双端在线、
+未挂起/复位、程序盘已发布且队列有空位时，向 WCH 核心返回 ACK。
+接收仍是高速 512 字节、全速 64 字节；不等批次填满，不更改 USB 描述符。
+队列满或主控装载回复待发时返回 NAK，恢复后仍由主循环重新开放。
+键鼠、触点、控制和 MSC 端点没有连续 ACK 捷径。
+
+```sh
+python3 experiments/mt2-petros-profile/test_live_touch.py --native-format --ram-setup --bulk-batch --bulk-profile --bulk-continuous-out
+python3 experiments/mt2-petros-profile/test_bulk_rx_sdk.py --sdk "$PATCHED_WCH_SDK"
+```
+
+第一项执行实际生成的 main、C 桥和 Rust 核心，覆盖队列满/环回、DMA 副本、
+64 字节分片、装载回复、挂起/复位、取消后新代次和输入推进。
+第二项链接固定哈希的真实 WCH 核心，仅模拟寄存器/DMA 边界：4,000 次接收、
+短包/ZLP、显式回压重开、独立 IN、复位及破坏 ACK 的变异检查。
+这些检查不证明硅片时序、物理速度或真实键鼠延迟；实机接受前保持实验状态。

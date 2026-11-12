@@ -9,6 +9,68 @@
 import Cocoa
 import ApplicationServices
 import Darwin
+import Carbon.HIToolbox
+
+// Keyboard interception can stop under Secure Event Input while mouse events
+// still arrive. Treat input ownership as one lease, not independent devices.
+private enum InputSafetyBlock: String {
+    case sleeping, inactiveSession, secureInput, disabledTap
+}
+private struct InputSafetyGate {
+    private(set) var allowed = false
+    private(set) var block: InputSafetyBlock?
+    private var healthySince: TimeInterval?
+    mutating func update(_ reason: InputSafetyBlock?, now: TimeInterval) {
+        block = reason
+        if reason != nil { allowed = false; healthySince = nil; return }
+        if healthySince == nil || now < healthySince! { healthySince = now }
+        // Unlock/wake enables a NEW edge entry; it never restores a remote
+        // session or held keys from before the interruption.
+        allowed = now - healthySince! >= 0.3
+    }
+}
+private var inputSafetyGate = InputSafetyGate()
+private var inputSafetyMonitoring = false // Self-tests run before monitoring.
+private var inputSafetySleeping = false
+private var inputSafetyInactive = false
+private var inputSafetyLastLog = ""
+private var inputSafetyReturn: () -> Void = {
+    let releaseRemote = activeClient || fileTransferBusy
+    cancelFileTransfer()
+    cancelClipboardShortcut("input-suspended")
+    restoreLocalPointer()
+    // Key-ups swallowed before lock must not swallow login input afterwards.
+    consumeSwitchKeyUp = false; consumeEmergencyKeyUp = false
+    consumeFilePasteKeyUp = false; consumeClipboardCopyKeyUp = false
+    consumeClipboardPasteKeyUp = false
+    if releaseRemote { emit("R") }
+}
+@discardableResult
+private func checkInputSafety() -> Bool {
+    guard inputSafetyMonitoring else { return true }
+    let now = ProcessInfo.processInfo.systemUptime
+    // This cheap public query is checked for EVERY input event/contact, even
+    // when no keyboard event or tap-disabled notification reaches us.
+    let reason: InputSafetyBlock? = inputSafetySleeping ? .sleeping :
+        (inputSafetyInactive ? .inactiveSession :
+        (IsSecureEventInputEnabled() ? .secureInput :
+        ((tapPort.map { CGEvent.tapIsEnabled(tap: $0) } == true) ? nil : .disabledTap)))
+    return applyInputSafety(reason, now: now)
+}
+@discardableResult
+private func applyInputSafety(_ reason: InputSafetyBlock?, now: TimeInterval) -> Bool {
+    let wasAllowed = inputSafetyGate.allowed
+    inputSafetyGate.update(reason, now: now)
+    if !inputSafetyGate.allowed && (wasAllowed || activeClient || fileTransferBusy || clipboardIntents.paste != nil) {
+        inputSafetyReturn()
+    }
+    let state = inputSafetyGate.allowed ? "ready" : (reason?.rawValue ?? "settling")
+    if state != inputSafetyLastLog {
+        // No key values, password text, session dictionary or process names.
+        fputs("WiredKVM: INPUT_SAFETY \(state)\n", stderr); inputSafetyLastLog = state
+    }
+    return inputSafetyGate.allowed
+}
 
 private var activeClient = false
 private var buttons = 0
@@ -62,7 +124,6 @@ private let wiredInputEnabled = desktopAbsoluteMode &&
     (ProcessInfo.processInfo.environment["WK_WIRED_INPUT"] == "1" || wiredClipboardEnabled)
 private var clipboardPeerReady = false
 private var wiredBookRevision = NSPasteboard.general.changeCount
-private var remoteMenuReturnRevision: Int?
 private var consumeClipboardCopyKeyUp = false
 private var consumeClipboardPasteKeyUp = false
 private let clipboardSyntheticMarker: Int64 = 0x574b434c
@@ -72,32 +133,58 @@ private struct ClipboardShortcut {
     let remote: Bool
     let pid: pid_t
     let at: TimeInterval
+    var epoch: UInt64 = 0
     func valid(remote: Bool, pid: pid_t, now: TimeInterval) -> Bool {
         self.remote == remote && (remote || self.pid == pid) &&
             now >= at && now - at <= 180
     }
 }
 private struct ClipboardIntents {
-    var sequence: UInt64 = UInt64.random(in: 1...UInt64(UInt32.max))
-    var copiedRemotely: Bool?
-    var copyToken = "0"
-    var cut = false
-    var copy: ClipboardShortcut?
+    // Monotonic across a capture-only restart while the helper stays alive.
+    // Normal checked arithmetic deliberately never wraps IDs into reuse.
+    var sequence: UInt64 = DispatchTime.now().uptimeNanoseconds
+    var inputSequence: UInt64 = DispatchTime.now().uptimeNanoseconds
+    var focusEpoch: UInt64 = DispatchTime.now().uptimeNanoseconds
+    // This is an engine projection, not a second clipboard version store.
+    var routeGeneration: UInt64 = 0
+    var appliedSequence: UInt64 = 0
+    var selectedSide: UInt64 = 2
+    var stamps: [UInt64] = [0, 0]
+    var receivedStamps: [UInt64] = [0, 0]
+    var nativeMask: UInt64 = 0
+    var cutBlocked = false
+    // An unacknowledged native input must outrank a delayed projection.
+    var nativeSelection: Bool?
+    var nativeSelectionSequence: UInt64 = 0
+    var pastedOnSide: Bool?
     var paste: ClipboardShortcut?
-    mutating func next() -> String { sequence &+= 1; return String(sequence) }
-    mutating func beginCopy(remote: Bool, pid: pid_t, now: TimeInterval) -> String {
-        copiedRemotely = remote; cut = false
-        let token = next()
-        copyToken = "0"
-        copy = nil
-        paste = nil
-        return token
+    mutating func next() -> String { sequence += 1; return String(sequence) }
+    mutating func select(remote: Bool) -> UInt64 {
+        inputSequence += 1
+        nativeSelection = remote; nativeSelectionSequence = inputSequence
+        pastedOnSide = nil; paste = nil
+        return inputSequence
+    }
+    mutating func context() -> UInt64 {
+        inputSequence += 1; focusEpoch += 1
+        return inputSequence
+    }
+    var source: Bool? {
+        if let nativeSelection { return nativeSelection }
+        return selectedSide < 2 ? selectedSide == 1 : nil
     }
     mutating func beginPaste(remote: Bool, pid: pid_t, now: TimeInterval) -> String? {
-        guard let source = copiedRemotely, source != remote, copyToken != "0" else { return nil }
-        let token = copyToken + "." + next()
-        paste = ClipboardShortcut(token: token, remote: remote, pid: pid, at: now)
+        guard let source, source != remote, pastedOnSide != remote else { return nil }
+        let destinationIndex = remote ? 1 : 0
+        if nativeSelection == nil, nativeMask & (1 << destinationIndex) != 0 { return nil }
+        let token = next()
+        paste = ClipboardShortcut(token: token, remote: remote, pid: pid, at: now, epoch: focusEpoch)
         return token
+    }
+    mutating func resetRoute() {
+        routeGeneration = 0; appliedSequence = 0; selectedSide = 2
+        stamps = [0, 0]; receivedStamps = [0, 0]; nativeMask = 0; cutBlocked = false
+        nativeSelection = nil; nativeSelectionSequence = 0; pastedOnSide = nil
     }
 }
 private var clipboardIntents = ClipboardIntents()
@@ -113,8 +200,21 @@ private func cancelClipboardShortcut(_ reason: String = "other") {
         fputs("WKCLIP_DIAG role=host event=PASTE phase=CANCEL code=capture-\(reason) token=\(pending.token)\n", stderr)
         clipboardIntent("CANCEL " + pending.token)
     }
-    clipboardIntents.copy = nil
     clipboardIntents.paste = nil
+}
+
+private func clipboardContext() {
+    guard wiredClipboardEnabled else { return }
+    let sequence = clipboardIntents.context()
+    clipboardIntent("CONTEXT \(sequence) \(activeClient ? 1 : 0) \(clipboardIntents.focusEpoch)")
+}
+
+private func noteClipboardSelection(cut: Bool) {
+    cancelClipboardShortcut(cut ? "cut" : "copy")
+    let baseline = clipboardIntents.stamps[activeClient ? 1 : 0]
+    let sequence = clipboardIntents.select(remote: activeClient)
+    clipboardIntent("SELECT \(sequence) \(activeClient ? 1 : 0) \(cut ? "cut" : "copy") \(baseline) \(clipboardIntents.focusEpoch)")
+    if !activeClient { wiredBookRevision = NSPasteboard.general.changeCount }
 }
 
 // Only invoked for a fresh, explicit user's shortcut after its data handshake.
@@ -140,26 +240,31 @@ private func replayClipboardShortcut(key: Int) {
 private func receiveClipboardControl(_ operation: String, token: String) {
     guard wiredClipboardEnabled else { return }
     if operation == "STATE" {
+        let wasReady = clipboardPeerReady
         clipboardPeerReady = token == "1"
         if !clipboardPeerReady {
-            cancelClipboardShortcut("peer"); clipboardIntents.copiedRemotely = nil; clipboardIntents.copyToken = "0"
+            cancelClipboardShortcut("peer"); clipboardIntents.resetRoute()
+        } else if !wasReady {
+            clipboardContext()
         }
         return
     }
-    if operation == "ORIGIN_IN" || operation == "ORIGIN_OUT" {
-        let remote = operation == "ORIGIN_IN"
-        let lateMenuCopy = remote && remoteMenuReturnRevision == NSPasteboard.general.changeCount
-        guard token != "0", remote == activeClient || clipboardIntents.copiedRemotely == remote || lateMenuCopy else { return }
-        // A destination menu copy takes precedence even if its metadata arrives
-        // just after V. Replay that V only while its original focus is valid.
-        let pending = clipboardIntents.paste
-        cancelClipboardShortcut("origin")
-        if !remote { wiredBookRevision = NSPasteboard.general.changeCount; remoteMenuReturnRevision = nil }
-        clipboardIntents.copiedRemotely = remote; clipboardIntents.copyToken = token
-        if let pending, pending.remote == remote,
-           pending.valid(remote: activeClient, pid: clipboardPID(), now: ProcessInfo.processInfo.systemUptime) {
-            replayClipboardShortcut(key: 9)
-        }
+    guard checkInputSafety() else { cancelClipboardShortcut("input-suspended"); return }
+    if operation == "ROUTE" {
+        let fields = token.split(separator: ",", omittingEmptySubsequences: false)
+        guard fields.count == 9, fields.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 20 && $0.utf8.allSatisfy({ (48...57).contains($0) }) }) else { return }
+        let values = fields.compactMap { UInt64($0) }
+        guard values.count == 9, values[0] > 0, values[0] >= clipboardIntents.routeGeneration,
+              values[1] >= clipboardIntents.appliedSequence, values[1] <= clipboardIntents.inputSequence,
+              values[2] <= 2, values[7] <= 1, values[8] <= 3 else { return }
+        if values[0] > clipboardIntents.routeGeneration { clipboardIntents.pastedOnSide = nil }
+        clipboardIntents.routeGeneration = values[0]; clipboardIntents.appliedSequence = values[1]
+        clipboardIntents.selectedSide = values[2]
+        clipboardIntents.stamps = [values[3], values[4]]
+        clipboardIntents.receivedStamps = [values[5], values[6]]
+        clipboardIntents.cutBlocked = values[7] == 1
+        clipboardIntents.nativeMask = values[8]
+        if values[1] >= clipboardIntents.nativeSelectionSequence { clipboardIntents.nativeSelection = nil }
         return
     }
     if operation == "CANCEL" {
@@ -167,18 +272,28 @@ private func receiveClipboardControl(_ operation: String, token: String) {
             fputs("WKCLIP_DIAG role=host event=PASTE phase=CANCEL code=capture-helper-block token=\(pending.token)\n", stderr)
         }
         if token == "0" {
-            clipboardPeerReady = false; clipboardIntents.copiedRemotely = nil; clipboardIntents.copyToken = "0"
+            clipboardPeerReady = false; clipboardIntents.resetRoute()
             clipboardIntents.paste = nil
         } else if clipboardIntents.paste?.token == token { clipboardIntents.paste = nil }
         return
     }
-    guard operation == "PASTE", let pending = clipboardIntents.paste, pending.token == token else { return }
+    guard operation == "RESULT" else { return }
+    let result = token.split(separator: ".", omittingEmptySubsequences: false)
+    guard (result.count == 3 && result[1] == "ready" && UInt64(result[2]) != nil) ||
+          (result.count == 2 && ["blocked", "cancelled"].contains(String(result[1]))) else { return }
+    guard
+          let pending = clipboardIntents.paste, pending.token == result[0] else { return }
     clipboardIntents.paste = nil
+    guard result[1] == "ready" else { return }
     guard pending.valid(remote: activeClient, pid: clipboardPID(), now: ProcessInfo.processInfo.systemUptime) else {
-        clipboardIntent("CANCEL " + token); return
+        clipboardIntent("CANCEL " + pending.token); return
+    }
+    guard pending.epoch == clipboardIntents.focusEpoch else { clipboardIntent("CANCEL " + pending.token); return }
+    if !activeClient && UInt64(exactly: NSPasteboard.general.changeCount) != UInt64(result[2]) {
+        clipboardIntent("CANCEL " + pending.token); return
     }
     wiredBookRevision = NSPasteboard.general.changeCount
-    clipboardIntents.copiedRemotely = activeClient; clipboardIntents.copyToken = "0"
+    clipboardIntents.pastedOnSide = activeClient
     replayClipboardShortcut(key: 9)
 }
 
@@ -194,9 +309,7 @@ private func requestClipboardShortcut(keyCode: Int, flags: CGEventFlags, repeatK
     guard wiredClipboardEnabled else { return false }
     if plainCommand(keyCode, expected: 8, flags: flags) {
         if !repeatKey {
-            cancelClipboardShortcut("copy")
-            _ = clipboardIntents.beginCopy(remote: activeClient, pid: clipboardPID(), now: ProcessInfo.processInfo.systemUptime)
-            if !activeClient { wiredBookRevision = NSPasteboard.general.changeCount; remoteMenuReturnRevision = nil }
+            noteClipboardSelection(cut: false)
         }
         // Physical Cmd+C and its key-up always follow the normal native/HID
         // path. They never depend on the peer, serial link, or a replay timer.
@@ -205,16 +318,15 @@ private func requestClipboardShortcut(keyCode: Int, flags: CGEventFlags, repeatK
     if plainCommand(keyCode, expected: 9, flags: flags) {
         if repeatKey && consumeClipboardPasteKeyUp { return true }
         if !activeClient && NSPasteboard.general.changeCount != wiredBookRevision {
-            wiredBookRevision = NSPasteboard.general.changeCount
-            remoteMenuReturnRevision = nil
-            clipboardIntents.copiedRemotely = false; clipboardIntents.copyToken = "0"
+            // A native menu/service copy wins immediately, even before the
+            // engine's next metadata observation; no content is read here.
+            noteClipboardSelection(cut: false)
         }
         guard clipboardPeerReady,
               let token = clipboardIntents.beginPaste(remote: activeClient, pid: clipboardPID(),
                                                        now: ProcessInfo.processInfo.systemUptime) else { return false }
         consumeClipboardPasteKeyUp = true
-        if clipboardIntents.cut { clipboardIntents.paste = nil }
-        else { clipboardIntent("PASTE \(activeClient ? "OUT" : "IN") \(token)") }
+        clipboardIntent("PASTE \(token) \(activeClient ? 1 : 0) \(clipboardIntents.inputSequence) \(activeClient ? 0 : NSPasteboard.general.changeCount) \(clipboardIntents.focusEpoch)")
         return true
     }
     return false
@@ -441,6 +553,7 @@ private func gestureTapCallback(proxy: CGEventTapProxy, type: CGEventType,
         if let tap = gestureTapPort { CGEvent.tapEnable(tap: tap, enable: true) }
         return Unmanaged.passUnretained(event)
     }
+    guard checkInputSafety() else { return Unmanaged.passUnretained(event) }
     guard activeClient, desktopAbsoluteMode, !iphoneHIDMode else { return Unmanaged.passUnretained(event) }
     if event.getIntegerValueField(.eventSourceUserData) == 0x574b4745 { return Unmanaged.passUnretained(event) }
 #if WK_RAW_TOUCH
@@ -466,7 +579,12 @@ private func gestureTapCallback(proxy: CGEventTapProxy, type: CGEventType,
 }
 #endif
 #if WK_RAW_TOUCH
-private let rawTouch = WKRawTouch { row in print(row);fflush(stdout) }
+private let rawTouch = WKRawTouch { row in
+    if row.hasPrefix("H B ") || row.hasPrefix("H D ") {
+        guard checkInputSafety() else { return }
+    }
+    print(row);fflush(stdout)
+}
 #endif
 private let clientLabel = iphoneHIDMode ? "iPhone" : "Mac mini"
 // Physical placement is independent of the target OS / clipboard behavior.
@@ -497,7 +615,7 @@ private func localPointerPosition(_ fraction: Int?,
 }
 
 private func restoreLocalPointer(_ fraction: Int? = nil) {
-    if wiredClipboardEnabled && activeClient { remoteMenuReturnRevision = NSPasteboard.general.changeCount }
+    let wasRemote = activeClient
     if wiredClipboardEnabled { cancelClipboardShortcut("screen-return") }
     if pointerDetached {
         _ = CGAssociateMouseAndMouseCursorPosition(1)
@@ -518,6 +636,7 @@ private func restoreLocalPointer(_ fraction: Int? = nil) {
     rawTouch.setRemote(false)
 #endif
     activeClient = false
+    if wasRemote { clipboardContext() }
     buttons = 0
     consumePasteKeyUp = false
     // Preserve the last copy source across screen changes. A fresh local
@@ -535,7 +654,7 @@ private func restoreLocalPointer(_ fraction: Int? = nil) {
 }
 
 private func enterClient(_ y: CGFloat) {
-    guard !activeClient else { return }
+    guard !activeClient, checkInputSafety() else { return }
     resetCapsForwarding()
     trackpadScroll.reset()
 #if WK_PIXEL_SCROLL
@@ -547,6 +666,7 @@ private func enterClient(_ y: CGFloat) {
     let bounds = CGDisplayBounds(CGMainDisplayID())
     let fraction = normalizeY(y, bounds)
     activeClient = true
+    clipboardContext()
 #if WK_RAW_TOUCH
     rawTouch.setRemote(true)
 #endif
@@ -1003,10 +1123,7 @@ private func noteCopyOrCut(_ type: CGEventType, keyCode: Int,
         flags.contains(.maskCommand) && !flags.contains(.maskAlternate) &&
         !flags.contains(.maskControl) && !flags.contains(.maskShift) else { return }
     remoteClipboardIsSource = activeClient
-    if wiredClipboardEnabled && keyCode == 7 {
-        clipboardIntents.copiedRemotely = activeClient
-        clipboardIntents.cut = true
-    }
+    if wiredClipboardEnabled && keyCode == 7 { noteClipboardSelection(cut: true) }
     if fileTransferEnabled {
         fileTransferIntent.noteCopy(remote: activeClient, cut: keyCode == 7,
             revision: NSPasteboard.general.changeCount,
@@ -1050,6 +1167,8 @@ private func eventTapCallback(proxy: CGEventTapProxy, type: CGEventType,
         if let tap = tapPort { CGEvent.tapEnable(tap: tap, enable: true) }
         return Unmanaged.passUnretained(event)
     }
+
+    guard checkInputSafety() else { return Unmanaged.passUnretained(event) }
 
     if type == systemDefinedEvent {
         guard activeClient, let down = capsPhysicalState(event) else {
@@ -1219,6 +1338,55 @@ private func eventTapCallback(proxy: CGEventTapProxy, type: CGEventType,
 
 // Safe regression paths below never install an EventTap, post OS input, read
 // general clipboard objects, or move either computer's pointer.
+if CommandLine.arguments.contains("--self-test-input-safety") {
+    // No EventTap, USB, pointer warp, keyboard posting or general clipboard.
+    for reason in [InputSafetyBlock.sleeping, .inactiveSession, .secureInput,
+                   .disabledTap] {
+        var gate = InputSafetyGate()
+        gate.update(nil, now: 10); precondition(!gate.allowed)
+        gate.update(nil, now: 10.4); precondition(gate.allowed)
+        gate.update(reason, now: 11); precondition(!gate.allowed)
+        for _ in 0..<1000 { gate.update(reason, now: 12); precondition(!gate.allowed) }
+        gate.update(nil, now: 13); precondition(!gate.allowed)
+        gate.update(nil, now: 13.1); precondition(!gate.allowed)
+        gate.update(nil, now: 13.4); precondition(gate.allowed)
+        gate.update(nil, now: 1); precondition(!gate.allowed) // clock discontinuity
+    }
+    var releases = 0
+    inputSafetyReturn = {
+        releases += 1; activeClient = false; buttons = 0; lastSentModifiers = 0
+        clipboardIntents.paste = nil; emit("R")
+    }
+    _ = applyInputSafety(nil, now: 20); _ = applyInputSafety(nil, now: 20.4)
+    activeClient = true; buttons = 1; lastSentModifiers = 8
+    precondition(!applyInputSafety(.secureInput, now: 21))
+    precondition(!activeClient && buttons == 0 && lastSentModifiers == 0 && releases == 1)
+    precondition(!applyInputSafety(.secureInput, now: 22) && releases == 1)
+    // Exercise real callback and entry guards while the workspace is asleep.
+    inputSafetyMonitoring = true; inputSafetySleeping = true
+    let proxy = CGEventTapProxy(bitPattern: 1)!
+    let motion = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved,
+                         mouseCursorPosition: .zero, mouseButton: .left)!
+    precondition(eventTapCallback(proxy: proxy, type: .mouseMoved, event: motion, refcon: nil) != nil)
+    let key = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true)!
+    precondition(eventTapCallback(proxy: proxy, type: .keyDown, event: key, refcon: nil) != nil)
+    enterClient(0); precondition(!activeClient && releases == 1)
+#if WK_PIXEL_SCROLL
+    let gesture = CGEvent(source: nil)!
+    gesture.type = CGEventType(rawValue: 30)!
+    precondition(gestureTapCallback(proxy: proxy, type: gesture.type, event: gesture, refcon: nil) != nil)
+#endif
+    // Healthy recovery only permits future edge entry, never remote re-entry.
+    _ = applyInputSafety(nil, now: 30); _ = applyInputSafety(nil, now: 30.4)
+    precondition(inputSafetyGate.allowed && !activeClient)
+    print("CAPTURE_INPUT_SAFETY_PASS secure_input=true sleep=true inactive_session=true tap=true release_once=true local_passthrough=true fresh_entry=true no_OS_input_posted=true")
+    exit(0)
+}
+if CommandLine.arguments.contains("--check-input-safety") {
+    print("SECURE_INPUT=\(IsSecureEventInputEnabled())")
+    exit(0)
+}
+
 #if WK_PIXEL_SCROLL
 if CommandLine.arguments.contains("--self-test-gesture-pacing") {
     var now: UInt64 = 100_000
@@ -1295,10 +1463,9 @@ if CommandLine.arguments.contains("--self-test-gesture-routing") {
     precondition(gestureTapCallback(proxy: OpaquePointer(bitPattern: 1)!, type: event.type, event: event, refcon: nil) != nil)
     if desktopAbsoluteMode {
         activeClient = true
-        clipboardIntents.copy = ClipboardShortcut(token: "41", remote: true, pid: 7, at: 10)
         clipboardIntents.paste = ClipboardShortcut(token: "42", remote: true, pid: 7, at: 10)
         precondition(gestureTapCallback(proxy: OpaquePointer(bitPattern: 1)!, type: event.type, event: event, refcon: nil) == nil)
-        precondition(clipboardIntents.copy?.token == "41" && clipboardIntents.paste?.token == "42")
+        precondition(clipboardIntents.paste?.token == "42")
     }
     print("CAPTURE_GESTURE_ROUTING_SELF_TEST_PASS no_OS_input_posted=true")
     exit(0)
@@ -1306,21 +1473,19 @@ if CommandLine.arguments.contains("--self-test-gesture-routing") {
 #endif
 
 if CommandLine.arguments.contains("--self-test-wired-clipboard-intents") {
-    var intents = ClipboardIntents(sequence: 100)
-    let first = intents.beginCopy(remote: false, pid: 7, now: 10)
-    precondition(first == "101")
-    intents.copyToken = first
+    var intents = ClipboardIntents(sequence: 100, inputSequence: 0)
+    let first = intents.select(remote: false)
+    precondition(first == 1)
     precondition(intents.beginPaste(remote: false, pid: 7, now: 10.1) == nil)
     let paste = intents.beginPaste(remote: true, pid: 8, now: 10.2)!
-    precondition(paste == "101.102")
+    precondition(paste == "101")
     precondition(intents.paste!.valid(remote: true, pid: 99, now: 10.3))
     precondition(!intents.paste!.valid(remote: false, pid: 8, now: 10.3))
     precondition(!intents.paste!.valid(remote: true, pid: 8, now: 191.1))
     let nextPaste = intents.beginPaste(remote: true, pid: 8, now: 11.2)!
     precondition(nextPaste != paste)
-    let second = intents.beginCopy(remote: true, pid: 8, now: 12)
+    let second = intents.select(remote: true)
     precondition(second != first && intents.paste == nil)
-    intents.copyToken = second
     _ = intents.beginPaste(remote: false, pid: 7, now: 12.2)
     precondition(!intents.paste!.valid(remote: false, pid: 8, now: 12.3))
     precondition(intents.paste!.valid(remote: false, pid: 7, now: 12.3))
@@ -1829,6 +1994,23 @@ let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
 CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
 CGEvent.tapEnable(tap: tap, enable: true)
 
+inputSafetyMonitoring = true
+checkInputSafety()
+let inputSafetyNotifications: [NSObjectProtocol] = [
+    (NSWorkspace.willSleepNotification, 0), (NSWorkspace.didWakeNotification, 1),
+    (NSWorkspace.sessionDidResignActiveNotification, 2),
+    (NSWorkspace.sessionDidBecomeActiveNotification, 3),
+    (NSWorkspace.screensDidWakeNotification, 4),
+].map { name, action in
+    NSWorkspace.shared.notificationCenter.addObserver(forName: name, object: nil, queue: .main) { _ in
+        if action == 0 { inputSafetySleeping = true }
+        if action == 1 { inputSafetySleeping = false }
+        if action == 2 { inputSafetyInactive = true }
+        if action == 3 { inputSafetyInactive = false }
+        checkInputSafety()
+    }
+}
+
 #if WK_RAW_TOUCH
 if let helper=ProcessInfo.processInfo.environment["WK_RAW_TOUCH_HELPER"] {
     do {try rawTouch.start(path:helper)}catch {fputs("RAW_TOUCH_HELPER_FAILED \(error)\n",stderr)}
@@ -1841,7 +2023,7 @@ let linkTimer = DispatchSource.makeTimerSource(queue: .main)
 linkTimer.schedule(deadline: .now() + .milliseconds(100),
                    repeating: .milliseconds(100), leeway: .milliseconds(20))
 linkTimer.setEventHandler {
-    checkLinkWatchdog(); clipboardTimeout()
+    checkInputSafety(); checkLinkWatchdog(); clipboardTimeout()
 #if WK_PIXEL_SCROLL
     if desktopAbsoluteMode && !iphoneHIDMode { pointingSource.refresh(); refreshNativeInputPolicy() }
 #endif
@@ -1861,7 +2043,7 @@ DispatchQueue.global(qos: .userInitiated).async {
             DispatchQueue.main.async { lastLinkSignal = CFAbsoluteTimeGetCurrent() }
         } else if pieces.count == 3 && pieces[0] == "CLIPBOARD" {
             let operation = String(pieces[1]), token = String(pieces[2])
-            if ["COPY", "PASTE", "CANCEL", "STATE", "ORIGIN_IN", "ORIGIN_OUT"].contains(operation) {
+            if ["ROUTE", "RESULT", "CANCEL", "STATE"].contains(operation) {
                 DispatchQueue.main.async { receiveClipboardControl(operation, token: token) }
             }
         } else if command == "FILE BUSY 1" {
@@ -1872,7 +2054,7 @@ DispatchQueue.global(qos: .userInitiated).async {
             DispatchQueue.main.async { cancelFileTransfer(); toggleClient() }
         } else if command == "PASTE" {
             DispatchQueue.main.async {
-                if activeClient { emit("V") }
+                if checkInputSafety() && activeClient { emit("V") }
             }
         } else if pieces.first == "RETURN" {
             let fraction = pieces.count == 2 ? Int(pieces[1]) : nil

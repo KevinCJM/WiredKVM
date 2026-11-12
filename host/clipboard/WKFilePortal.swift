@@ -39,11 +39,12 @@ enum WKFilePortalError: Error, CustomStringConvertible {
 // completed/failed entries older than ten minutes without GET leases are reclaimed.
 final class WKPortalStore: @unchecked Sendable {
     enum Payload {
-        case memory(Data), file(WKReceivedFile)
-        func read(offset: Int, maximum: Int) throws -> Data {
+        case memory(Data), file(WKReceivedFile), receiving(WKReceivingFile)
+        func read(offset: Int, maximum: Int, cancelled: () -> Bool = { false }) throws -> Data {
             switch self {
             case .memory(let data): return data.subdata(in: offset..<min(data.count, offset + maximum))
             case .file(let file): return try file.read(offset: UInt64(offset), maximum: maximum)
+            case .receiving(let file): return try file.read(offset: UInt64(offset), maximum: maximum, cancelled: cancelled)
             }
         }
     }
@@ -58,6 +59,7 @@ final class WKPortalStore: @unchecked Sendable {
         let metadata: Metadata
         var data: Data?
         var file: WKReceivedFile?
+        var receiving: WKReceivingFile?
         var streaming = false
         var failed = false
         var retired: Date?
@@ -136,7 +138,7 @@ final class WKPortalStore: @unchecked Sendable {
     func fail(id: String) {
         condition.lock(); defer { condition.unlock() }
         guard var entry = entries[id], entry.data == nil, entry.file == nil else { return }
-        entry.failed = true; entries[id] = entry; condition.broadcast()
+        entry.failed = true; entry.receiving?.fail(); entries[id] = entry; condition.broadcast()
     }
     func retire(id: String) {
         condition.lock(); defer { condition.unlock() }
@@ -154,7 +156,15 @@ final class WKPortalStore: @unchecked Sendable {
         entry.leases = max(0, entry.leases - 1); entries[id] = entry
     }
     func stop() {
-        condition.lock(); stopped = true; entries.removeAll(); condition.broadcast(); condition.unlock()
+        condition.lock(); stopped = true; entries.values.forEach { $0.receiving?.fail() }; entries.removeAll(); condition.broadcast(); condition.unlock()
+    }
+    func beginReceiving(id: String, file: WKReceivingFile) throws {
+        condition.lock(); defer { condition.unlock() }
+        guard !stopped, var entry = entries[id], entry.streaming, !entry.failed,
+              file.size == UInt64(entry.metadata.size) else { throw WKFilePortalError.invalidOffer }
+        if entry.file != nil { return }
+        guard entry.receiving == nil else { throw WKFilePortalError.invalidOffer }
+        entry.receiving = file; entries[id] = entry; condition.broadcast()
     }
     func fulfill(id: String, file: WKReceivedFile) throws {
         condition.lock(); defer { condition.unlock() }
@@ -175,6 +185,7 @@ final class WKPortalStore: @unchecked Sendable {
             guard let entry = entries[id], !entry.failed else { throw WKFilePortalError.failed }
             if let data = entry.data { return .memory(data) }
             if let file = entry.file { return .file(file) }
+            if let receiving = entry.receiving { return .receiving(receiving) }
             // CH32 streaming uses the file engine's 60s inactivity deadline;
             // an actively arriving large file must not expire after 120s total.
             let deadline = entry.streaming ? entry.metadata.created.addingTimeInterval(86400) : end
@@ -441,21 +452,36 @@ final class WKPortalHTTPServer: @unchecked Sendable {
             }
             counters.record(.waiting)
             var served = false
-            defer { counters.record(served ? .served : .failed) }
+            var announced = false
+            defer {
+                if announced && !served {
+                    // macOS WebDAV may treat a clean EOF in a short 200 body
+                    // as a completed cached file and zero-fill the remainder.
+                    // An interrupted announced body must fail at TCP level.
+                    var reset = linger(l_onoff: 1, l_linger: 0)
+                    _ = setsockopt(fd, SOL_SOCKET, SO_LINGER, &reset, socklen_t(MemoryLayout<linger>.size))
+                }
+                counters.record(served ? .served : .failed)
+            }
             do {
                 let data = try store.waitPayload(id: metadata.id, timeout: waitTimeout, cancelled: { self.disconnected(fd) })
                 guard proxyCheck(url), !disconnected(fd) else { return }
-                // Do not announce HTTP success before integrity is established.
-                // A truncated 200 body can leave Finder's preallocated target
-                // looking like a complete file even though it contains zeros.
+                // The normal path waits for the entire verified file. The
+                // opt-in reader exposes checksummed, written prefixes and
+                // withholds the tail until whole-file verification. Obtain
+                // actual bytes before headers; never substitute zero content.
+                let first = try data.read(offset: baseOffset + range.start, maximum: min(65536, range.end - range.start), cancelled: { self.disconnected(fd) })
+                guard range.start == range.end || !first.isEmpty else { return }
                 guard header(fd, range.partial ? 206 : 200, length: range.end - range.start, extra: extra) else { return }
-                var offset = range.start
+                announced = true
+                guard first.isEmpty || send(fd, first) else { return }
+                var offset = range.start + first.count
                 while offset < range.end {
-                    let part = try data.read(offset: baseOffset + offset, maximum: min(65536, range.end - offset))
+                    let part = try data.read(offset: baseOffset + offset, maximum: min(65536, range.end - offset), cancelled: { self.disconnected(fd) })
                     guard !part.isEmpty, send(fd, part) else { return }; offset += part.count
                 }
                 served = true
-            } catch { if !disconnected(fd) { header(fd, 503) } }
+            } catch { if !announced && !disconnected(fd) { header(fd, 503) } }
         default: header(fd, 405, extra: ["Allow": "OPTIONS, HEAD, PROPFIND, GET"])
         }
     }
@@ -643,6 +669,10 @@ final class WKFilePortal: @unchecked Sendable {
     func fulfill(id: String, file: WKReceivedFile) throws {
         state.lock(); let target = store; state.unlock()
         guard let target else { throw WKFilePortalError.unavailable }; try target.fulfill(id: id, file: file)
+    }
+    func beginReceiving(id: String, file: WKReceivingFile) throws {
+        state.lock(); let target = store; state.unlock()
+        guard let target else { throw WKFilePortalError.unavailable }; try target.beginReceiving(id: id, file: file)
     }
 #if WK_TREE
     func offerTree(_ offer: WKStreamOffer, manifest: WKTreeManifest) throws -> [URL] {

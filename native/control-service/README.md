@@ -18,11 +18,16 @@ Book 登录后由 `com.wiredkvm.control-autostart` 启动。USB1 接入 Book 后
 cargo test --offline --manifest-path native/control-service/Cargo.toml
 cargo build --release --offline --manifest-path native/control-service/Cargo.toml
 native/control-service/target/release/wiredkvm-control-service inventory
+native/control-service/target/release/wiredkvm-control-service check /absolute/path/to/config.txt
 python3 scripts/configure_control_autostart.py prepare build/control-autostart-STAMP
 python3 scripts/configure_control_autostart.py install build/control-autostart-STAMP
 ```
 
 `prepare` 只生成工程内文件。`install` 明确写入主控用户的 LaunchAgents 和 Application Support，保留正在运行的控制进程；若已有安装则拒绝覆盖。
+
+`check CONFIG` 仅检查固定文件哈希和捕获程序的辅助功能状态，不枚举或打开 USB、不启动输入捕获、不接管进程。升级前应在实际 launchd 身份下先通过此检查；从终端通过不等于登录服务通过。检查会在配置指定的状态目录写入有限的 `probe.log`，哈希超时报告具体配置项，不跳过校验。
+
+已有安装升级采用 `scripts/upgrade_portable_autostart.py` 的 `prepare → preflight → install`。预检先备份并暂存正式路径的监督程序，用一次性的 Aqua 登录任务检查真实运行身份；此时原输入服务仍运行，不替换配置或登录项。只有同一二进制、配置和计划在 15 分钟内预检通过，才允许交接。失败则保留当前输入，按正常系统流程修复授权后重测。可用 `--state-name state-portable-v2` 指定新的状态目录，保留旧失败记录；回退始终使用先前运行的监督程序。
 
 停止并关闭自动启动：
 
@@ -41,4 +46,4 @@ launchctl bootout gui/$(id -u)/com.wiredkvm.control-autostart
 
 配置须同时设置 `portable_host`、`portable_runtime` 和各自 `*_sha256`；`native`、`capture`、`relay` 仍须有固定路径和哈希。新协调器在输出 `CH32_INPUT_READY` 后才算输入就绪，监督器核对完整进程路径及创建时间，管理 host→native→capture 和 host→relay 两条父子关系。`seed-portable CONFIG HOST_PID` 仅接管身份、父子关系及设备占用均相符的现有会话。
 
-当前便携模式只在 Book 临时运行，尚未覆盖已有 LaunchAgent。不要把命令行启动时的授权、单元测试或临时恢复当成登录后已通过。准备永久升级时须保留原二进制、配置、授权身份和可回退的输入通道；本次未修改用户登录项。
+便携模式可通过上述带备份和预检的流程迁移到同一 Book 登录项。命令行授权、只读预检、进程退出恢复、真实登录重启和睡眠唤醒须分别验收；不要用前几项替代真实重启结果。升级保留固定输入二进制、配置、授权身份及可回退的输入通道，实际安装与物理验收状态单独记录。

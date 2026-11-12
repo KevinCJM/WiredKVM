@@ -168,13 +168,15 @@ struct WKMessage: Codable {
             throw WKClipboardError.invalid("content-integrity-check-failed")
         }
         switch kind {
-        case "arm", "cancel", "check", "commit":
+        case "arm", "cancel", "check", "commit", "metadata-refresh":
             guard body.isEmpty, name == nil, nonce != "0" else { throw WKClipboardError.invalid("invalid-control") }
         case "prepare", "pull":
-            guard name == nil, nonce != "0", body.count <= 128,
+            guard name == nil, nonce != "0", body.count <= 512,
                   let object = try JSONSerialization.jsonObject(with: body) as? [String: String],
-                  Set(object.keys) == Set(["source", "destination"]),
-                  object.values.allSatisfy({ Self.validNonce($0) && $0 != "0" }) else {
+                  Set(object.keys) == Set(["source", "destination", "originalSide", "originalSession", "originalStamp"]),
+                  object.values.allSatisfy({ Self.validNonce($0) }),
+                  object["source"] != "0", object["destination"] != "0",
+                  ["0", "1"].contains(object["originalSide"] ?? ""), object["originalSession"] != "0", object["originalStamp"] != "0" else {
                 throw WKClipboardError.invalid("invalid-control")
             }
         case "text":
@@ -195,6 +197,12 @@ struct WKMessage: Codable {
         case "stream-diagnostic":
             guard name == nil, body.count <= 64, let code = String(data: body, encoding: .utf8),
                   (code.hasPrefix("stream-") || code.hasPrefix("posix-")), WKMetadata.safeCode(code) else { throw WKStreamError.invalid }
+        case "metadata-snapshot":
+            guard name == nil, nonce != "0", body.count == 38, body.prefix(4) == Data("WKCV".utf8) else { throw WKStreamError.invalid }
+        case "bundle-metadata":
+            guard let name, WKFileOffer.validID(name), nonce != "0", body.count <= 128 * 1024 else { throw WKStreamError.invalid }
+            let bundle = try WKClipboardBundle.decode(body)
+            guard bundle.items.allSatisfy({ $0.representations.allSatisfy({ $0.kind == .fileURL }) }) else { throw WKStreamError.invalid }
         case "stream-offer":
             guard name == nil, try WKStreamOffer.decode(body).nonce == nonce else { throw WKClipboardError.invalid("invalid-stream-offer") }
         default: throw WKClipboardError.invalid("unsupported-content")

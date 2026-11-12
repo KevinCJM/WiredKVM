@@ -169,7 +169,9 @@ class ClipboardNativeTests(unittest.TestCase):
     def test_input_only_preserves_hid_and_return_without_clipboard_commands(self):
         events = [(0, 'E 5000 0'), (.04, 'B 1 0'), (.02, 'M 20 10'), (.02, 'B 0 0'),
                   (.02, 'W 0 -1'), (0, 'C 8 0'), (0, 'T 6 1'), (0, 'T 6 0'), (0, 'C 0 0'),
-                  (0, 'C COPY OUT 42'), (.04, 'M -127 0'), (.14, 'M -127 0')]
+                  (0, 'C COPY OUT 42'), (0, 'C SELECT 2 0 copy 12 1'),
+                  (0, 'C CONTEXT 3 1 2'), (0, 'C PASTE 5 1 3 0 2'),
+                  (.04, 'M -127 0'), (.14, 'M -127 0')]
         with tempfile.TemporaryDirectory(prefix='wk-input-', dir='/tmp') as directory, Session(directory, events, slow=True, input_only=True) as s:
             s.client.sendall((b'WKC3' + bytes(60) + b'WKG2' + bytes(60)) * 128)
             self.assertTrue(wait_for(lambda: len(s.reports) == 129))
@@ -267,6 +269,25 @@ class ClipboardNativeTests(unittest.TestCase):
             self.assertNotIn("CPP_CLIPBOARD_INTENT C COPY BAD", errors)
             self.assertNotIn("CPP_CLIPBOARD_INTENT C PASTE OUT 999", errors)
             self.assertIn("CPP_CAPTURE_STARTED", output)
+
+    def test_v2_state_commands_are_bounded_and_forwarded_without_content(self):
+        events = [(0, 'C SELECT 2 0 copy 12 1'), (0, 'C CONTEXT 3 1 2'),
+                  (0, 'C PASTE 5 1 3 0 2'), (0, 'C SELECT 4 2 copy 12 1'),
+                  (0, 'C PASTE 6 1 18446744073709551616 0 2')]
+        with tempfile.TemporaryDirectory(prefix='wk-v2-ipc-', dir='/tmp') as directory, Session(directory, events) as s:
+            s.proc.stdin.write('CLIPBOARD ROUTE 1,2,0,12,34,0,0,0,1\nCLIPBOARD RESULT 5.ready.17\n')
+            s.proc.stdin.write('CLIPBOARD ROUTE 1,2,0,12,34,0,0,0,4\nCLIPBOARD RESULT 5.arbitrary\n')
+            s.proc.stdin.flush()
+            self.assertTrue(wait_for(lambda: 'CLIPBOARD RESULT 5.ready.17' in s.commands()))
+            self.assertIn('CLIPBOARD ROUTE 1,2,0,12,34,0,0,0,1', s.commands())
+            self.assertNotIn('CLIPBOARD ROUTE 1,2,0,12,34,0,0,0,4', s.commands())
+            self.assertNotIn('CLIPBOARD RESULT 5.arbitrary', s.commands())
+            _, errors = s.finish()
+            self.assertIn('CPP_CLIPBOARD_INTENT C SELECT 2 0 copy 12 1', errors)
+            self.assertIn('CPP_CLIPBOARD_INTENT C CONTEXT 3 1 2', errors)
+            self.assertIn('CPP_CLIPBOARD_INTENT C PASTE 5 1 3 0 2', errors)
+            self.assertNotIn('CPP_CLIPBOARD_INTENT C SELECT 4', errors)
+            self.assertNotIn('CPP_CLIPBOARD_INTENT C PASTE 6', errors)
 
     def test_exchange_and_clipboard_make_progress_together(self):
         with tempfile.TemporaryDirectory(prefix="wk-c1-", dir="/tmp") as directory, Session(directory, slow=True, exchange=True) as s:

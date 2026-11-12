@@ -1,6 +1,8 @@
 #pragma once
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+bool wk_cable_setup_at_boundary(void);
 void wk_cable_setup_reset(void);
 void wk_cable_setup_peer_reset(void);
 uint32_t wk_cable_setup_size(void);

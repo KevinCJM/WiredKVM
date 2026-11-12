@@ -1,0 +1,4 @@
+module WKClipboardStateCore {
+    header "clipboard_state.h"
+    export *
+}

@@ -430,9 +430,9 @@ public:
                     std::istringstream command(buffer_);
                     std::string prefix, verb, token, extra;
                     command >> prefix >> verb >> token;
-                    if (prefix == "CLIPBOARD" && (verb == "COPY" || verb == "PASTE" || verb == "CANCEL" ||
+                    if (prefix == "CLIPBOARD" && (((verb == "COPY" || verb == "PASTE" || verb == "CANCEL" ||
                         verb == "STATE" || verb == "ORIGIN_IN" || verb == "ORIGIN_OUT") &&
-                        clipboard_token(token) && !(command >> extra))
+                        clipboard_token(token)) || wk::clipboard_v2_control(verb, token)) && !(command >> extra))
                         if (!capture_.control("CLIPBOARD " + verb + " " + token)) cancel();
                 }
                 buffer_.clear(); overlong_ = false;
@@ -914,7 +914,8 @@ static void live_macos(Sender &sender, const std::string &binary, bool iphone_ta
                         }
                         continue;
                     }
-                    if (clipboard && !input_only && (line.rfind("C COPY ", 0) == 0 || line.rfind("C PASTE ", 0) == 0 ||
+                    if (clipboard && !input_only && (line.rfind("C SELECT ", 0) == 0 || line.rfind("C CONTEXT ", 0) == 0 ||
+                                      line.rfind("C COPY ", 0) == 0 || line.rfind("C PASTE ", 0) == 0 ||
                                       line.rfind("C CANCEL ", 0) == 0)) {
                         if (line.size() <= 256) {
                             std::istringstream intent(line);
@@ -928,7 +929,7 @@ static void live_macos(Sender &sender, const std::string &binary, bool iphone_ta
                             const bool valid_local_copy = fields.size() == 5 && fields[1] == "COPY" &&
                                 fields[2] == "OUT" && clipboard_token(fields[3]) && clipboard_token(fields[4]) &&
                                 fields[4].find('.') == std::string::npos;
-                            if (valid_cancel || valid_shortcut || valid_local_copy)
+                            if (valid_cancel || valid_shortcut || valid_local_copy || wk::clipboard_v2_intent(fields))
                                 std::cerr << "CPP_CLIPBOARD_INTENT " << line << '\n';
                         }
                         continue;

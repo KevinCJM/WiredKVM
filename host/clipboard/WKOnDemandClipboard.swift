@@ -6,7 +6,7 @@ import Darwin
 final class WKCompanion: NSObject, NSMenuDelegate {
     static let magic = Data("WKC3".utf8)
     static let fileMagic = Data("WKF3".utf8)
-    static let build: UInt32 = 12
+    static let build: UInt32 = 16
     static let pasteLifetime: Double = 180
     let link: WKLink
     let bulkLink = WKLink(wireMagic: fileMagic)
@@ -30,14 +30,41 @@ final class WKCompanion: NSObject, NSMenuDelegate {
     private var imageJob: WKStreamFiles.ImageJob?
     private var decodedImage: (id: String, image: WKBulkImage)?
     private var imageReady: WKMessage?
+    private var readiness: [WKMessage] = []
     private var peerBulkImages = false
+    private let clipboardState = WKClipboardState()
+    private struct Origin: Equatable { let side: UInt32; let session, stamp: UInt64 }
+    private var localOrigin: Origin?
+    private var peerMetadataReady = false
+    private var lastRoute = ""
+    private struct Decision {
+        let id: UInt64, destination: UInt32, sequence: UInt64, revision: UInt64, focus: UInt64
+        let deadline: Double
+    }
+    private var decision: Decision?
+    private var highestIntentID: UInt64 = 0
+    private var bundleResponse: WKStreamSource?
+    private var decodedBundles: [String: WKClipboardBundle] = [:]
+    private var preparedBundles: [String: WKClipboardBundle.Prepared] = [:]
+    private var bundlePreparing = Set<String>()
+    private var bundlePreparationJobs = 0
+    private var requiredReady: [String: Set<String>] = [:]
+    private var expectedPeerCommit: (id: UInt64, origin: Origin)?
+    private var peerCommitReceipt: (id: UInt64, snapshot: WKClipboardState.Snapshot)?
+    private struct Departure {
+        let nonce: String, sequence: UInt64, focus: UInt64, session: UInt64, stamp: UInt64
+        let bookRevision: Int
+    }
+    private var departure: Departure?
+    private var metadataQuery: String?
+    private var metadataResponse: WKMessage?
 #if WK_TREE
     private var treeJob: WKTreeJob?
     private var offeredTreeURLs: [String: [URL]] = [:]
     private var collectionReady = Set<String>(), completedCollections = Set<String>()
-    private var protocolBuild: UInt32 { stream == nil ? Self.build : 15 }
+    private var protocolBuild: UInt32 { Self.build }
 #else
-    private var protocolBuild: UInt32 { stream == nil ? Self.build : 14 }
+    private var protocolBuild: UInt32 { Self.build }
 #endif
     private let clock: () -> Double
     private var revision: Int
@@ -64,9 +91,18 @@ final class WKCompanion: NSObject, NSMenuDelegate {
         let id: String, revision: Int, deadline: Double
         var staged: WKMessage?
         var fileID: String?
+        var bundleID: String?
+        var origin: Origin?
     }
-    private struct Request: Codable { let source: String, destination: String }
-    private enum Purpose { case prepare(String), content(String), commit(String), offer(String, String), streamOffer(String, String), cancel }
+    private struct Request: Codable {
+        let source: String, destination: String, originalSide: String, originalSession: String, originalStamp: String
+        var origin: Origin? {
+            guard let side = UInt32(originalSide), side < 2, let session = UInt64(originalSession), session > 0,
+                  let stamp = UInt64(originalStamp), stamp > 0 else { return nil }
+            return Origin(side: side, session: session, stamp: stamp)
+        }
+    }
+    private enum Purpose { case prepare(String), content(String), commit(String), offer(String, String), streamOffer(String, String), bundleMetadata(String, String), cancel }
     private var lastFinishedToken: String?
     private var paste: Paste?
     private var lease: Lease?
@@ -188,6 +224,19 @@ final class WKCompanion: NSObject, NSMenuDelegate {
         stream?.onFile = { [weak self] id, file in
             guard let self, let offer = self.streamIncoming.removeValue(forKey: id) else { return }
             if let line=WKMetadata.line(role:self.role,event:"BULK_RX",fields:["phase":"COMPLETE","acked":String(file.size),"total":String(file.size),"transfer":String(offer.generation),"nonce":offer.nonce]){self.log(line)}
+            if offer.kind == "clipboard-bundle" {
+                guard self.lease?.id == offer.nonce, self.lease?.bundleID == id else { return }
+                self.imageJob = self.stream?.decodeBundle(file: file) { [weak self] result in
+                    guard let self, let lease = self.lease, lease.id == offer.nonce, lease.bundleID == id,
+                          self.clipboard.changeCount == lease.revision else { return }
+                    self.imageJob = nil
+                    switch result {
+                    case .success(let bundle): self.decodedBundles[id] = bundle; self.prepareDecodedBundle(id)
+                    case .failure: self.discardLease(); self.notifyCancel(offer.nonce); self.status("ERROR bundle-decode-failed")
+                    }
+                }
+                return
+            }
             if offer.kind == "png" {
                 guard self.lease?.id == offer.nonce, self.lease?.fileID == id else { return }
                 self.imageJob = self.stream?.decodeImage(file: file) { [weak self] result in
@@ -197,7 +246,7 @@ final class WKCompanion: NSObject, NSMenuDelegate {
                     switch result {
                     case .success(let image):
                         self.decodedImage = (id, image)
-                        if self.role == "target" { self.imageReady = WKMessage(kind: "stream-ready", nonce: offer.nonce, body: Data(id.utf8)) }
+                        if self.role == "target" { self.queueReady(nonce: offer.nonce, id: id) }
                     case .failure: self.discardLease(); self.notifyCancel(offer.nonce); self.status("ERROR bulk-image-decode-failed")
                     }
                 }
@@ -206,6 +255,11 @@ final class WKCompanion: NSObject, NSMenuDelegate {
             do { try self.portal?.fulfill(id: id, file: file) }
             catch { self.portal?.fail(id: id); self.status("ERROR stream-file-publish-failed") }
         }
+        stream?.onReceiving = { [weak self] id, receiving in
+            guard let self, self.streamIncoming[id]?.kind == "file" else { return }
+            do { try self.portal?.beginReceiving(id: id, file: receiving) }
+            catch { receiving.fail(); self.portal?.fail(id: id) }
+        }
 #if WK_TREE
         stream?.onManifest = { [weak self] id, manifest in
             guard let self, let offer = self.streamIncoming[id], offer.kind == "collection",
@@ -213,19 +267,20 @@ final class WKCompanion: NSObject, NSMenuDelegate {
                   self.clipboard.changeCount == lease.revision, let portal = self.portal else { return }
             do {
                 self.offeredTreeURLs[id] = try portal.offerTree(offer, manifest: manifest)
-                if self.role == "target" { self.imageReady = WKMessage(kind: "stream-ready", nonce: offer.nonce, body: Data(id.utf8)) }
+                if let bundleID = self.lease?.bundleID { self.prepareDecodedBundle(bundleID) }
+                if self.role == "target" { self.queueReady(nonce: offer.nonce, id: id) }
             } catch { self.discardLease(); self.notifyCancel(offer.nonce); self.status("ERROR collection-publish-failed") }
         }
 #endif
         stream?.onFailure = { [weak self] id in
             guard let self else { return }
-            if let source = self.streamSources.removeValue(forKey: id), ["png", "collection"].contains(source.offer.kind) {
+            if let source = self.streamSources.removeValue(forKey: id), ["png", "collection", "clipboard-bundle"].contains(source.offer.kind) {
                 if self.paste?.id == source.offer.nonce { self.cancelPaste(notifyPeer: true) }
                 else { self.notifyCancel(source.offer.nonce) }
             }
             if let offer = self.streamIncoming.removeValue(forKey: id) {
-                if offer.kind != "png" { self.portal?.fail(id: id) }
-                if self.lease?.fileID == id { self.discardLease(); self.cancelPaste(notifyPeer: true); self.notifyCancel(offer.nonce) }
+                if !["png", "clipboard-bundle"].contains(offer.kind) { self.portal?.fail(id: id) }
+                if self.lease?.fileID == id || self.lease?.bundleID == id { self.discardLease(); self.cancelPaste(notifyPeer: true); self.notifyCancel(offer.nonce) }
             }
 #if WK_TREE
             self.collectionReady.remove(id); self.completedCollections.remove(id)
@@ -243,11 +298,153 @@ final class WKCompanion: NSObject, NSMenuDelegate {
                 return
             }
 #endif
-            if self.streamSources[id]?.offer.kind != "png" || self.role != "host" { self.streamSources.removeValue(forKey: id) }
+            if !["png", "clipboard-bundle"].contains(self.streamSources[id]?.offer.kind ?? "") || self.role != "host" { self.streamSources.removeValue(forKey: id) }
         }
     }
 
     private func next() -> String { counter &+= 1; return String(counter) }
+    private var side: UInt32 { role == "host" ? 0 : 1 }
+    private func origin(_ snapshot: WKClipboardState.Snapshot) -> Origin? {
+        if snapshot.provenance == .local { return Origin(side: snapshot.side, session: snapshot.session, stamp: snapshot.stamp) }
+        if snapshot.provenance == .received { return Origin(side: snapshot.originalSide, session: snapshot.originalSession, stamp: snapshot.originalStamp) }
+        return nil
+    }
+    private func localSnapshot() -> WKClipboardState.Snapshot {
+        WKClipboardState.Snapshot(side: side, session: link.session, stamp: UInt64(localState) ?? 0,
+            revision: UInt64(max(0, revision)), provenance: localOrigin == nil ? .local : .received,
+            originalSide: localOrigin?.side ?? 0, originalSession: localOrigin?.session ?? 0, originalStamp: localOrigin?.stamp ?? 0)
+    }
+    private func observeLocal(select: Bool = false) {
+        guard link.ready else { return }
+        _ = clipboardState.observe(localSnapshot(), selectSource: select)
+        emitRoute()
+    }
+    private func emitRoute() {
+        guard role == "host" else { return }
+        let p = clipboardState.projection, book = clipboardState.snapshot(side: 0), mini = clipboardState.snapshot(side: 1)
+        var nativeMask: UInt64 = 0
+        for destination: UInt32 in [0, 1] {
+            if p.selectedSide == nil || p.selectedSide == destination { nativeMask |= 1 << destination; continue }
+            if !p.cutBlocked, let selected = p.selectedSide, let source = clipboardState.snapshot(side: selected),
+               let target = clipboardState.snapshot(side: destination), let sourceOrigin = origin(source), origin(target) == sourceOrigin {
+                nativeMask |= 1 << destination
+            }
+        }
+        let fields: [UInt64] = [p.generation, p.appliedSequence, UInt64(p.selectedSide ?? 2),
+            book?.stamp ?? 0, mini?.stamp ?? 0, book?.originalStamp ?? 0, mini?.originalStamp ?? 0,
+            p.cutBlocked ? 1 : 0, nativeMask]
+        let line = "WKCLIP_ROUTE " + fields.map(String.init).joined(separator: ",")
+        if line != lastRoute { lastRoute = line; reply(line) }
+    }
+    private func metadataPayload() -> Data {
+        let snapshot = localSnapshot()
+        var bytes = Data("WKCV".utf8)
+        bytes.appendLE(snapshot.stamp); bytes.appendLE(snapshot.revision)
+        bytes.append(UInt8(snapshot.provenance.rawValue)); bytes.append(UInt8(snapshot.originalSide))
+        bytes.appendLE(snapshot.originalSession); bytes.appendLE(snapshot.originalStamp)
+        return bytes
+    }
+    private func receiveMetadata(_ report: WKReport, resolve: Bool = true) {
+        guard report.flags == 0x42, report.kind == .pong, report.session == link.peerSession,
+              report.sequence == 0, report.transfer == 0, report.payload.count == 38,
+              report.payload.prefix(4) == Data("WKCV".utf8), peerMetadataReady,
+              let provenance = WKClipboardState.Provenance(rawValue: UInt32(report.payload[20])) else { return }
+        let stamp: UInt64 = report.payload.readLE(at: 4), observed: UInt64 = report.payload.readLE(at: 12)
+        guard stamp == UInt64(remoteState) else { return }
+        let snapshot = WKClipboardState.Snapshot(side: 1-side, session: link.peerSession, stamp: stamp, revision: observed,
+            provenance: provenance, originalSide: UInt32(report.payload[21]),
+            originalSession: report.payload.readLE(at: 22), originalStamp: report.payload.readLE(at: 30))
+        let previous = clipboardState.snapshot(side: 1-side)
+        let changed = previous != nil && previous?.stamp != stamp
+        var ownCommit = peerCommitReceipt.map { $0.id == UInt64(paste?.id ?? "0") && $0.snapshot == snapshot } ?? false
+        if let expected = expectedPeerCommit, origin(snapshot) == expected.origin {
+            ownCommit = clipboardState.commit(id: expected.id, destinationSnapshot: snapshot)
+            if ownCommit { expectedPeerCommit = nil; peerCommitReceipt = (expected.id, snapshot) }
+        }
+        if !ownCommit {
+            guard clipboardState.observe(snapshot, selectSource: changed && provenance == .local && clipboardState.projection.contextSide == 1-side) else { return }
+        }
+        if role == "host" {
+            reply("WKCLIP_LINK 1"); emitRoute()
+            if !ownCommit, let p = paste, !clipboardState.active(UInt64(p.id) ?? 0) { cancelPaste(notifyPeer: true) }
+            if resolve { resolveDecision() }
+        }
+    }
+    private func resolveDecision() {
+        guard role == "host", let d = decision else { return }
+        if departure != nil, clock() < d.deadline { return }
+        if departure != nil { departure = nil; clipboardState.abort(d.id); decision = nil; reply("WKCLIP_RESULT \(d.id) blocked"); return }
+        if link.transmitting && clock() < d.deadline { return }
+        let targetRevision = d.destination == 0 ? d.revision : (clipboardState.snapshot(side: 1)?.revision ?? 0)
+        let plan = clipboardState.plan(id: d.id, destination: d.destination, minSequence: d.sequence,
+                                      destinationRevision: targetRevision, focusEpoch: d.focus)
+        if (plan.action == .refresh || (plan.action == .blocked && plan.reason == 6)), clock() < d.deadline { return }
+        decision = nil
+        if plan.action == .native { reply("WKCLIP_RESULT \(d.id) ready \(clipboard.changeCount)"); emitRoute(); return }
+        guard plan.action == .transfer, link.ready, peerMetadataReady, !link.transmitting,
+              let sourceOrigin = origin(plan.source) else {
+            clipboardState.abort(d.id); reply("WKCLIP_RESULT \(d.id) blocked"); emitRoute(); return
+        }
+        let id = String(d.id), direction = d.destination == 1 ? "OUT" : "IN"
+        let p = Paste(token: id, id: id, source: String(plan.source.stamp), direction: direction,
+                      revision: revision, deadline: clock() + Self.pasteLifetime)
+        paste = p
+        if direction == "IN" { lease = Lease(id: id, revision: revision, deadline: p.deadline, origin: sourceOrigin) }
+        // WKOD can arrive before its full WKCV observation. Only the Rust
+        // plan's pinned peer stamp may authorize Prepare/Pull, never that
+        // unpaired advertisement (which could contain a new destination Copy).
+        let peerStamp = direction == "OUT" ? plan.destination.stamp : plan.source.stamp
+        let request = Request(source: p.source, destination: String(peerStamp), originalSide: String(sourceOrigin.side),
+                              originalSession: String(sourceOrigin.session), originalStamp: String(sourceOrigin.stamp))
+        do {
+            guard let transfer = link.send(try WKMessage(kind: direction == "OUT" ? "prepare" : "pull", nonce: id,
+                body: JSONEncoder().encode(request)).encoded()) else { throw WKStreamError.disconnected }
+            purposes[transfer] = .prepare(id)
+            status("TRANSFER requested " + id)
+        } catch { cancelPaste(notifyPeer: true) }
+        emitRoute()
+    }
+    private func prepareDecodedBundle(_ id: String) {
+        guard let l = lease, l.bundleID == id, l.revision == clipboard.changeCount,
+              let bundle = decodedBundles[id], preparedBundles[id] == nil, !bundlePreparing.contains(id), bundlePreparationJobs < 2 else { return }
+        var urls: [URL] = []
+        if let fileID = l.fileID {
+#if WK_TREE
+            if let roots = offeredTreeURLs[fileID] { urls = roots }
+            else if let url = offeredURLs[fileID] { urls = [url] }
+#else
+            if let url = offeredURLs[fileID] { urls = [url] }
+#endif
+        }
+        if bundle.items.contains(where: { $0.representations.contains(where: { $0.kind == .fileURL }) }), urls.isEmpty { return }
+        let roots = urls, job = WKStreamFiles.ImageJob()
+        imageJob = job; bundlePreparing.insert(id); bundlePreparationJobs += 1
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let result = Result {
+                try bundle.prepare(fileURL: { reference in
+                    guard let index = Int(reference), roots.indices.contains(index) else { throw WKStreamError.invalid }
+                    return roots[index]
+                }, check: { try job.check() })
+            }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.bundlePreparationJobs -= 1
+                guard self.lease?.id == l.id, self.lease?.bundleID == id,
+                      self.lease?.revision == self.clipboard.changeCount else { return }
+                self.bundlePreparing.remove(id); self.imageJob = nil
+                switch result {
+                case .success(let prepared):
+                    self.preparedBundles[id] = prepared; self.decodedBundles.removeValue(forKey: id)
+                    if self.role == "target" { self.queueReady(nonce: l.id, id: id) }
+                case .failure: self.discardLease(); self.notifyCancel(l.id); self.status("ERROR bundle-prepare-failed")
+                }
+            }
+        }
+    }
+    private func queueReady(nonce: String, id: String) {
+        guard readiness.count < 8, !readiness.contains(where: { $0.nonce == nonce && $0.body == Data(id.utf8) }) else { return }
+        readiness.append(WKMessage(kind: "stream-ready", nonce: nonce, body: Data(id.utf8)))
+    }
     private func status(_ value: String) {
         if value.hasPrefix("ERROR "), let line = WKMetadata.line(role: role, event: "ERROR",
             fields: ["code": String(value.dropFirst(6))]) { log(line) }
@@ -361,8 +558,17 @@ final class WKCompanion: NSObject, NSMenuDelegate {
         preparing = nil; streamResponse = nil; lastFinishedToken = nil; peerBulkImages = false; imageJob?.cancel(); imageJob = nil; imageReady = nil; decodedImage = nil
         stream?.setEpoch(ready ? (link.session ^ link.peerSession) : 0)
         cancelPaste(notifyPeer: false); discardLease(); response = nil; purposes.removeAll()
-        committed = nil; remoteState = "0"; remoteSource = "0"; localSource = "0"
-        revision = clipboard.changeCount; localState = next(); lastAdvertisement = -10
+        committed = nil; remoteState = "0"; remoteSource = "0"
+        decision = nil; peerMetadataReady = false; lastRoute = ""; requiredReady.removeAll(); decodedBundles.removeAll()
+        preparedBundles.removeAll(); bundlePreparing.removeAll(); readiness.removeAll(); expectedPeerCommit = nil; peerCommitReceipt = nil
+        departure = nil; metadataQuery = nil; metadataResponse = nil
+        bundleResponse?.cancel(); bundleResponse = nil
+        let observedRevision = clipboard.changeCount
+        if observedRevision != revision { localOrigin = nil }
+        revision = observedRevision; localState = next(); localSource = localState; lastAdvertisement = -10
+        clipboardState.reset(side: side, session: ready ? link.session : 0)
+        clipboardState.reset(side: 1-side, session: ready ? link.peerSession : 0)
+        observeLocal()
         if role == "host" { reply("WKCLIP_RESET 0"); log("WKCLIP_STATUS PEER_VERSION 0") }
         if !ready { failFiles() }
         updateBulk(); status(ready ? "READY \(role)" : "DISCONNECTED")
@@ -387,6 +593,9 @@ final class WKCompanion: NSObject, NSMenuDelegate {
         if role != "host", fnKey.receive(data, at: clock()) { return }
         if data.prefix(4) == Self.fileMagic { bulkLink.receive(data, at: clock()); return }
         link.receive(data, at: clock())
+        if link.ready, let report = WKReport(data, wireMagic: Self.magic), report.flags == 0x42 {
+            receiveMetadata(report); return
+        }
         if link.ready, let report = WKReport(data, wireMagic: Self.magic), report.session == link.peerSession,
            let counts = Self.portalCounts(report) {
             if role == "host", counts != peerPortalCounts { logPortalCounts(counts, role: "target") }
@@ -402,22 +611,27 @@ final class WKCompanion: NSObject, NSMenuDelegate {
               report.session == link.peerSession, report.payload.count == (stream == nil ? 24 : 32),
               report.payload.prefix(4) == Data("WKOD".utf8) else { return }
         let build: UInt32 = report.payload.readLE(at: 4)
-        guard build == protocolBuild else { peerBulkImages = false; return }
+        guard build == protocolBuild, report.flags & 0x03 == 0x03 else {
+            peerBulkImages = false; peerMetadataReady = false
+            if role == "host" { reply("WKCLIP_RESET 0") }
+            return
+        }
         if stream != nil {
             peerBulkImages = (report.payload.readLE(at: 24) as UInt32 == UInt32(WKStreamOffer.maximumImage)) &&
                 (report.payload.readLE(at: 28) as UInt32 == 5)
-            guard peerBulkImages else { return }
+            guard peerBulkImages else {
+                peerMetadataReady = false
+                if role == "host" { reply("WKCLIP_RESET 0") }
+                return
+            }
         }
         let state = String(report.payload.readLE(at: 8) as UInt64)
         let source = String(report.payload.readLE(at: 16) as UInt64)
         guard state != "0" else { return }
-        let changed = source != remoteSource
+        peerMetadataReady = true
         remoteState = state; remoteSource = source
         if role == "host" {
             log("WKCLIP_STATUS PEER_VERSION \(build)")
-            reply("WKCLIP_LINK 1")
-            if changed && source != "0" { reply("WKCLIP_ORIGIN IN \(source)") }
-            if let p = paste, p.direction == "IN", source != p.source { cancelPaste(notifyPeer: true) }
         }
     }
     func tick(_ now: Double) {
@@ -465,10 +679,16 @@ final class WKCompanion: NSObject, NSMenuDelegate {
             var payload = Data("WKOD".utf8); payload.appendLE(protocolBuild)
             payload.appendLE(UInt64(localState)!); payload.appendLE(UInt64(localSource)!)
             if stream != nil { payload.appendLE(UInt32(WKStreamOffer.maximumImage)); payload.appendLE(UInt32(5)) }
-            if transport.send(WKReport(kind: .ping, session: link.session, payload: payload).encode(wireMagic: Self.magic)) {
+            if transport.send(WKReport(kind: .ping, flags: 0x03, session: link.session, payload: payload).encode(wireMagic: Self.magic)) {
+                _ = transport.send(WKReport(kind: .pong, flags: 0x42, session: link.session, payload: metadataPayload()).encode(wireMagic: Self.magic))
                 lastAdvertisement = now
             }
         }
+        resolveDecision()
+        if let id = lease?.bundleID { prepareDecodedBundle(id) }
+        if let query = metadataQuery, !link.transmitting,
+           let data = try? WKMessage(kind: "metadata-refresh", nonce: query).encoded(), link.send(data) != nil { metadataQuery = nil }
+        if let item = metadataResponse, !link.transmitting, let data = try? item.encoded(), link.send(data) != nil { metadataResponse = nil }
         if let p = paste, now >= p.deadline { cancelPaste(notifyPeer: true) }
         if let l = lease, now >= l.deadline { discardLease() }
         if let code = pendingStreamDiagnostic, link.ready, !link.transmitting {
@@ -479,12 +699,17 @@ final class WKCompanion: NSObject, NSMenuDelegate {
         if let ready = imageReady, !link.transmitting {
             if let data = try? ready.encoded(), link.send(data) != nil { imageReady = nil }
         }
-        if let source = streamResponse, !link.transmitting {
-            streamResponse = nil
+        if let ready = readiness.first, !link.transmitting, let data = try? ready.encoded(), link.send(data) != nil { readiness.removeFirst() }
+        if let source = streamResponse ?? bundleResponse, !link.transmitting {
+            if streamResponse?.offer.id == source.offer.id { streamResponse = nil } else { bundleResponse = nil }
             do {
-                let item = WKMessage(kind: "stream-offer", nonce: source.offer.nonce, body: try source.offer.encoded())
+                let metadata = source.bundleMetadata
+                let item: WKMessage
+                if let metadata { item = WKMessage(kind: "bundle-metadata", nonce: source.offer.nonce, name: source.offer.id, body: metadata) }
+                else { item = WKMessage(kind: "stream-offer", nonce: source.offer.nonce, body: try source.offer.encoded()) }
                 guard let id = link.send(try item.encoded()) else { throw WKStreamError.disconnected }
-                streamSources[source.offer.id] = source; purposes[id] = .streamOffer(source.offer.id, source.offer.nonce)
+                streamSources[source.offer.id] = source
+                purposes[id] = metadata == nil ? .streamOffer(source.offer.id, source.offer.nonce) : .bundleMetadata(source.offer.id, source.offer.nonce)
             } catch { cancelPaste(notifyPeer: true); status("ERROR stream-offer-failed") }
         }
         // IN data is staged by the transport callback, then committed only on
@@ -497,7 +722,13 @@ final class WKCompanion: NSObject, NSMenuDelegate {
     func pollClipboard(_ now: Double) {
         let current = clipboard.changeCount
         guard current != revision else { return }
-        revision = current; committed = nil
+        revision = current; committed = nil; localOrigin = nil
+        if role == "host" {
+            departure = nil
+            if let pending = decision {
+                decision = nil; clipboardState.abort(pending.id); reply("WKCLIP_RESULT \(pending.id) cancelled")
+            }
+        }
         if stream != nil {
             imageJob?.cancel(); imageJob = nil
 #if WK_TREE
@@ -507,9 +738,9 @@ final class WKCompanion: NSObject, NSMenuDelegate {
         }
         cancelPaste(notifyPeer: true); discardLease(); response = nil; preparing = nil; streamResponse?.cancel(); streamResponse = nil
         localState = next(); localSource = localState; lastAdvertisement = -10
+        observeLocal(select: role == "host" && clipboardState.projection.contextSide == side)
         if let id = appliedFileID { portal?.retire(id: id); appliedFileID = nil }
         // Only origin/version metadata leaves this function. No content reads.
-        if role == "host" { reply("WKCLIP_ORIGIN OUT \(localSource)") }
         if let line = WKMetadata.line(role: role, event: "COPY",
             fields: ["direction": role == "host" ? "OUT" : "IN", "nonce": localSource, "revision": String(revision)]) { log(line) }
     }
@@ -531,43 +762,61 @@ final class WKCompanion: NSObject, NSMenuDelegate {
         guard role == "host" else { return }
         let w = line.split(separator: " ").map(String.init)
         if w.count == 2 && w[0] == "CANCEL" {
+            if let d = decision, w[1] == "0" || w[1] == String(d.id) {
+                clipboardState.abort(d.id); decision = nil; reply("WKCLIP_RESULT \(d.id) cancelled"); emitRoute()
+            }
             if w[1] == lastFinishedToken { status("TRANSFER already-completed " + w[1]); return }
             if w[1] == "0" || w[1] == paste?.token { cancelPaste(notifyPeer: true) }; return
         }
-        // Copy is already being delivered natively by capture. Never arm/replay
-        // it, and never read its contents. Revision polling supplies provenance.
-        if w.first == "COPY" { return }
-        guard w.count == 3, w[0] == "PASTE", ["IN", "OUT"].contains(w[1]) else { return }
-        let token = w[2], parts = token.split(separator: ".").map(String.init)
-        guard parts.count == 2, parts.allSatisfy(WKMessage.validNonce), !parts.contains("0") else { return }
-        pollClipboard(clock())
-        if let line = WKMetadata.line(role: role, event: "CHECK", fields: ["direction": w[1], "token": token,
-            "linkReady": link.ready ? "1" : "0", "ready": remoteState != "0" ? "1" : "0",
-            "notTransmitting": link.transmitting ? "0" : "1",
-            "revisionMatches": parts[0] == (w[1] == "OUT" ? localSource : remoteSource) ? "1" : "0"]) { log(line) }
-        if paste?.token == token { return } // same V intent: do not restart or reset deadline
-        cancelPaste(notifyPeer: true)
-        guard link.ready, remoteState != "0", !link.transmitting,
-              parts[0] == (w[1] == "OUT" ? localSource : remoteSource) else {
-            reply("WKCLIP_PASTE BLOCK \(token)"); return
-        }
-        let p = Paste(token: token, id: parts[1], source: parts[0], direction: w[1],
-                      revision: revision, deadline: clock() + Self.pasteLifetime)
-        paste = p
-        if p.direction == "IN" { lease = Lease(id: p.id, revision: revision, deadline: p.deadline) }
-        let request = Request(source: p.source, destination: remoteState)
-        do {
-            let data = try JSONEncoder().encode(request)
-            guard let id = link.send(try WKMessage(kind: p.direction == "OUT" ? "prepare" : "pull", nonce: p.id, body: data).encoded()) else {
-                cancelPaste(notifyPeer: false); return
+        if w.count == 4, w[0] == "CONTEXT", let sequence = UInt64(w[1]), let destination = UInt32(w[2]), let focus = UInt64(w[3]) {
+            // Attribute a just-completed Book menu copy to the side being left.
+            pollClipboard(clock())
+            let oldSide = clipboardState.projection.contextSide
+            let oldPeer = clipboardState.snapshot(side: 1)
+            if clipboardState.context(sequence: sequence, side: destination, focusEpoch: focus) {
+                departure = nil
+                if oldSide == 1, destination == 0, let peer = oldPeer {
+                    let nonce = next()
+                    departure = Departure(nonce: nonce, sequence: sequence, focus: focus, session: peer.session,
+                                          stamp: peer.stamp, bookRevision: clipboard.changeCount)
+                    metadataQuery = nonce
+                }
+                if let p = paste, !clipboardState.active(UInt64(p.id) ?? 0) { cancelPaste(notifyPeer: true) }
+                if let d = decision { clipboardState.abort(d.id); decision = nil; reply("WKCLIP_RESULT \(d.id) cancelled") }
+                emitRoute()
             }
-            purposes[id] = .prepare(p.id)
-            status("TRANSFER requested \(p.id)")
-        } catch { cancelPaste(notifyPeer: false) }
+            return
+        }
+        if w.count == 6, w[0] == "SELECT", let sequence = UInt64(w[1]), let source = UInt32(w[2]),
+           ["copy", "cut"].contains(w[3]), let baseline = UInt64(w[4]), let focus = UInt64(w[5]),
+           sequence > clipboardState.projection.appliedSequence,
+           focus == clipboardState.projection.focusEpoch, source == clipboardState.projection.contextSide {
+            departure = nil
+            cancelPaste(notifyPeer: true)
+            if let d = decision { clipboardState.abort(d.id); decision = nil; reply("WKCLIP_RESULT \(d.id) cancelled") }
+            pollClipboard(clock())
+            _ = clipboardState.select(sequence: sequence, side: source, cut: w[3] == "cut", baselineStamp: baseline)
+            emitRoute(); return
+        }
+        guard w.count == 6, w[0] == "PASTE", let id = UInt64(w[1]), id > 0, let destination = UInt32(w[2]), destination < 2,
+              let sequence = UInt64(w[3]), let destinationRevision = UInt64(w[4]), let focus = UInt64(w[5]) else { return }
+        if paste?.id == w[1] || decision?.id == id || lastFinishedToken == w[1] { return }
+        guard id > highestIntentID, focus == clipboardState.projection.focusEpoch,
+              destination == clipboardState.projection.contextSide else { return }
+        highestIntentID = id
+        cancelPaste(notifyPeer: true)
+        if let old = decision { clipboardState.abort(old.id); reply("WKCLIP_RESULT \(old.id) cancelled") }
+        pollClipboard(clock())
+        decision = Decision(id: id, destination: destination, sequence: sequence, revision: destinationRevision,
+                            focus: focus, deadline: clock() + 0.75)
+        metadataQuery = departure?.nonce ?? String(id)
+        resolveDecision()
+        if decision == nil, metadataQuery == String(id) { metadataQuery = nil }
     }
     private func cancelPaste(notifyPeer: Bool) {
         guard let p = paste else { return }
-        paste = nil; reply("WKCLIP_PASTE BLOCK \(p.token)")
+        clipboardState.abort(UInt64(p.id) ?? 0); expectedPeerCommit = nil; peerCommitReceipt = nil
+        paste = nil; reply("WKCLIP_RESULT \(p.token) cancelled"); emitRoute()
         if lease?.id == p.id { discardLease() }
         cancelTransaction(p.id)
         if stream != nil {
@@ -590,7 +839,9 @@ final class WKCompanion: NSObject, NSMenuDelegate {
     }
     private func finishPaste(_ p: Paste) {
         guard paste?.token == p.token else { return }
-        paste = nil; lastFinishedToken = p.token; reply("WKCLIP_PASTE READY \(p.token)")
+        paste = nil; lastFinishedToken = p.token; reply("WKCLIP_RESULT \(p.token) ready \(clipboard.changeCount)"); emitRoute()
+        peerCommitReceipt = nil
+        requiredReady.removeValue(forKey: p.id)
         let pending=streamSources.values.contains{$0.offer.nonce==p.id&&$0.offer.kind != "png"} || streamIncoming.values.contains{$0.nonce==p.id&&$0.kind != "png"}
         status("TRANSFER \(pending ? "file-in-progress" : "complete") \(p.id)")
     }
@@ -604,7 +855,10 @@ final class WKCompanion: NSObject, NSMenuDelegate {
         }
         if response?.nonce == nonce { response = nil }
         if streamResponse?.offer.nonce == nonce { streamResponse?.cancel(); streamResponse = nil }
+        if bundleResponse?.offer.nonce == nonce { bundleResponse?.cancel(); bundleResponse = nil }
+        requiredReady.removeValue(forKey: nonce)
         if imageReady?.nonce == nonce { imageReady = nil }
+        readiness.removeAll { $0.nonce == nonce }
         for (id, source) in streamSources where source.offer.nonce == nonce {
             stream?.cancel(id); streamSources.removeValue(forKey: id)
 #if WK_TREE
@@ -614,6 +868,9 @@ final class WKCompanion: NSObject, NSMenuDelegate {
     }
     private var leaseCanCommit: Bool {
         guard let l = lease, let item = l.staged else { return false }
+        if let id = l.bundleID, preparedBundles[id] == nil { return false }
+        if item.kind == "stream-offer", let offer = try? WKStreamOffer.decode(item.body), offer.clipboardBundle == true, l.bundleID == nil { return false }
+        if item.kind == "stream-offer", let offer = try? WKStreamOffer.decode(item.body), offer.kind == "clipboard-bundle" { return l.bundleID != nil }
         if item.kind == "stream-offer", let offer = try? WKStreamOffer.decode(item.body), offer.kind == "png" {
             return decodedImage?.id == offer.id
         }
@@ -626,6 +883,11 @@ final class WKCompanion: NSObject, NSMenuDelegate {
     }
     private func discardLease() {
         imageJob?.cancel(); imageJob = nil; decodedImage = nil; imageReady = nil
+        if let id = lease?.id { readiness.removeAll { $0.nonce == id } }
+        if let id = lease?.bundleID {
+            decodedBundles.removeValue(forKey: id); preparedBundles.removeValue(forKey: id); bundlePreparing.remove(id)
+            if streamIncoming.removeValue(forKey: id) != nil { stream?.cancel(id) }
+        }
         if let id = lease?.fileID {
             portal?.fail(id: id); portal?.retire(id: id)
             incomingFiles.removeValue(forKey: id); offeredURLs.removeValue(forKey: id)
@@ -640,6 +902,40 @@ final class WKCompanion: NSObject, NSMenuDelegate {
         do {
             let item = try WKMessage.decode(data)
             guard item.nonce != "0" else { return false }
+            if item.kind == "metadata-refresh" {
+                pollClipboard(clock()); lastAdvertisement = -10
+                metadataResponse = WKMessage(kind: "metadata-snapshot", nonce: item.nonce, body: metadataPayload())
+                return true
+            }
+            if item.kind == "metadata-snapshot" {
+                guard role == "host", peerMetadataReady, item.nonce == departure?.nonce || item.nonce == decision.map({ String($0.id) }),
+                      item.body.count == 38, item.body.prefix(4) == Data("WKCV".utf8) else { return false }
+                let stamp: UInt64 = item.body.readLE(at: 4)
+                guard stamp >= (UInt64(remoteState) ?? 0) else { return true }
+                remoteState = String(stamp); remoteSource = remoteState
+                receiveMetadata(WKReport(kind: .pong, flags: 0x42, session: link.peerSession, payload: item.body), resolve: false)
+                if let old = departure, old.nonce == item.nonce {
+                    departure = nil
+                    if clipboard.changeCount == old.bookRevision {
+                        _ = clipboardState.confirmDeparture(side: 1, expectedSequence: old.sequence, focusEpoch: old.focus,
+                                                            baselineSession: old.session, baselineStamp: old.stamp)
+                        emitRoute(); resolveDecision()
+                    }
+                }
+                resolveDecision()
+                return true
+            }
+            if item.kind == "bundle-metadata" {
+                guard stream != nil, peerBulkImages, item.body.count <= 128 * 1024,
+                      var l = lease, l.id == item.nonce, l.revision == clipboard.changeCount,
+                      clock() < l.deadline, let id = item.name, l.bundleID == nil, l.fileID != nil else { return false }
+                let bundle = try WKClipboardBundle.decode(item.body)
+                // This control message may contain opaque file references only.
+                // Media and formatted-content bodies always require Bulk.
+                guard bundle.items.allSatisfy({ $0.representations.allSatisfy({ $0.kind == .fileURL }) }) else { return false }
+                l.bundleID = id; lease = l; decodedBundles[id] = bundle; prepareDecodedBundle(id)
+                return true
+            }
             if item.kind == "stream-diagnostic" {
                 guard role == "host", let code = String(data: item.body, encoding: .utf8),
                       let line = WKMetadata.line(role: "target", event: "ERROR", fields: ["code": code]) else { return false }
@@ -649,22 +945,27 @@ final class WKCompanion: NSObject, NSMenuDelegate {
                 guard role == "target" else { return false }
                 pollClipboard(clock())
                 let request = try JSONDecoder().decode(Request.self, from: item.body)
-                guard request.destination == localState else { return false }
+                guard request.destination == localState, let sourceOrigin = request.origin else { return false }
+                // Retire only uncommitted clipboard preparation. File streams
+                // already handed to Finder continue independently.
+                var obsolete = Set(requiredReady.filter { !$0.value.isEmpty }.map(\.key))
+                if let old = preparing?.nonce { obsolete.insert(old) }
+                if let old = bundleResponse?.offer.nonce { obsolete.insert(old) }
+                if let old = streamResponse?.offer.nonce { obsolete.insert(old) }
+                for source in streamSources.values where ["png", "clipboard-bundle"].contains(source.offer.kind) { obsolete.insert(source.offer.nonce) }
+                for old in obsolete where old != item.nonce { cancelTransaction(old) }
                 discardLease(); imageJob?.cancel(); imageJob = nil; preparing = nil; streamResponse = nil; response = nil
-                for (id, source) in streamSources where source.offer.kind == "png" {
-                    stream?.cancel(id); streamSources.removeValue(forKey: id)
-                }
                 if item.kind == "prepare" {
-                    lease = Lease(id: item.nonce, revision: revision, deadline: clock() + Self.pasteLifetime)
+                    lease = Lease(id: item.nonce, revision: revision, deadline: clock() + Self.pasteLifetime, origin: sourceOrigin)
                 } else {
-                    guard request.source == localSource, localSource != "0" else { return false }
+                    guard request.source == localSource, localSource != "0", origin(localSnapshot()) == sourceOrigin else { return false }
                     try prepareContent(item.nonce)
                 }
                 return true
             }
             if item.kind == "stream-ready" {
                 guard role == "host", let id = String(data: item.body, encoding: .utf8),
-                      let source = streamSources[id], ["png", "collection"].contains(source.offer.kind), source.offer.nonce == item.nonce,
+                      let source = streamSources[id], ["png", "collection", "clipboard-bundle"].contains(source.offer.kind), source.offer.nonce == item.nonce,
                       paste?.id == item.nonce else { return false }
 #if WK_TREE
                 if source.offer.kind == "collection" {
@@ -674,7 +975,9 @@ final class WKCompanion: NSObject, NSMenuDelegate {
 #else
                 streamSources.removeValue(forKey: id)
 #endif
-                metadataCompleted(item.nonce, true); return true
+                requiredReady[item.nonce]?.remove(id)
+                if requiredReady[item.nonce]?.isEmpty != false { metadataCompleted(item.nonce, true) }
+                return true
             }
             if item.kind == "cancel" {
                 if stream != nil { cancelTransaction(item.nonce) }
@@ -686,6 +989,17 @@ final class WKCompanion: NSObject, NSMenuDelegate {
                 return true
             }
             if item.kind == "commit" { return role == "target" && commit(item.nonce) }
+            // The bundle is a second stream of the same transaction. It carries
+            // representations and opaque root references, never file contents.
+            if item.kind == "stream-offer", let offer = try? WKStreamOffer.decode(item.body), offer.kind == "clipboard-bundle" {
+                guard let stream, stream.isReady, peerBulkImages, var l = lease, l.id == item.nonce,
+                      l.revision == clipboard.changeCount, clock() < l.deadline, l.bundleID == nil,
+                      streamIncoming[offer.id] == nil, streamIncoming.count < 4 else { return false }
+                l.bundleID = offer.id
+                if l.staged == nil { l.staged = item }
+                lease = l; streamIncoming[offer.id] = offer; stream.expect(offer); receivedCount += 1
+                return true
+            }
             guard var l = lease, l.id == item.nonce, l.revision == clipboard.changeCount,
                   clock() < l.deadline, l.staged == nil else { return false }
             if item.kind == "stream-offer" {
@@ -697,14 +1011,7 @@ final class WKCompanion: NSObject, NSMenuDelegate {
                     offeredURLs[offer.id] = try portal.offerStream(offer)
                 }
                 streamIncoming[offer.id] = offer; l.fileID = offer.id; stream.expect(offer)
-            } else if stream != nil && ["png", "file", "file-offer"].contains(item.kind) { return false
-            } else if item.kind == "file-offer" {
-                guard portalReady, bulkLink.ready, let portal, incomingFiles.count < 8 else { return false }
-                let offer = try WKFileOffer.decode(item.body)
-                guard incomingFiles[offer.id] == nil else { return false }
-                offeredURLs[offer.id] = try portal.offer(id: offer.id, name: offer.name, size: offer.size, sha256: offer.sha256)
-                incomingFiles[offer.id] = offer; l.fileID = offer.id
-            } else if !["text", "png", "file"].contains(item.kind) { return false }
+            } else if item.kind != "text" { return false }
             l.staged = item; lease = l; receivedCount += 1
             return true
         } catch { status("ERROR \(WKMetadata.errorCode(error))"); return false }
@@ -712,9 +1019,21 @@ final class WKCompanion: NSObject, NSMenuDelegate {
     private func commit(_ id: String) -> Bool {
         guard leaseCanCommit, let l = lease, l.id == id, let item = l.staged,
               l.revision == clipboard.changeCount, clock() < l.deadline else { return false }
+        if role == "host", !clipboardState.active(UInt64(id) ?? 0) { return false }
         do {
-            if let image = decodedImage, image.id == l.fileID {
+            var ownRevision: Int
+            if let bundleID = l.bundleID, let bundle = preparedBundles[bundleID] {
+                ownRevision = try bundle.apply(to: clipboard, expectedChangeCount: l.revision)
+                preparedBundles.removeValue(forKey: bundleID)
+                if let fileID = l.fileID {
+                    if let old = appliedFileID { portal?.retire(id: old) }; appliedFileID = fileID
+                }
+            } else if item.kind == "text" {
+                let bundle = WKClipboardBundle(items: [.init(representations: [.init(kind: .text, body: item.body)])])
+                ownRevision = try bundle.prepare().apply(to: clipboard, expectedChangeCount: l.revision)
+            } else if let image = decodedImage, image.id == l.fileID {
                 try clipboard.applyBulkImage(image.image, expectedChangeCount: l.revision); decodedImage = nil
+                ownRevision = clipboard.changeCount
             } else if let fileID = l.fileID {
                 // The URL has already been reserved; offer() is not called twice.
 #if WK_TREE
@@ -728,8 +1047,14 @@ final class WKCompanion: NSObject, NSMenuDelegate {
                 try clipboard.applyFileURL(url, expectedChangeCount: l.revision)
 #endif
                 if let old = appliedFileID { self.portal?.retire(id: old) }; appliedFileID = fileID
-            } else { _ = try clipboard.apply(item, expectedChangeCount: l.revision) }
-            revision = clipboard.changeCount; localState = next(); localSource = "0"; lastAdvertisement = -10
+                ownRevision = clipboard.changeCount
+            } else { _ = try clipboard.apply(item, expectedChangeCount: l.revision); ownRevision = clipboard.changeCount }
+            guard clipboard.changeCount == ownRevision else { pollClipboard(clock()); discardLease(); return false }
+            revision = ownRevision; localState = next(); localSource = localState; localOrigin = l.origin; lastAdvertisement = -10
+            if role == "host" {
+                guard clipboardState.commit(id: UInt64(id) ?? 0, destinationSnapshot: localSnapshot()) else { return false }
+                emitRoute()
+            } else { observeLocal() }
             committed = (id, revision); lease = nil
             if let fileID = l.fileID { offeredURLs.removeValue(forKey: fileID) }
 #if WK_TREE
@@ -753,6 +1078,9 @@ final class WKCompanion: NSObject, NSMenuDelegate {
                 } catch { cancelPaste(notifyPeer: true); status("ERROR \(WKMetadata.errorCode(error))") }
             }
         case .content(let nonce): metadataCompleted(nonce, accepted)
+        case .bundleMetadata(let file, let nonce):
+            if !accepted { streamSources.removeValue(forKey: file); cancelPaste(notifyPeer: true); notifyCancel(nonce) }
+            else if role != "host" { streamSources.removeValue(forKey: file) }
         case .offer(let file, let nonce):
             if accepted { bulkQueue.append(file) }
             else { outgoingFiles.removeValue(forKey: file) }
@@ -760,7 +1088,7 @@ final class WKCompanion: NSObject, NSMenuDelegate {
         case .streamOffer(let file, let nonce):
             if accepted, let source = streamSources[file] {
                 stream?.send(source)
-                if ["png", "collection"].contains(source.offer.kind) { return } // decoded image or verified manifest precedes commit
+                if ["png", "collection", "clipboard-bundle"].contains(source.offer.kind) || requiredReady[nonce]?.isEmpty == false { return }
             } else { streamSources.removeValue(forKey: file); notifyCancel(nonce) }
             metadataCompleted(nonce, accepted)
         case .commit(let nonce):
@@ -772,76 +1100,89 @@ final class WKCompanion: NSObject, NSMenuDelegate {
     }
     private func metadataCompleted(_ nonce: String, _ accepted: Bool) {
         guard role == "host", let p = paste, p.id == nonce else { return }
-        guard accepted, p.revision == clipboard.changeCount,
+        guard accepted, p.revision == clipboard.changeCount, clipboardState.active(UInt64(nonce) ?? 0),
               let data = try? WKMessage(kind: "commit", nonce: nonce).encoded(), let id = link.send(data) else {
             cancelPaste(notifyPeer: true); return
+        }
+        if let source = clipboardState.projection.selectedSide.flatMap({ clipboardState.snapshot(side: $0) }), let sourceOrigin = origin(source) {
+            expectedPeerCommit = (UInt64(nonce) ?? 0, sourceOrigin)
         }
         purposes[id] = .commit(nonce)
     }
     private func sendContent(_ item: WKMessage) {
         do {
-            if stream != nil && ["png", "file"].contains(item.kind) { throw WKStreamError.invalid }
-            if item.kind == "file", portalReady, bulkLink.ready, let name = item.name {
-                guard outgoingFiles.count < 8 else { throw WKClipboardError.invalid("file-transfer-queue-full") }
-                let offer = WKFileOffer(name: name, size: item.size, sha256: item.sha256, nonce: item.nonce)
-                var body = item; body.fileID = offer.id
-                let data = try WKMessage(kind: "file-offer", nonce: item.nonce, body: offer.encoded()).encoded()
-                guard let id = link.send(data) else { throw WKClipboardError.invalid("file-portal-unavailable") }
-                outgoingFiles[offer.id] = body; purposes[id] = .offer(offer.id, item.nonce)
-            } else if let id = link.send(try item.encoded()) { purposes[id] = .content(item.nonce) }
+            guard item.kind == "text" else { throw WKClipboardError.invalid("bulk-transport-required") }
+            guard let id = link.send(try item.encoded()) else { throw WKStreamError.disconnected }
+            purposes[id] = .content(item.nonce)
         } catch { cancelPaste(notifyPeer: true); status("ERROR \(WKMetadata.errorCode(error))") }
     }
     private func prepareContent(_ nonce: String) throws {
-#if WK_TREE
-        let urls = try clipboard.selectedFileURLs()
-        if let stream, !urls.isEmpty {
-            guard portalReady, stream.isReady, streamSources.count < 4 else { throw WKStreamError.capacity }
-            let captured = clipboard.changeCount; preparing = (nonce, captured); treeJob?.cancel()
-            treeJob = stream.prepareSelection(urls: urls, nonce: nonce) { [weak self] result in
-                guard let self, self.preparing?.nonce == nonce, self.preparing?.revision == captured,
-                      self.clipboard.changeCount == captured, self.link.ready else {
-                    if case .success(let source) = result { source.cancel() }; return
-                }
-                self.preparing = nil; self.treeJob = nil
-                switch result {
-                case .success(let source): self.streamResponse = source
-                case .failure: self.cancelPaste(notifyPeer: true); self.notifyCancel(nonce); self.status("ERROR collection-source-unavailable")
-                }
-            }
+        let captured = clipboard.changeCount
+        let items = clipboard.board.pasteboardItems ?? []
+        let richTypes: Set<NSPasteboard.PasteboardType> = [.html, .rtf, .png, .tiff, .fileURL, .init("public.jpeg"), .init("public.heic")]
+        let plain = items.count == 1 && items[0].types.contains(.string) && !items[0].types.contains(where: { richTypes.contains($0) })
+        if plain {
+            guard clipboard.changeCount == captured, let text = items[0].string(forType: .string),
+                  clipboard.changeCount == captured else { throw WKClipboardError.invalid("clipboard-changed-during-read") }
+            let snapshot = WKMessage(kind: "text", nonce: nonce, body: Data(text.utf8))
+            try snapshot.validate()
+            response = snapshot
             return
         }
+        // No legacy PNG/file snapshot is allowed here: without Bulk, refuse
+        // before asking a pasteboard owner to materialize a media body.
+        guard stream != nil else { throw WKClipboardError.invalid("bulk-transport-required") }
+#if WK_TREE
+        let urls = try clipboard.selectedFileURLs()
+#else
+        let urls = try clipboard.singleFileURL().map { [$0] } ?? []
 #endif
-        if let stream, let url = try clipboard.singleFileURL() {
-            guard portalReady, stream.isReady, streamSources.count < 4 else { throw WKStreamError.capacity }
-            let captured = clipboard.changeCount; preparing = (nonce, captured)
-            stream.prepare(url: url, nonce: nonce) { [weak self] result in
-                guard let self, self.preparing?.nonce == nonce, self.preparing?.revision == captured,
-                      self.clipboard.changeCount == captured, self.link.ready else { return }
-                self.preparing = nil
-                switch result {
-                case .success(let source): self.streamResponse = source
-                case .failure:
-                    self.cancelPaste(notifyPeer: true)
-                    if let data = try? WKMessage(kind: "cancel", nonce: nonce).encoded(), let id = self.link.send(data) { self.purposes[id] = .cancel }
-                    self.status("ERROR stream-source-unavailable")
-                }
+        guard let stream, peerBulkImages, stream.isReady, streamSources.count <= 2,
+              urls.isEmpty || portalReady else { throw WKStreamError.disconnected }
+        guard clipboard.changeCount == captured else { throw WKClipboardError.invalid("clipboard-changed-during-read") }
+        preparing = (nonce, captured)
+        imageJob?.cancel()
+#if WK_TREE
+        treeJob?.cancel()
+#endif
+        imageJob = stream.prepareBundle(clipboard: clipboard, revision: captured, nonce: nonce, files: urls) { [weak self] result in
+            guard let self, self.preparing?.nonce == nonce, self.preparing?.revision == captured,
+                  self.clipboard.changeCount == captured, self.link.ready else {
+                if case .success(let source) = result { source.cancel() }; return
             }
-        } else if let stream, clipboard.hasImage {
-            guard peerBulkImages, stream.isReady else { throw WKStreamError.disconnected }
-            let captured = clipboard.changeCount; preparing = (nonce, captured)
-            imageJob?.cancel()
-            imageJob = stream.prepareImage(clipboard: clipboard, revision: captured, nonce: nonce) { [weak self] result in
-                guard let self, self.preparing?.nonce == nonce, self.preparing?.revision == captured,
-                      self.clipboard.changeCount == captured, self.link.ready else { return }
-                self.preparing = nil; self.imageJob = nil
-                switch result {
-                case .success(let source): self.streamResponse = source
-                case .failure(let error): self.cancelPaste(notifyPeer: true); self.notifyCancel(nonce); self.status("ERROR \(WKMetadata.errorCode(error))")
+            self.imageJob = nil
+            switch result {
+            case .failure(let error):
+                self.preparing = nil; self.cancelPaste(notifyPeer: true); self.notifyCancel(nonce); self.status("ERROR \(WKMetadata.errorCode(error))")
+            case .success(let bundle):
+                if urls.isEmpty {
+                    self.preparing = nil
+                    if self.role == "host" { self.requiredReady[nonce] = [bundle.offer.id] }
+                    self.streamResponse = bundle
+                    return
                 }
+#if WK_TREE
+                self.treeJob = stream.prepareSelection(urls: urls, nonce: nonce, clipboardBundle: true) { [weak self] result in
+                    guard let self, self.preparing?.nonce == nonce, self.preparing?.revision == captured,
+                          self.clipboard.changeCount == captured, self.link.ready else {
+                        bundle.cancel(); if case .success(let source) = result { source.cancel() }; return
+                    }
+                    self.preparing = nil; self.treeJob = nil
+                    switch result {
+                    case .success(let source):
+                        bundle.orderForPublication(after: source)
+                        var readiness: Set<String> = [bundle.offer.id]
+                        if source.offer.kind == "collection" { readiness.insert(source.offer.id) }
+                        if self.role == "host" { self.requiredReady[nonce] = readiness }
+                        self.streamResponse = source; self.bundleResponse = bundle
+                    case .failure:
+                        bundle.cancel(); self.cancelPaste(notifyPeer: true); self.notifyCancel(nonce); self.status("ERROR collection-source-unavailable")
+                    }
+                }
+#else
+                bundle.cancel(); self.preparing = nil; self.cancelPaste(notifyPeer: true); self.notifyCancel(nonce)
+#endif
             }
-        } else {
-            guard let snapshot = try clipboard.snapshot(nonce: nonce) else { throw WKClipboardError.invalid("unsupported-content") }
-            response = snapshot
         }
     }
     private func pumpFiles() {
@@ -851,19 +1192,9 @@ final class WKCompanion: NSObject, NSMenuDelegate {
         bulkPurposes[transfer] = id
     }
     private func receiveFile(_ data: Data) -> Bool {
-        do {
-            let item = try WKMessage.decode(data)
-            guard item.kind == "file", let id = item.fileID, let offer = incomingFiles[id], portalReady else { return false }
-            guard item.nonce == offer.nonce, item.name == offer.name, item.size == offer.size,
-                  item.sha256 == offer.sha256 else {
-                portal?.fail(id: id); incomingFiles.removeValue(forKey: id)
-                if lease?.fileID == id { discardLease() }
-                return false
-            }
-            try portal?.fulfill(id: id, data: item.body)
-            incomingFiles.removeValue(forKey: id)
-            return true
-        } catch { failIncomingFiles(); return false }
+        // WKF3's historical file messages used HID-sized reports. Build 16
+        // never accepts media bodies here, regardless of transport availability.
+        return false
     }
     private func failIncomingFiles() {
         for id in streamIncoming.keys { portal?.fail(id: id); stream?.cancel(id) }

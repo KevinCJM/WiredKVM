@@ -13,6 +13,7 @@
 #include <iostream>
 #include <poll.h>
 #include <stdexcept>
+#include <sstream>
 #include <string>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -21,6 +22,45 @@
 #include <vector>
 
 namespace wk {
+// Metadata-only local IPC. Do not accept arbitrary capture commands or paths.
+inline bool clipboard_decimal(const std::string &word) {
+    if (word.empty() || word.size() > 20) return false;
+    uint64_t value = 0;
+    for (char c : word) {
+        if (c < '0' || c > '9' || value > (UINT64_MAX - static_cast<unsigned>(c - '0')) / 10) return false;
+        value = value * 10 + static_cast<unsigned>(c - '0');
+    }
+    return true;
+}
+inline bool clipboard_v2_control(const std::string &verb, const std::string &token) {
+    if (verb == "RESULT") {
+        const auto dot = token.find('.');
+        if (dot == std::string::npos || !clipboard_decimal(token.substr(0, dot))) return false;
+        const auto result = token.substr(dot + 1);
+        return result == "blocked" || result == "cancelled" ||
+            (result.rfind("ready.", 0) == 0 && clipboard_decimal(result.substr(6)));
+    }
+    if (verb != "ROUTE" || token.size() > 188) return false;
+    std::istringstream input(token); std::vector<std::string> fields;
+    for (std::string field; std::getline(input, field, ',');) fields.push_back(field);
+    return !token.empty() && token.back() != ',' && fields.size() == 9 &&
+        std::all_of(fields.begin(), fields.end(), clipboard_decimal) && fields[0] != "0" &&
+        (fields[2] == "0" || fields[2] == "1" || fields[2] == "2") &&
+        (fields[7] == "0" || fields[7] == "1") &&
+        (fields[8] == "0" || fields[8] == "1" || fields[8] == "2" || fields[8] == "3");
+}
+inline bool clipboard_v2_intent(const std::vector<std::string> &fields) {
+    if (fields.size() < 2 || fields[0] != "C") return false;
+    const auto side = [](const std::string &s) { return s == "0" || s == "1"; };
+    if (fields[1] == "SELECT") return fields.size() == 7 && clipboard_decimal(fields[2]) &&
+        side(fields[3]) && (fields[4] == "copy" || fields[4] == "cut") &&
+        clipboard_decimal(fields[5]) && clipboard_decimal(fields[6]);
+    if (fields[1] == "CONTEXT") return fields.size() == 5 && clipboard_decimal(fields[2]) &&
+        side(fields[3]) && clipboard_decimal(fields[4]);
+    if (fields[1] == "PASTE") return fields.size() == 7 && clipboard_decimal(fields[2]) &&
+        side(fields[3]) && clipboard_decimal(fields[4]) && clipboard_decimal(fields[5]) && clipboard_decimal(fields[6]);
+    return false;
+}
 class ClipboardChannel {
 public:
     using Report = std::array<uint8_t, 64>;

@@ -204,7 +204,9 @@ def bulk_profile_overlay(main):
               'else if(diagnostic){uint8_t record[512];size_t n=wk_bulk_profile_line(diagnostic,diagnostic_size,record,sizeof(record),SystemCoreClock/8,now);\n            if(n)send(0,2,7,record,(unsigned)n);}')
     return main
 
-def generate(out,pointer_collections=False,absolute_no_preferred=False,absolute_mouse_logical=False,single_port_probe=False,live_touch=False,native_format=False,ram_setup=False,bulk_batch=False,bulk_profile=False,bulk_continuous_out=False):
+def generate(out,pointer_collections=False,absolute_no_preferred=False,absolute_mouse_logical=False,single_port_probe=False,live_touch=False,native_format=False,ram_setup=False,bulk_batch=False,bulk_profile=False,bulk_continuous_out=False,bulk_probe=False,bulk_probe_large_in=False):
+    if bulk_probe_large_in and not bulk_probe:raise ValueError('Large diagnostic IN requires explicit Bulk probe')
+    if bulk_probe and not bulk_continuous_out:raise ValueError('Bulk probe requires the retained continuous-OUT/RAM/native profile')
     if bulk_profile and not (bulk_batch and native_format):raise ValueError("Bulk profiling requires the native live-touch/bulk-batch profile")
     if bulk_continuous_out and not (ram_setup and bulk_batch and bulk_profile and native_format):
         raise ValueError("Continuous file OUT requires RAM setup and the native bulk-batch/profile candidate")
@@ -244,6 +246,26 @@ def generate(out,pointer_collections=False,absolute_no_preferred=False,absolute_
         main=once(main,'else (void)wk407_bulk_accept(&bridge,p,buf,size);',
                   'else (void)wk407_bulk_accept(&bridge,p,buf,size);\n'
                   '        if(wk_file_rx_continue(p,e)){armed[p][e]=true;return ENDP_RESP_ACK;}')
+    if bulk_probe:
+        main=once(main,'#include "bulk_batch.h"','#include "bulk_batch.h"\n#include "bulk_probe.h"')
+        if bulk_probe_large_in:
+            main=once(main,'#include "bulk_probe.h"','#define WK_PROBE_SLOTS 12u\n#define WK_PROBE_DMA_BYTES 6144u\n#include "bulk_probe.h"')
+        # Declarations precede reset/data callbacks; the implementation is below
+        # send(), which is deliberately unchanged for all retained endpoints.
+        main=once(main,'static uint32_t touch_at;',
+                  '#define WK_BULK_PROBE 1\nstatic void wk_probe_reset(unsigned);\nstatic bool wk_probe_space(unsigned);\nstatic bool wk_probe_active(unsigned);\nstatic bool wk_probe_current(unsigned);\nstatic bool wk_probe_input(unsigned,const uint8_t *,size_t,uint32_t);\nstatic void wk_probe_done(unsigned,unsigned,uint32_t);\nstatic uint32_t touch_at;')
+        main=once(main,'    reset_pending[p]=true;','    wk_probe_reset(p);reset_pending[p]=true;')
+        main=once(main,'(void)parameter;unsigned p=wk407_port(h);','(void)parameter;unsigned p=wk407_port(h);wk_probe_reset(p);')
+        main=once(main,'else if(p==0&&e==4)wk_cable_setup_input(buf,size);',
+                  'else if(e==(p?5u:4u)&&wk_probe_input(p,buf,size,wk407_now_ms())){}\n        else if(p==0&&e==4)wk_cable_setup_input(buf,size);')
+        main=once(main,'        busy[p][e]=false;\n    } else {',
+                  '        if(busy[p][e]&&wk_probe_current(p)&&(tx_kind[p][e]==10||tx_kind[p][e]==11))wk_probe_done(p,tx_kind[p][e],wk407_now_ms());\n        busy[p][e]=false;\n    } else {')
+        main=once(main,'        unsigned ep=p?5:4;\n',
+                  '        unsigned ep=p?5:4;\n        if(wk_probe_active(p)){if(wk_probe_space(p))arm(p,ep,usbd_get_speed(handles[p])==USB_SPEED_HIGH?512:64);wk_probe_service(p,ep,now);continue;}\n')
+        main=once(main,'        if(p==0?(!wk_cable_setup_pending()',
+                  '        if(wk_probe_idle_arm(p)||(p==0?(!wk_cable_setup_pending()')
+        main=once(main,':wk407_bulk_space(&bridge,p))arm(p,ep,',':wk407_bulk_space(&bridge,p)))arm(p,ep,')
+        main=once(main,'if(online!=bridge.online[p]) {','if(online!=bridge.online[p]) {\n            if(!online)wk_probe_reset(p);')
     out.mkdir(exist_ok=False)
     (out/"generated").mkdir();(out/"obj").mkdir()
     (out/"generated/main.c").write_text(main);(out/"generated/descriptors.c").write_text(descriptors)
@@ -264,6 +286,12 @@ def generate(out,pointer_collections=False,absolute_no_preferred=False,absolute_
     manifest["ram_setup"]=ram_setup
     manifest["bulk_batch"]=bulk_batch
     manifest["bulk_profile"]=bulk_profile
+    manifest['bulk_probe']=bulk_probe
+    manifest['bulk_probe_large_in']=bulk_probe_large_in
+    if bulk_probe_large_in:manifest['probe_large_in_limits']={'dma_bytes':6144,'queue_slots_per_port':12,'out_packet_bytes':512,'ordinary_file_dma_bytes':4096,'wait_for_fill':False,'physical_speed_verified':False}
+    if bulk_probe:
+        manifest['production_inputs'][str((HERE/'bulk_probe.h').relative_to(ROOT))]=sha(HERE/'bulk_probe.h')
+        manifest['probe_limits']={'max_bytes_per_stage':512*1024*1024,'in_batch_max':4096,'body_idle_timeout_ms':5000,'bridge_rendezvous_timeout_ms':60000,'filesystem':False,'clipboard':False,'hardware_ceiling_proven':False}
     manifest["bulk_continuous_out"]=bulk_continuous_out
     if bulk_continuous_out:
         manifest["file_out_continuation"]={"receive_bytes_high_speed":512,"receive_bytes_full_speed":64,"bounded_copy_before_ack":True,"loader_unchanged":True,"physical_speed_verified":False}
@@ -363,6 +391,8 @@ def main():
     parser.add_argument("--bulk-batch",action="store_true",help="experimental bounded 4 KiB file IN DMA batches; input endpoints unchanged")
     parser.add_argument("--bulk-profile",action="store_true",help="opt-in bounded numeric counters on existing MT2 status; requires --bulk-batch and --native-format")
     parser.add_argument("--bulk-continuous-out",action="store_true",help="experimental one-packet file OUT continuation; requires RAM setup, bulk batch and profile")
+    parser.add_argument('--bulk-probe',action='store_true',help='explicit memory-only CDC link and bridge diagnostic; requires continuous OUT')
+    parser.add_argument('--bulk-probe-large-in',action='store_true',help='opt-in 6 KiB memory-only IN DMA; ordinary file and input endpoints unchanged')
     args=parser.parse_args();out=args.output
     if args.absolute_no_preferred and not args.pointer_collections:parser.error("--absolute-no-preferred requires --pointer-collections")
     if args.absolute_mouse_logical and not args.pointer_collections:parser.error("--absolute-mouse-logical requires --pointer-collections")
@@ -373,7 +403,7 @@ def main():
     out=out.parent.resolve(strict=True)/out.name
     if out.exists() or out.is_symlink():raise SystemExit("Output must be new; no overwrite/cleanup")
     if not out.is_relative_to(HERE):raise SystemExit("Output must be inside experiments/mt2-petros-profile")
-    manifest=generate(out,args.pointer_collections,args.absolute_no_preferred,args.absolute_mouse_logical,args.single_port_probe,args.live_touch,args.native_format,args.ram_setup,args.bulk_batch,args.bulk_profile,args.bulk_continuous_out)
+    manifest=generate(out,args.pointer_collections,args.absolute_no_preferred,args.absolute_mouse_logical,args.single_port_probe,args.live_touch,args.native_format,args.ram_setup,args.bulk_batch,args.bulk_profile,args.bulk_continuous_out,args.bulk_probe,args.bulk_probe_large_in)
     if args.build:
         if not args.sdk or not args.gcc_prefix:raise SystemExit("--build needs explicit patched SDK and GCC prefix")
         build(out,args.sdk.resolve(strict=True),args.gcc_prefix,manifest)

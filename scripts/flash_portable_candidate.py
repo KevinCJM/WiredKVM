@@ -29,6 +29,8 @@ ACCEPTED={
     'bulk-profile-v1':('candidate-bulk-profile-20261110','6caef7f682024f1b2b3f94859e714180aa610782ae866d8acf8aa9a9658cb604'),
     'bulk-continuous-out-v1':('candidate-bulk-continuous-out-20261110','ac118ce1fae43c044242d6e6cbb6ce46fe3a6e8e7776af5ff18d54232faea3e1'),
     'aligned-cells-v1':('candidate-aligned-cells-20261111','4cbd040747e6ab0c15c8dca1df2591aa24db41b3c7a3d2a8c6f04351738761b3'),
+    'memory-probe-v1':('candidate-memory-probe-20261111-v4','11315e378e3d5b25ee53690aeb8b1686fe9f1e953f00d96a434c2b05ed5e99de'),
+    'memory-probe-large-in-v1':('candidate-memory-probe-large-in-20261111-v2','68bab29ee6b310a9afaa5ba85b9ae08ffb4b319dd44a23e972312301934d7a61'),
 }
 BACKUP_BYTES=576*1024
 

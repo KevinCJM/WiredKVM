@@ -1,8 +1,6 @@
-"""Execute capture routing with OS key posting replaced by a recording sink.
+"""Production v2 capture tests; OS replay, focus and clipboard use fake sinks.
 
-This fixture never installs an event tap or injects real input. It compiles a
-private copy of the production source and replaces only OS replay/focus access,
-so the actual callback, nonce matching, cancellation and timeout decisions run.
+No EventTap, real input, USB or general clipboard access is used.
 """
 from __future__ import annotations
 import os
@@ -30,179 +28,139 @@ def replace_function(source, name, body):
 class WiredClipboardCaptureTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp = tempfile.TemporaryDirectory(prefix='wk-wired-routing-')
+        cls.temp = tempfile.TemporaryDirectory(prefix='wk-wired-routing-v2-')
         cls.addClassCleanup(cls.temp.cleanup)
         path = Path(cls.temp.name)
-        source = (ROOT / 'host/macos_capture.swift').read_text()
-        source = replace_function(source, 'replayClipboardShortcut', '    fixtureReplays.append(key)')
-        source = replace_function(source, 'clipboardPID', '    return fixturePID')
+        source = (ROOT/'host/macos_capture.swift').read_text()
+        source = replace_function(source,'replayClipboardShortcut',' fixtureReplays.append(key)')
+        source = replace_function(source,'clipboardPID',' return fixturePID')
+        source = replace_function(source,'clipboardIntent',' fixtureIntents.append(line)')
         source = source.replace('private var activeClient = false',
-            'private var fixtureRevision = 0\nprivate var fixtureReplays: [Int] = []\nprivate var fixturePID: pid_t = 71\n'
-            'private var activeClient = false', 1)
-        source = source.replace('NSPasteboard.general.changeCount', 'fixtureRevision')
-        marker = '// Safe regression paths below'
+            'private var fixtureRevision = 0\nprivate var fixtureReplays: [Int] = []\n'
+            'private var fixtureIntents: [String] = []\nprivate var fixturePID: pid_t = 71\n'
+            'private var activeClient = false',1)
+        source = source.replace('NSPasteboard.general.changeCount','fixtureRevision')
         harness = r'''
 if CommandLine.arguments.contains("--fixture-routing") {
     precondition(wiredClipboardEnabled)
-    receiveClipboardControl("STATE", token: "1")
-    let proxy = CGEventTapProxy(bitPattern: 1)!
-    let source = CGEventSource(stateID: .privateState)
-    let scenario = CommandLine.arguments.last!
-    func sample(_ key: Int, _ type: CGEventType = .keyDown,
-                _ flags: CGEventFlags = [.maskCommand], repeatKey: Bool = false) -> CGEvent {
-        let e = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(key), keyDown: type != .keyUp)!
-        e.type = type; e.flags = flags
-        e.setIntegerValueField(.keyboardEventAutorepeat, value: repeatKey ? 1 : 0)
-        return e
+    receiveClipboardControl("STATE",token:"1")
+    let proxy=CGEventTapProxy(bitPattern:1)!
+    let eventSource=CGEventSource(stateID:.privateState)
+    let scenario=CommandLine.arguments.last!
+    func sample(_ key:Int,_ type:CGEventType = .keyDown,_ flags:CGEventFlags = [.maskCommand],repeatKey:Bool=false)->CGEvent {
+        let e=CGEvent(keyboardEventSource:eventSource,virtualKey:CGKeyCode(key),keyDown:type != .keyUp)!
+        e.type=type;e.flags=flags;e.setIntegerValueField(.keyboardEventAutorepeat,value:repeatKey ? 1:0);return e
     }
-    func route(_ event: CGEvent) -> Bool {
-        let passed = eventTapCallback(proxy: proxy, type: event.type, event: event, refcon: nil) != nil
-        // Represent the application's receipt of an ordinary, passed-through
-        // local shortcut in the same sink as a deliberately replayed shortcut.
-        if passed && event.type == .keyDown && event.flags.contains(.maskCommand) &&
-            event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
-            let key = Int(event.getIntegerValueField(.keyboardEventKeycode))
-            if key == 8 || key == 9 { fixtureReplays.append(key) }
-        }
-        return passed
+    func route(_ event:CGEvent)->Bool {
+        let passed=eventTapCallback(proxy:proxy,type:event.type,event:event,refcon:nil) != nil
+        if passed && event.type == .keyDown && event.flags.contains(.maskCommand) && event.getIntegerValueField(.keyboardEventAutorepeat)==0 {
+            let key=Int(event.getIntegerValueField(.keyboardEventKeycode));if key==8 || key==9 {fixtureReplays.append(key)}
+        };return passed
     }
-    if scenario == "copy-local-native" {
-        precondition(route(sample(8)), "local physical Cmd+C must pass through")
-        precondition(clipboardIntents.copy == nil && !consumeClipboardCopyKeyUp)
-        precondition(route(sample(8, .keyUp)), "local C key-up must also pass through")
-        precondition(fixtureReplays == [8])
-    } else if scenario == "copy-remote-cancel" {
-        activeClient = true
-        precondition(!route(sample(8)), "remote key is forwarded by HID, not passed to Book")
-        precondition(clipboardIntents.copy == nil && !consumeClipboardCopyKeyUp)
-        precondition(!route(sample(8, .keyUp)))
-        receiveClipboardControl("COPY", token: "123")
-        precondition(fixtureReplays.isEmpty, "remote copy must never be replayed by clipboard control")
-    } else if scenario == "copy-cancel" {
-        _ = route(sample(8))
-        _ = route(sample(8, .keyUp))
-        let pending = clipboardIntents.copy?.token
-        _ = route(sample(0, .keyDown, []))
-        if let pending { receiveClipboardControl("COPY", token: pending) }
-        precondition(fixtureReplays == [8], "copy must execute exactly once despite cancellation")
-    } else if scenario == "copy-repeat" {
-        _ = route(sample(8))
-        let pending = clipboardIntents.copy?.token
-        _ = route(sample(8, repeatKey: true))
-        if let pending { receiveClipboardControl("COPY", token: pending) }
-        precondition(fixtureReplays == [8], "key repeat must not consume the first native copy")
-    } else if scenario == "paste-cancel" || scenario == "paste-focus" || scenario == "paste-expired" {
-        _ = clipboardIntents.beginCopy(remote: true, pid: 99, now: ProcessInfo.processInfo.systemUptime)
-        clipboardIntents.copy = nil
-        clipboardIntents.copyToken = "123"
-        precondition(!route(sample(9)))
-        let pending = clipboardIntents.paste!
-        if scenario == "paste-cancel" { _ = route(sample(0, .keyDown, [])) }
-        if scenario == "paste-focus" { fixturePID = 72 }
-        if scenario == "paste-expired" {
-            clipboardIntents.paste = ClipboardShortcut(token: pending.token, remote: pending.remote,
-                pid: pending.pid, at: ProcessInfo.processInfo.systemUptime - 181)
-        }
-        receiveClipboardControl("PASTE", token: pending.token)
-        precondition(!fixtureReplays.contains(9), "late paste must not be injected")
-    } else if scenario == "paste-token" {
-        _ = clipboardIntents.beginCopy(remote: true, pid: 99, now: ProcessInfo.processInfo.systemUptime)
-        clipboardIntents.copy = nil
-        clipboardIntents.copyToken = "123"
-        precondition(!route(sample(9)))
-        let pending = clipboardIntents.paste!
-        receiveClipboardControl("PASTE", token: "0.0")
-        precondition(fixtureReplays.isEmpty)
-        receiveClipboardControl("PASTE", token: pending.token)
-        receiveClipboardControl("PASTE", token: pending.token)
-        precondition(fixtureReplays == [9], "only current paste nonce may inject once")
-    } else if scenario == "local-menu-copy" {
-        clipboardIntents.copiedRemotely = true; clipboardIntents.copyToken = "321"
-        fixtureRevision += 1
-        precondition(route(sample(9)), "local menu copy must take priority before helper notices it")
-        precondition(fixtureReplays == [9] && clipboardIntents.paste == nil)
-    } else if scenario == "offline-native-paste" {
-        clipboardIntents.copiedRemotely = true; clipboardIntents.copyToken = "321"
-        receiveClipboardControl("STATE", token: "0")
-        precondition(route(sample(8)) && route(sample(9)))
-        precondition(fixtureReplays == [8,9], "offline component must not intercept native C/V")
-    } else if scenario == "same-side-paste" {
-        clipboardIntents.copiedRemotely = false; clipboardIntents.copyToken = "321"
-        precondition(route(sample(9)))
-        activeClient = true
-        clipboardIntents.copiedRemotely = true
-        precondition(!route(sample(9)))
-        precondition(clipboardIntents.paste == nil && !consumeClipboardPasteKeyUp,
-                     "mini native paste must use regular HID without an async clipboard request")
-    } else if scenario == "paste-native-repeat" {
-        clipboardIntents.copiedRemotely = true; clipboardIntents.copyToken = "321"
-        precondition(!route(sample(9)))
-        let token = clipboardIntents.paste!.token
-        _ = route(sample(9,.keyUp))
-        receiveClipboardControl("PASTE", token: token)
-        precondition(route(sample(9)), "next paste on the same destination must be native")
+    func projection(_ side:UInt64,generation:UInt64=1,applied:UInt64?=nil,mask:UInt64=0,book:UInt64=121,mini:UInt64=242) {
+        receiveClipboardControl("ROUTE",token:"\(generation),\(applied ?? clipboardIntents.inputSequence),\(side),\(book),\(mini),0,0,0,\(mask)")
+    }
+    func crossPaste(source:UInt64=1)->ClipboardShortcut {
+        projection(source);activeClient=source==0;_ = route(sample(9));return clipboardIntents.paste!
+    }
+    func result(_ p:ClipboardShortcut,_ status:String="ready") {
+        receiveClipboardControl("RESULT",token:p.token+"."+status+(status=="ready" ? ".\(fixtureRevision)":""))
+    }
+    switch scenario {
+    case "copy-local-native","copy-remote-native":
+        activeClient=scenario=="copy-remote-native"
+        precondition(route(sample(8)) == !activeClient && route(sample(8,.keyUp)) == !activeClient)
+        precondition(fixtureIntents.filter{$0.hasPrefix("SELECT ")}.count==1)
+        precondition(fixtureReplays == (activeClient ? []:[8]))
+    case "copy-repeat":
+        _ = route(sample(8));_ = route(sample(8,repeatKey:true))
+        precondition(fixtureIntents.filter{$0.hasPrefix("SELECT ")}.count==1 && fixtureReplays == [8])
+    case "native-copy-before-projection","native-cut-before-projection":
+        projection(1);let before=clipboardIntents.inputSequence
+        _ = route(sample(scenario.contains("cut") ? 7:8));projection(1,generation:2,applied:before)
+        precondition(route(sample(9)) && clipboardIntents.paste==nil,"unacknowledged native input must outrank delayed route")
+    case "same-revision-book","same-revision-mini":
+        let remote=scenario.hasSuffix("mini");activeClient=remote;projection(remote ? 1:0)
+        for _ in 0..<100 {_ = route(sample(8));_ = route(sample(8,.keyUp))}
+        precondition(clipboardIntents.stamps == [121,242],"Copy cannot create or clear content versions")
+        precondition(route(sample(9)) == !remote,"same-side paste must remain native")
+        activeClient = !remote;_ = route(sample(9));precondition(clipboardIntents.paste != nil)
+        precondition(fixtureIntents.last!.hasPrefix("PASTE "))
+    case "return-to-old-side":
+        projection(0);_ = route(sample(8));activeClient=true;_ = route(sample(8));projection(1,generation:2)
+        activeClient=false;_ = route(sample(8));precondition(clipboardIntents.stamps == [121,242])
+        activeClient=true;_ = route(sample(9));precondition(clipboardIntents.paste != nil,"A-B-A unchanged copy must select the old side")
+    case "unknown-source-native":
+        projection(2,book:0,mini:0);precondition(route(sample(9)) && clipboardIntents.paste==nil)
+    case "unknown-version-refresh":
+        projection(2,book:0,mini:0);_ = route(sample(8));activeClient=true;_ = route(sample(9))
+        precondition(clipboardIntents.paste != nil && clipboardIntents.stamps == [0,0],"engine must resolve the explicit source without invented versions")
+    case "cut-cross-guard":
+        projection(0);_ = route(sample(7));activeClient=true;_ = route(sample(9));let p=clipboardIntents.paste!
+        result(p,"blocked");precondition(clipboardIntents.paste==nil && fixtureReplays.isEmpty,"only engine may confirm fresh Cut data")
+    case "paste-cancel","paste-focus","paste-expired","paste-epoch":
+        let p=crossPaste()
+        if scenario=="paste-cancel" {_ = route(sample(0,.keyDown,[]))}
+        if scenario=="paste-focus" {fixturePID=72}
+        if scenario=="paste-expired" {clipboardIntents.paste=ClipboardShortcut(token:p.token,remote:p.remote,pid:p.pid,at:ProcessInfo.processInfo.systemUptime-181,epoch:p.epoch)}
+        if scenario=="paste-epoch" {clipboardIntents.focusEpoch += 1}
+        result(p);precondition(!fixtureReplays.contains(9),"late or wrong-focus result cannot replay")
+    case "paste-token":
+        let p=crossPaste();receiveClipboardControl("RESULT",token:"999999.ready.0");precondition(fixtureReplays.isEmpty)
+        result(p);result(p);precondition(fixtureReplays == [9])
+    case "paste-local-revision":
+        let p=crossPaste();fixtureRevision += 1
+        receiveClipboardControl("RESULT",token:p.token+".ready.0")
+        precondition(fixtureReplays.isEmpty && fixtureIntents.last=="CANCEL "+p.token,
+                     "new local ownership between engine commit and replay must win")
+    case "menu-local-wins":
+        projection(1);fixtureRevision += 1;precondition(route(sample(9)))
+        precondition(clipboardIntents.paste==nil && fixtureReplays == [9])
+    case "offline-native":
+        projection(1);receiveClipboardControl("STATE",token:"0");precondition(route(sample(8)) && route(sample(9)))
+        precondition(fixtureReplays == [8,9])
+    case "same-side-native":
+        projection(0);precondition(route(sample(9)));activeClient=true;projection(1,generation:2)
+        precondition(!route(sample(9)) && clipboardIntents.paste==nil)
+    case "native-mask":
+        projection(0,mask:2);activeClient=true;precondition(!route(sample(9)) && clipboardIntents.paste==nil)
+        precondition(fixtureIntents.allSatisfy{!$0.hasPrefix("PASTE ")})
+    case "repeat-after-ready":
+        let p=crossPaste();result(p);precondition(route(sample(9)) && clipboardIntents.paste==nil)
         precondition(fixtureReplays == [9,9])
-    } else { fatalError("unknown scenario") }
-    print("WIRED_CLIPBOARD_ROUTING_PASS " + scenario)
-    exit(0)
+    case "route-stale":
+        projection(0,generation:5);projection(1,generation:4);precondition(clipboardIntents.selectedSide==0)
+        receiveClipboardControl("ROUTE",token:"6,\(clipboardIntents.inputSequence+1),1,121,242,0,0,0,0");precondition(clipboardIntents.selectedSide==0)
+    case "context-bounded":
+        let count=fixtureIntents.count;for _ in 0..<100 {receiveClipboardControl("STATE",token:"1")}
+        precondition(fixtureIntents.count==count,"heartbeat cannot flood context commands")
+        clipboardContext();precondition(fixtureIntents.count==count+1 && fixtureIntents.last!.hasPrefix("CONTEXT "))
+    default:fatalError("unknown scenario")
+    }
+    print("WIRED_CLIPBOARD_ROUTING_PASS "+scenario);exit(0)
 }
 '''
-        source = source.replace(marker, harness + '\n' + marker, 1)
-        fixture = path / 'capture.swift'
-        fixture.write_text(source)
-        cls.binary = path / 'capture'
-        result = subprocess.run(['/usr/bin/swiftc', '-O', '-target',
-            f'{platform.machine()}-apple-macosx13.0', '-module-cache-path', str(path / 'modules'),
-            '-framework', 'ApplicationServices', '-framework', 'Cocoa', str(fixture),
-            '-o', str(cls.binary)], capture_output=True, text=True, timeout=90)
-        if result.returncode:
-            raise AssertionError(result.stderr)
+        source=source.replace('// Safe regression paths below',harness+'\n// Safe regression paths below',1)
+        fixture=path/'capture.swift';fixture.write_text(source);cls.binary=path/'capture'
+        result=subprocess.run(['/usr/bin/swiftc','-O','-target',f'{platform.machine()}-apple-macosx13.0',
+            '-module-cache-path',str(path/'modules'),'-framework','ApplicationServices','-framework','Cocoa',
+            str(fixture),'-o',str(cls.binary)],capture_output=True,text=True,timeout=100)
+        if result.returncode:raise AssertionError(result.stderr)
 
-    def run_scenario(self, scenario):
-        env = dict(os.environ, WK_TARGET_ABSOLUTE='1', WK_WIRED_CLIPBOARD='1')
-        for key in ('WK_TARGET_IPHONE', 'WK_FILE_TRANSFER', 'WK_CLIPBOARD_SYNC'):
-            env.pop(key, None)
-        result = subprocess.run([str(self.binary), '--fixture-routing', scenario], env=env,
-                                capture_output=True, text=True, timeout=10)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn('WIRED_CLIPBOARD_ROUTING_PASS ' + scenario, result.stdout)
-
-    def test_menu_copy_overrides_remote_origin_before_poll(self):
-        self.run_scenario('local-menu-copy')
-
-    def test_offline_component_preserves_native_copy_and_paste(self):
-        self.run_scenario('offline-native-paste')
-
-    def test_both_sides_native_paste_bypasses_transfer(self):
-        self.run_scenario('same-side-paste')
-
-    def test_second_paste_on_destination_is_native(self):
-        self.run_scenario('paste-native-repeat')
-
-    def test_copy_survives_next_user_action_and_late_armed(self):
-        self.run_scenario('copy-cancel')
-
-    def test_local_physical_copy_and_keyup_pass_through(self):
-        self.run_scenario('copy-local-native')
-
-    def test_remote_copy_uses_hid_immediately_without_clipboard_replay(self):
-        self.run_scenario('copy-remote-cancel')
-
-    def test_copy_survives_autorepeat(self):
-        self.run_scenario('copy-repeat')
-
-    def test_late_paste_is_cancelled_after_another_user_action(self):
-        self.run_scenario('paste-cancel')
-
-    def test_late_paste_is_cancelled_after_front_app_changed(self):
-        self.run_scenario('paste-focus')
-
-    def test_expired_paste_is_not_injected(self):
-        self.run_scenario('paste-expired')
-
-    def test_only_matching_current_paste_token_injects_once(self):
-        self.run_scenario('paste-token')
+    def run_scenario(self,scenario):
+        env=dict(os.environ,WK_TARGET_ABSOLUTE='1',WK_WIRED_CLIPBOARD='1')
+        for key in ('WK_TARGET_IPHONE','WK_FILE_TRANSFER','WK_CLIPBOARD_SYNC'):env.pop(key,None)
+        result=subprocess.run([str(self.binary),'--fixture-routing',scenario],env=env,capture_output=True,text=True,timeout=10)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn('WIRED_CLIPBOARD_ROUTING_PASS '+scenario,result.stdout)
 
 
-if __name__ == '__main__':
-    unittest.main()
+SCENARIOS=['copy-local-native','copy-remote-native','copy-repeat','native-copy-before-projection',
+ 'native-cut-before-projection','same-revision-book','same-revision-mini','return-to-old-side',
+ 'unknown-source-native','unknown-version-refresh','cut-cross-guard','paste-cancel','paste-focus',
+ 'paste-expired','paste-epoch','paste-token','paste-local-revision','menu-local-wins','offline-native','same-side-native',
+ 'native-mask','repeat-after-ready','route-stale','context-bounded']
+for scenario in SCENARIOS:
+    setattr(WiredClipboardCaptureTests,'test_'+scenario.replace('-','_'),lambda self,s=scenario:self.run_scenario(s))
+
+if __name__=='__main__':unittest.main()

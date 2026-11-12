@@ -24,7 +24,7 @@ int usbd_download(usbd_handle_t *h,uint8_t ep,void *b,unsigned n){
 #endif
 #ifdef WK_BULK_BATCH_TEST
 static unsigned endpoint_flags[2][256],file_size[2],file_uploads[2];
-static uint8_t file_copy[2][4096];
+static uint8_t file_copy[2][16384];
 static const void *file_dma[2];
 static bool fail_file_upload;
 #endif
@@ -53,7 +53,15 @@ int usbd_upload(usbd_handle_t *h,uint8_t ep,const void *b,unsigned n){
 #ifdef WK_BULK_BATCH_TEST
     if(ep==(h->port?0x85:0x84)) {
         if(fail_file_upload){fail_file_upload=false;return -1;}
-        assert(n>0&&n<=4096&&n%512==0);
+        unsigned limit=4096;
+#ifdef WK_BULK_PROBE_TEST
+        if(wk_probe_active(h->port)&&(wk_probe_ports[h->port].mode==2||wk_probe_ports[h->port].mode==5))limit=sizeof(wk_probe_ports[h->port].dma);
+#endif
+        assert(n>0&&n<=limit&&(n%512==0
+#ifdef WK_BULK_PROBE_TEST
+            ||(n==64&&!memcmp(b,"WKBR",4))
+#endif
+        ));
         if(mock_speed!=USB_SPEED_HIGH)assert(n<=512);
         memcpy(file_copy[h->port],b,n);file_dma[h->port]=b;file_size[h->port]=n;file_uploads[h->port]++;
     } else assert(n<=512);
@@ -303,6 +311,73 @@ static void bulk_profile_test(void) {
     puts("BULK_PROFILE_PASS numeric_only=true bounded_record=true counter_wrap=true control_not_counted_as_file=true no_extra_usb_transaction=true physical_measurement=false");
 }
 #endif
+#ifdef WK_BULK_PROBE_TEST
+static void raw_probe_command(unsigned p,unsigned op,uint64_t total){
+    uint8_t c[64]={0};memcpy(c,"WKBP",4);c[4]=1;c[5]=(uint8_t)op;wk_probe_put(c+8,711,8);wk_probe_put(c+16,total,8);wk_probe_put(c+60,wk_probe_crc(c,60),4);
+    data_cb(handles[p],p?5:4,c,64);pass(1,true);pass(1,true);assert(wk_probe_ports[p].phase==2);
+}
+static void raw_probe_input_test(const uint8_t *pressure){
+    for(unsigned i=0;i<100;i++)pass(1,true);
+    /* The independent profiling fixture deliberately left a 64-byte noise
+     * fragment. Model a fresh file-session boundary without erasing the image. */
+    wk_cable_setup_peer_reset();bridge.cell_size[0]=bridge.cell_size[1]=0;
+    /* An older loader ACK is still owned by IN DMA when a new query arrives.
+     * Do not arm OUT over the new, unsent acknowledgement. */
+    uint8_t query[512]={0};memcpy(query,"WKIM",4);query[4]=1;put32(query+508,image_crc(query,508));
+    data_cb(handles[0],4,query,512);service();assert(busy[0][4]&&!wk_cable_setup_pending());
+    service();assert(armed[0][4]);data_cb(handles[0],4,query,512);assert(wk_cable_setup_pending()&&!armed[0][4]);
+    service();assert(wk_cable_setup_pending()&&!armed[0][4]);complete(0,4);pass(1,true);pass(1,true);
+    assert(!wk_cable_setup_pending());
+    /* Deliberately put a fully valid diagnostic command INSIDE an ordinary
+     * file body and split USB exactly there. It must remain byte-for-byte data. */
+    uint8_t ordinary[512];memcpy(ordinary,pressure,512);
+    memset(ordinary+64,0,64);memcpy(ordinary+64,"WKBP",4);ordinary[68]=1;ordinary[69]=2;
+    wk_probe_put(ordinary+72,711,8);wk_probe_put(ordinary+80,8192,8);wk_probe_put(ordinary+124,wk_probe_crc(ordinary+64,60),4);
+    for(unsigned p=0;p<2;p++){
+        bridge.stream_session[p]=1;bridge.transactions[p][0].used=true;memcpy(bridge.transactions[p][0].id,ordinary+20,16);
+    }
+    for(unsigned p=0;p<2;p++){
+        unsigned ep=p?5:4;data_cb(handles[p],ep,ordinary,64);data_cb(handles[p],ep,ordinary+64,64);data_cb(handles[p],ep,ordinary+128,384);
+        assert(!wk_probe_active(p));const wk407_bulk_packet *v=wk407_bulk_peek(&bridge,1-p);
+        assert(v&&v->size==512&&!memcmp(v->bytes,ordinary,512));wk407_bulk_done(&bridge,1-p);
+    }
+    line("MT2B,3\n");for(unsigned i=0;i<10;i++)pass(1,true);
+    unsigned keys=packets[1][1],touches=packets[1][7];uint8_t bytes[512];memset(bytes,0xa5,sizeof(bytes));
+    raw_probe_command(0,1,512*1000);
+    for(unsigned i=0;i<1000;i++){
+        assert(armed[0][4]);data_cb(handles[0],4,bytes,512);
+        wk(40000+i*2,'T',4,1);pass(1,true);wk(40001+i*2,'T',4,0);pass(1,true);gesture(3,i%2?4:2);pass(4,true);
+    }
+    pass(1,true);assert(!wk_probe_active(0)&&wk_probe_ports[0].received==512*1000);
+    raw_probe_command(1,2,512*1000);
+    for(unsigned i=0;i<1000&&wk_probe_active(1);i++){
+        wk(45000+i*2,'T',4,1);pass(1,true);wk(45001+i*2,'T',4,0);pass(1,true);gesture(3,i%2?4:2);pass(4,true);
+    }
+    assert(!wk_probe_active(1)&&wk_probe_ports[1].sent==512*1000);
+    /* Exercise the actual generated service loop, including the first short
+     * packet and queue wrap, rather than calling only the standalone core. */
+    for(unsigned src=0;src<2;src++){
+        unsigned dst=1-src;const unsigned total=65536;
+        for(unsigned p=0;p<2;p++){assert(!busy[p][p?5:4]);wk_probe_reset(p);}
+        raw_probe_command(dst,5,total);raw_probe_command(src,4,total);
+        unsigned accepted=0;
+        for(unsigned tries=0;tries<1000&&(wk_probe_active(src)||wk_probe_active(dst));tries++){
+            if(accepted<total&&wk_probe_space(src)){
+                unsigned n=accepted?512:128;if(n>total-accepted)n=total-accepted;
+                assert(armed[src][src?5:4]);data_cb(handles[src],src?5:4,bytes,n);accepted+=n;
+            }
+            unsigned before=file_uploads[dst];pass(1,true);
+            if(file_uploads[dst]!=before&&file_size[dst]>=512){for(unsigned i=0;i<file_size[dst];i++)assert(file_copy[dst][i]==0xa5);}
+        }
+        assert(accepted==total&&wk_probe_ports[src].received==total&&wk_probe_ports[dst].sent==total);
+        assert(!wk_probe_active(src)&&!wk_probe_active(dst));
+    }
+    puts("BULK_PROBE_RELAY_MAIN_PASS short_first_packet=128 bidirectional=true physicalUSB=false");
+    printf("BULK_PROBE_INPUT_COUNTS keyboard=%u touch=%u\n",packets[1][1]-keys,packets[1][7]-touches);
+    assert(packets[1][1]>keys+500&&packets[1][7]>touches+100);
+    puts("BULK_PROBE_INPUT_PASS real_generated_callbacks=true keyboard_two_four_fingers_progress=true no_filesystem=true physicalUSB=false");
+}
+#endif
 int main(void){
     handles[0]=&usbhs1d_handle;handles[1]=&usbhs2d_handle;mock_usb2.MIS_ST=USBHS_UDMS_SIE_FREE;
     wk407_init(&bridge);
@@ -391,6 +466,9 @@ int main(void){
     for(unsigned i=0;i<200;i++)pass(1,true);assert(wkmt2_live_faults()>0);
 #ifdef WK_BULK_PROFILE_TEST
     bulk_profile_test();
+#endif
+#ifdef WK_BULK_PROBE_TEST
+    raw_probe_input_test(pressure);
 #endif
     puts("LIVE_MAIN_RUST_C_CALLBACK_PASS stress=1000 continuous_bulk_both_directions=true stale_epoch_rejected=true no_device_access=true");
 }

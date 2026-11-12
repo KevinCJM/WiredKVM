@@ -6,6 +6,7 @@ import CryptoKit
 struct CH32PortableRuntime: Decodable {
     let native, capture, companion, touch, loader, asset: String
     let hashes: [String: String]
+    var diagnosticOnly: Bool? = nil
     private func verify(_ paths: [String]) throws {
         for path in paths {
             guard path.hasPrefix("/"), let expected=hashes[path] else { throw WKStreamError.invalid }
@@ -55,8 +56,8 @@ final class CH32Host {
         socketURL=socket
         native.executableURL = portable.map{URL(fileURLWithPath:$0.native)} ?? runtime.appendingPathComponent("wiredkvm-native")
         native.arguments = ["--transport", "cdc:" + control, "--source", "macos", "--target", "desktop",
-            "--absolute-mouse", "--position", position, "--capture", portable?.capture ?? runtime.appendingPathComponent("macos-capture").path,
-            "--clipboard-socket", socket.path]
+            "--absolute-mouse", "--position", position, "--capture", portable?.capture ?? runtime.appendingPathComponent("macos-capture").path]
+        if portable?.diagnosticOnly != true { native.arguments! += ["--clipboard-socket", socket.path] }
         if let portable {
             native.arguments! += ["--invert-scroll","--raw-touch",portable.touch]
             var env=ProcessInfo.processInfo.environment;env["WK_RAW_TOUCH_PROTOCOL"]="2";env["WK_RAW_TOUCH_HELPER"]=portable.touch
@@ -82,7 +83,7 @@ final class CH32Host {
         if portable != nil {
             helperHealth=Timer.scheduledTimer(withTimeInterval:2,repeats:true){[weak self] _ in
                 Task {@MainActor [weak self] in
-                    guard let self,!self.stopping,self.clipboardStarted,!self.clipboard.isRunning else{return}
+                    guard let self,self.portable?.diagnosticOnly != true,!self.stopping,self.clipboardStarted,!self.clipboard.isRunning else{return}
                     self.clipboardStarted=false;self.startProgramLoader()
                 }
             }
@@ -102,6 +103,7 @@ final class CH32Host {
         process.terminationHandler = { [weak self] child in DispatchQueue.main.async {
             guard let self, !self.stopping else { return };self.programLoader=nil
             if child.terminationStatus==0, let socket=self.socketURL {
+                if portable.diagnosticOnly == true { self.clipboardStarted=true;wkLog("CH32_PROBE_READY file_channel_released=true input_retained=true");return }
                 do {
                     try self.clipboard.start(executable:URL(fileURLWithPath:portable.companion),socket:socket,ch32Files:self.filePort)
                     self.clipboardStarted=true;wkLog("CH32 portable clipboard started; native input retained")

@@ -16,10 +16,21 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCES = ["WKClipboardProtocol", "WKOnboarding", "WKFnKey", "WKScrollRelay",
            "WKGestureRelay", "WKInputRelay", "WKClipboardContent",
            "WKClipboardTransport", "WKFilePortal", "WKStreamFiles", "WKTransferTree",
-           "WKOnDemandClipboard", "WiredKVMCompanion"]
+           "WKClipboardState", "WKClipboardBundle", "WKOnDemandClipboard", "WiredKVMCompanion"]
+RUST_LIBRARIES = [("transfer-tree", "wiredkvm_transfer_tree"),
+                  ("clipboard-state", "wiredkvm_clipboard_state")]
 
 
-def build(out: Path, arches: list[str], stream_profile: bool = False, module_cache: Path | None = None) -> dict:
+def rust_input_paths():
+    tree = ROOT / "native/transfer-tree"
+    state = ROOT / "native/clipboard-state"
+    return ([tree / p for p in ["Cargo.toml", "Cargo.lock", "build.rs", "src/lib.rs", "src/dir_list.c",
+                                "include/transfer_tree.h", "include/module.modulemap"]]
+            + [state / p for p in ["Cargo.toml", "Cargo.lock", "src/lib.rs",
+                                  "include/clipboard_state.h", "include/module.modulemap"]])
+
+
+def build(out: Path, arches: list[str], stream_profile: bool = False, module_cache: Path | None = None, progressive_portal: bool = False) -> dict:
     out = out.resolve()
     if not out.is_relative_to(ROOT / "build"):
         raise ValueError("output must be a new directory under project/build")
@@ -28,9 +39,7 @@ def build(out: Path, arches: list[str], stream_profile: bool = False, module_cac
     if not cache.is_relative_to(ROOT / "build") or cache == ROOT / "build":
         raise ValueError("module cache must be below project/build")
     sources = [ROOT / "host/clipboard" / (s + ".swift") for s in SOURCES]
-    crate = ROOT / "native/transfer-tree"
-    inputs = sources + [ROOT/"host/gui/Companion-Info.plist"] + [crate / p for p in ["Cargo.toml", "Cargo.lock", "build.rs", "src/lib.rs", "src/dir_list.c",
-                                           "include/transfer_tree.h", "include/module.modulemap"]]
+    inputs = sources + [ROOT/"host/gui/Companion-Info.plist"] + rust_input_paths()
     before={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}
     commands = []
 
@@ -50,17 +59,25 @@ def build(out: Path, arches: list[str], stream_profile: bool = False, module_cac
     exe = app / "Contents/MacOS/WiredKVMPortable"
     exe.parent.mkdir(parents=True)
     rust_targets = {"arm64": "aarch64-apple-darwin", "x86_64": "x86_64-apple-darwin"}
+    static_libraries = {}
     for arch in arches:
         target = rust_targets[arch]
         # Keep candidate builds separate from every currently running helper.
-        run(["cargo", "build", "--offline", "--locked", "--release", "--manifest-path", crate / "Cargo.toml",
-             "--target", target, "--target-dir", out / "rust-target"])
-        archive = out / "rust-target" / target / "release/libwiredkvm_transfer_tree.a"
-        run(["/usr/bin/swiftc", "-D", "WK_PORTABLE", "-D", "WK_TREE", *(["-D", "WK_STREAM_PROFILE"] if stream_profile else []), "-O", "-parse-as-library",
+        archives = []
+        includes = []
+        for directory, library in RUST_LIBRARIES:
+            crate = ROOT / "native" / directory
+            run(["cargo", "build", "--offline", "--locked", "--release", "--manifest-path", crate / "Cargo.toml",
+                 "--target", target, "--target-dir", out / "rust-target"])
+            archive = out / "rust-target" / target / ("release/lib" + library + ".a")
+            archives.append(archive)
+            includes += ["-I", crate / "include"]
+            static_libraries[str(archive)] = hashlib.sha256(archive.read_bytes()).hexdigest()
+        run(["/usr/bin/swiftc", "-D", "WK_PORTABLE", "-D", "WK_TREE", *(["-D", "WK_STREAM_PROFILE"] if stream_profile else []), *(["-D", "WK_PROGRESSIVE_PORTAL"] if progressive_portal else []), "-O", "-parse-as-library",
              "-target", f"{arch}-apple-macosx13.0", "-module-cache-path", cache,
-             "-I", crate / "include", "-Xlinker", "-dead_strip",
+             *includes, "-Xlinker", "-dead_strip",
              "-framework", "AppKit", "-framework", "IOKit", "-lcompression",
-             *sources, archive, "-o", out / ("portable-" + arch)])
+             *sources, *archives, "-o", out / ("portable-" + arch)])
     run(["/usr/bin/lipo", "-create", *[out / ("portable-" + a) for a in arches], "-output", exe])
     info = plistlib.loads((ROOT / "host/gui/Companion-Info.plist").read_bytes())
     info.update(CFBundleIdentifier="com.wiredkvm.portable", CFBundleExecutable="WiredKVMPortable",
@@ -74,12 +91,12 @@ def build(out: Path, arches: list[str], stream_profile: bool = False, module_cac
             raise RuntimeError("portable binary contains installed-only symbol: " + forbidden)
     if before!={str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}:
         raise RuntimeError("build inputs changed during compilation; candidate is not publishable")
-    manifest = dict(mode="portable", architectures=arches, collections=True, binaryBulk=True, streamProfile=stream_profile, moduleCache=str(cache),
+    manifest = dict(mode="portable", architectures=arches, collections=True, binaryBulk=True, streamProfile=stream_profile, progressivePortal=progressive_portal, moduleCache=str(cache),
                     legacyInputRelay=False, launched=False, installed=False,
                     deviceAccess=False, clipboardAccess=False, firmwareChanged=False,
                     binary=str(exe), bytes=exe.stat().st_size,
                     sha256=hashlib.sha256(exe.read_bytes()).hexdigest(),
-                    sources=before,
+                    sources=before, staticLibraries=static_libraries,
                     limitations=["physical input and clipboard acceptance pending",
                                  "macOS may require normal execution and network-volume access permission",
                                  "temporary transfer data and OS-managed caches are not an installation",
@@ -94,7 +111,8 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--arch", choices=["arm64", "x86_64"], action="append")
     parser.add_argument("--stream-profile", action="store_true", help="opt-in bounded numeric stream I/O diagnostics; no transport algorithm changes")
+    parser.add_argument("--progressive-portal", action="store_true", help="experimental single-file verified-prefix portal; hold tail until whole-file integrity passes")
     parser.add_argument("--module-cache", type=Path, help="explicit shared Swift cache below project/build")
     args = parser.parse_args()
-    result = build(args.output, args.arch or ["arm64", "x86_64"], args.stream_profile, args.module_cache)
+    result = build(args.output, args.arch or ["arm64", "x86_64"], args.stream_profile, args.module_cache, args.progressive_portal)
     print(json.dumps({k: result[k] for k in ["mode", "architectures", "binary", "bytes", "sha256", "launched"]}, ensure_ascii=False))

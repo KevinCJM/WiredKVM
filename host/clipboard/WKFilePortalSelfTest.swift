@@ -193,8 +193,66 @@ struct WKFilePortalSelfTest {
         mustThrow("proxy preflight refusal") { try refused.start() }
         refused.stop()
     }
+
+    static func progressiveHTTPTests() throws {
+        let bytes = Data((0..<131072).map { UInt8($0 % 251) })
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("wk-prefix-"+UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
+        defer { _ = rmdir(root.path) }
+        func incoming() throws -> (Int32, WKReceivingFile) {
+            let path = root.appendingPathComponent(UUID().uuidString).path
+            let fd = Darwin.open(path, O_CREAT|O_EXCL|O_RDWR|O_CLOEXEC, 0o600)
+            guard fd >= 0 else { throw WKStreamError.system(errno) }
+            guard unlink(path)==0 else { Darwin.close(fd); throw WKStreamError.system(errno) }
+            do {
+                guard bytes.withUnsafeBytes({ pwrite(fd,$0.baseAddress!,$0.count,0) }) == bytes.count else { throw WKStreamError.integrity }
+                return (fd, try WKReceivingFile(fd: fd, size: UInt64(bytes.count)))
+            } catch { Darwin.close(fd); throw error }
+        }
+        func connect(_ url: URL) throws -> Int32 {
+            let fd = socket(AF_INET, SOCK_STREAM, 0); guard fd >= 0 else { throw WKStreamError.system(errno) }
+            var a=sockaddr_in();a.sin_len=UInt8(MemoryLayout<sockaddr_in>.size);a.sin_family=sa_family_t(AF_INET);a.sin_addr.s_addr=inet_addr("127.0.0.1");a.sin_port=UInt16(url.port!).bigEndian
+            guard withUnsafePointer(to:&a,{$0.withMemoryRebound(to:sockaddr.self,capacity:1,{Darwin.connect(fd,$0,socklen_t(MemoryLayout<sockaddr_in>.size))})})==0 else { Darwin.close(fd);throw WKStreamError.system(errno) }
+            var timeout=timeval(tv_sec:2,tv_usec:0);_ = setsockopt(fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,socklen_t(MemoryLayout<timeval>.size))
+            let request=Data("GET \(url.path) HTTP/1.1\r\nHost: 127.0.0.1:\(url.port!)\r\nConnection: close\r\n\r\n".utf8)
+            guard request.withUnsafeBytes({ Darwin.send(fd,$0.baseAddress,$0.count,0) })==request.count else { Darwin.close(fd);throw WKStreamError.system(errno) }
+            return fd
+        }
+        func receive(_ fd: Int32, until count: Int, into data: inout Data) throws {
+            while data.count<count { var buffer=[UInt8](repeating:0,count:min(8192,count-data.count));let n=recv(fd,&buffer,buffer.count,0);guard n>0 else {throw WKStreamError.system(errno)};data.append(contentsOf:buffer.prefix(n)) }
+        }
+        for failure in [false,true] {
+            let (fd, receiving)=try incoming();defer{Darwin.close(fd)}
+            let store=WKPortalStore()
+            let http=WKPortalHTTPServer(store:store,proxyCheck:{_ in true});try http.start();defer{http.stop();store.stop()}
+            _ = try store.offer(id:"prefix",name:"prefix.bin",size:bytes.count,sha256:String(repeating:"0",count:64),streaming:true)
+            try store.beginReceiving(id:"prefix",file:receiving)
+            receiving.advance(to:UInt64(bytes.count)) // All bytes written; tail still requires final digest.
+            let socket=try connect(http.url.appendingPathComponent("prefix/prefix.bin"));defer{Darwin.close(socket)}
+            var header=Data(), one=Data();
+            while header.suffix(4) != Data("\r\n\r\n".utf8) { one=Data();try receive(socket,until:1,into:&one);header.append(one);check(header.count<4096,"bounded prefix header") }
+            check(String(data:header,encoding:.utf8)!.hasPrefix("HTTP/1.1 200"),"prefix headers")
+            var body=Data();try receive(socket,until:65536,into:&body)
+            check(body==bytes.prefix(65536),"only real written bytes are served")
+            let prefixRange=try request(http.url.appendingPathComponent("prefix/prefix.bin"),headers:["Range":"bytes=0-4095"])
+            check(prefixRange.status==206&&prefixRange.body==bytes.prefix(4096),"verified prefix range does not await full file")
+            var descriptor=pollfd(fd:socket,events:Int16(POLLIN),revents:0)
+            check(poll(&descriptor,1,100)==0,"tail withheld until whole digest")
+            if failure { receiving.fail() } else { try receiving.finishVerified() }
+            var buffer=[UInt8](repeating:0,count:8192)
+            var reset = false
+            while true {
+                let n=recv(socket,&buffer,buffer.count,0)
+                if n<0 && errno==ECONNRESET { reset=true;break }
+                if n==0{break};guard n>0 else{throw WKStreamError.system(errno)};body.append(contentsOf:buffer.prefix(n))
+            }
+            if failure { check(reset && body.count==65536 && body.count<bytes.count,"failure resets instead of clean EOF in declared HTTP body") }
+            else { check(!reset && body==bytes,"verified tail completes exact bytes") }
+        }
+        print("PORTAL_PROGRESSIVE_HTTP_PASS actual_prefix=true tail_gated=true failed_body_incomplete=true physicalFinder=false")
+    }
     static func main() throws {
-        try canonicalDirectoryTests(); try storeTests(); try httpTests()
+        try canonicalDirectoryTests(); try storeTests(); try httpTests(); try progressiveHTTPTests()
         let portal = WKFilePortal(), stopped = PortalTestBox(false)
         portal.stop { check(Thread.isMainThread, "stop completion main thread"); stopped.put(true) }
         let deadline = Date().addingTimeInterval(2)

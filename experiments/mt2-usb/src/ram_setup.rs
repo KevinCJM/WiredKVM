@@ -24,6 +24,13 @@ unsafe impl Sync for Owner {}
 static STATE: Owner = Owner(UnsafeCell::new(State { upload: Upload::new(), cell: [0; CELL], used: 0,
     ack: [0; CELL], pending: false, published: 0 }));
 
+/// Same single polling owner as input(). Diagnostics may recognize commands
+/// only here, never in a file's arbitrary binary body or partial image cell.
+#[no_mangle]
+pub extern "C" fn wk_cable_setup_at_boundary() -> bool {
+    unsafe { &*STATE.0.get() }.used == 0
+}
+
 #[no_mangle]
 pub extern "C" fn wk_cable_setup_reset() {
     let s = unsafe { &mut *STATE.0.get() }; s.upload.disconnected(); s.used = 0; s.pending = false;

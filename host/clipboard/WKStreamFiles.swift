@@ -11,6 +11,7 @@ struct WKStreamOffer: Codable, Equatable {
     let id: String, name: String, nonce: String
     let size: UInt64
     var kind: String = "file"
+    var clipboardBundle: Bool? = nil
     var generation: UInt64 = WKStreamSequence.next()
 #if WK_TREE
     var manifestBytes: Int? = nil
@@ -18,7 +19,7 @@ struct WKStreamOffer: Codable, Equatable {
 #endif
     static let maximumImage = 64 * 1024 * 1024
     func validate() throws {
-        var kinds = ["file", "png"]
+        var kinds = ["file", "png", "clipboard-bundle"]
 #if WK_TREE
         kinds.append("collection")
         if kind == "collection" {
@@ -29,7 +30,8 @@ struct WKStreamOffer: Codable, Equatable {
         guard WKFileOffer.validID(id), WKMessage.validFilename(name),
               !name.contains("\\"), !name.unicodeScalars.contains(where: { $0.value < 32 || $0.value == 127 }),
               WKMessage.validNonce(nonce), nonce != "0", generation > 0, kinds.contains(kind),
-              size <= (kind == "png" ? UInt64(Self.maximumImage) : Self.maximumSize) else { throw WKStreamError.invalid }
+              size <= (kind == "png" ? UInt64(Self.maximumImage) : kind == "clipboard-bundle" ? UInt64(WKClipboardBundle.maximumBytes) : Self.maximumSize),
+              clipboardBundle == nil || (clipboardBundle == true && ["file", "collection"].contains(kind)) else { throw WKStreamError.invalid }
     }
     func encoded() throws -> Data { try validate(); return try JSONEncoder().encode(self) }
     static func decode(_ data: Data) throws -> Self {
@@ -70,7 +72,7 @@ struct WKBulkControl {
         return ~c
     }
 }
-enum WKStreamError: Error { case invalid, disconnected, integrity, changed, capacity, timeout, system(Int32) }
+enum WKStreamError: Error { case invalid, disconnected, integrity, changed, capacity, timeout, cancelled, system(Int32) }
 private func streamErrorCode(_ error: Error) -> String {
     guard let e=error as? WKStreamError else{return "stream-io"}
     switch e {
@@ -80,6 +82,7 @@ private func streamErrorCode(_ error: Error) -> String {
     case .changed:return "stream-source-changed"
     case .capacity:return "stream-capacity"
     case .timeout:return "stream-timeout"
+    case .cancelled:return "stream-cancelled"
     case .system(let code):return "posix-"+String(code)
     }
 }
@@ -100,21 +103,88 @@ final class WKReceivedFile: @unchecked Sendable {
     }
 }
 
+// Experimental portal reader. Only the file engine publishes contiguous bytes
+// after frame checksum validation AND successful disk writes. Hold the final
+// 64 KiB until whole-file length/digest/source verification has completed: an
+// HTTP consumer can make progress, but cannot receive a complete file early.
+// Its duplicate pins the unlinked inode; cancellation never exposes a pathname.
+final class WKReceivingFile: @unchecked Sendable {
+    let size: UInt64
+    private let fd: Int32
+    private let condition = NSCondition()
+    private var written: UInt64 = 0, verified = false, failed = false
+#if WK_CH32_TEST
+    var onRead: ((UInt64, Int, Bool) -> Void)? // explicit native fixture only
+#endif
+    init(fd: Int32, size: UInt64) throws {
+        let copy = fcntl(fd, F_DUPFD_CLOEXEC, 0)
+        guard copy >= 0 else { throw WKStreamError.system(errno) }
+        self.fd = copy; self.size = size
+    }
+    deinit { Darwin.close(fd) }
+    func advance(to count: UInt64) {
+        condition.lock(); defer { condition.unlock() }
+        guard !failed, !verified, count >= written, count <= size else { return }
+        written = count; condition.broadcast()
+    }
+    func finishVerified() throws {
+        condition.lock(); defer { condition.unlock() }
+        guard !failed, written == size else { throw WKStreamError.integrity }
+        verified = true; condition.broadcast()
+    }
+    func fail() {
+        condition.lock(); defer { condition.unlock() }
+        if !verified { failed = true; condition.broadcast() }
+    }
+    // HTTP worker only. No UI, transport, input or clipboard queue waits here.
+    func read(offset: UInt64, maximum: Int, cancelled: () -> Bool) throws -> Data {
+        guard offset <= size, (0...65536).contains(maximum) else { throw WKStreamError.invalid }
+        condition.lock()
+        while true {
+            if failed { condition.unlock(); throw WKStreamError.cancelled }
+            let available = verified ? size : min(written, size - min(size, 65536))
+            if available > offset || (verified && offset == size) {
+                let count = min(maximum, Int(available - offset))
+#if WK_CH32_TEST
+                let complete = verified
+#endif
+                condition.unlock()
+                var bytes = Data(count: count)
+                if !bytes.isEmpty {
+                    let n = bytes.withUnsafeMutableBytes { pread(fd, $0.baseAddress!, $0.count, off_t(offset)) }
+                    guard n == count else { throw WKStreamError.integrity }
+                }
+#if WK_CH32_TEST
+                onRead?(offset, count, complete)
+#endif
+                return bytes
+            }
+            condition.unlock(); let stopped = cancelled(); condition.lock()
+            if stopped { condition.unlock(); throw WKStreamError.cancelled }
+            _ = condition.wait(until: Date().addingTimeInterval(0.1))
+        }
+    }
+}
+
 final class WKStreamSource: @unchecked Sendable {
-    let offer: WKStreamOffer
+    private(set) var offer: WKStreamOffer
+    // File-reference-only manifests contain no representation/file bytes and
+    // may use the bounded control lane to preserve immediate Finder progress.
+    var bundleMetadata: Data?
     fileprivate let fd: Int32
     private let original: stat
     private let cancellation = NSLock()
     private var cancelled = false
 #if WK_TREE
     private var tree: WKTransferTree?
-    init(tree: WKTransferTree, nonce: String) throws {
+    init(tree: WKTransferTree, nonce: String, clipboardBundle: Bool = false) throws {
         var metadata = WKStreamOffer(id: UUID().uuidString.lowercased(), name: "WiredKVM Selection", nonce: nonce, size: tree.size, kind: "collection")
         metadata.manifestBytes = tree.manifestData.count; metadata.manifestSHA256 = tree.manifestSHA256
+        if clipboardBundle { metadata.clipboardBundle = true }
         try metadata.validate(); self.tree = tree; offer = metadata; fd = -1; original = stat()
     }
 #endif
-    init(url: URL, nonce: String, kind: String = "file", unlinkAfterOpen: Bool = false) throws {
+    init(url: URL, nonce: String, kind: String = "file", unlinkAfterOpen: Bool = false, clipboardBundle: Bool = false) throws {
         let f = Darwin.open(url.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
         guard f >= 0 else { throw WKStreamError.system(errno) }
         if unlinkAfterOpen && unlink(url.path) != 0 { Darwin.close(f); throw WKStreamError.system(errno) }
@@ -123,11 +193,17 @@ final class WKStreamSource: @unchecked Sendable {
               UInt64(st.st_size) <= WKStreamOffer.maximumSize else { Darwin.close(f); throw WKStreamError.invalid }
         // A file-copy feature must not silently discard a resource fork.
         guard fgetxattr(f, "com.apple.ResourceFork", nil, 0, 0, 0) <= 0 else { Darwin.close(f); throw WKStreamError.invalid }
-        let metadata = WKStreamOffer(id: UUID().uuidString.lowercased(), name: url.lastPathComponent, nonce: nonce, size: UInt64(st.st_size), kind: kind)
+        var metadata = WKStreamOffer(id: UUID().uuidString.lowercased(), name: url.lastPathComponent, nonce: nonce, size: UInt64(st.st_size), kind: kind)
+        if clipboardBundle { metadata.clipboardBundle = true }
         do { try metadata.validate() } catch { Darwin.close(f); throw error }
         fd = f; original = st; offer = metadata
     }
     deinit { if fd >= 0 { Darwin.close(fd) } }
+    // Call only on the preparation/main executor, before either source is
+    // handed to the stream worker. The bridge admits new IDs monotonically.
+    func orderForPublication(after earlier: WKStreamSource) {
+        if offer.generation <= earlier.offer.generation { offer.generation = WKStreamSequence.next() }
+    }
     func cancel() {
         cancellation.lock(); cancelled = true; cancellation.unlock()
 #if WK_TREE
@@ -398,6 +474,7 @@ final class WKStreamEngine {
         let offer: WKStreamOffer
         var fd: Int32, offset: UInt64 = 0, hash = SHA256(), activity: Double
         var written: UInt64 = 0, staged = Data(), writer: WKDiskTask<Int>?
+        var receiving: WKReceivingFile?
 #if WK_TREE
         var manifestData = Data(), manifestTask: WKDiskTask<WKTreeManifest>?
         var manifestReported = false, finalHash: Data?
@@ -410,7 +487,7 @@ final class WKStreamEngine {
             fd = f
             guard unlink(url.path) == 0 else { Darwin.close(f); fd = -1; throw WKStreamError.system(errno) }
         }
-        deinit { if fd >= 0 { Darwin.close(fd) } }
+        deinit { receiving?.fail(); if fd >= 0 { Darwin.close(fd) } }
     }
     private let io: WKStreamIO, directory: URL
     private let inlineDisk: Bool
@@ -428,6 +505,8 @@ final class WKStreamEngine {
     var onControl: (Data) -> Void = { _ in }
     var onAccepted: (String) -> Void = { _ in }
     var onProgress: (String, UInt64, UInt64) -> Void = { _,_,_ in }
+    var onReceiving: (String, WKReceivingFile) -> Void = { _,_ in }
+    var progressivePortal = false // explicit candidate build only
     var outputBytes: Int { output.reduce(0) { $0 + $1.bytes.count } }
     var activeCount: Int { outgoing.count + incoming.count }
 
@@ -500,7 +579,7 @@ final class WKStreamEngine {
         grants.removeAll(); pendingControls.removeAll(); lastSession = -10
         emitControl(WKBulkControl(kind: .session, origin: io.port, epoch: epoch).encode())
     }
-    func cancelAll() { let ids = Set(outgoing.keys).union(incoming.keys); for item in outgoing.values { item.source.cancel() }; outgoing.removeAll(); incoming.removeAll(); output.removeAll(); grants.removeAll(); pendingControls.removeAll(); for id in ids { onFailure(id) } }
+    func cancelAll() { let ids = Set(outgoing.keys).union(incoming.keys); for item in outgoing.values { item.source.cancel() }; for item in incoming.values { item.receiving?.fail() }; outgoing.removeAll(); incoming.removeAll(); output.removeAll(); grants.removeAll(); pendingControls.removeAll(); for id in ids { onFailure(id) } }
     func stop() { emitControl(WKBulkControl(kind: .session, origin: io.port, epoch: 0).encode()); stopped = true; cancelAll(); io.close(); input.removeAll(); output.removeAll() }
     func add(_ source: WKStreamSource, now: Double) throws {
         guard !stopped, epoch != 0, outgoing.count < 4, pendingControls.count < 12, outgoing[source.offer.id] == nil else { throw WKStreamError.capacity }
@@ -516,7 +595,12 @@ final class WKStreamEngine {
         let promised = incoming.values.reduce(UInt64(0)) { $0 + $1.offer.size - $1.written }
         let available = UInt64(fs.f_bavail) * UInt64(fs.f_bsize)
         guard available > 256 * 1024 * 1024, offer.size + promised <= available - 256 * 1024 * 1024 else { throw WKStreamError.capacity }
-        incoming[offer.id] = try Incoming(offer, now, directory: directory)
+        let item = try Incoming(offer, now, directory: directory)
+        if progressivePortal && offer.kind == "file" {
+            item.receiving = try WKReceivingFile(fd: item.fd, size: offer.size)
+        }
+        incoming[offer.id] = item
+        if let receiving = item.receiving { onReceiving(offer.id, receiving) }
         onDiagnostic("WKCLIP_DIAG role=\(io.port == 0 ? "host" : "target") event=BULK_RX phase=REQUEST transfer=\(offer.generation) acked=0 total=\(offer.size)")
         let control = WKBulkControl(kind: .grant, origin: 1-io.port, epoch: epoch, id: offer.id, generation: offer.generation)
         pendingControls[offer.id] = PendingControl(control: control)
@@ -528,6 +612,7 @@ final class WKStreamEngine {
         onRetire(id)
         output.removeAll { $0.id == id && !$0.started }
         outgoing[id]?.source.cancel()
+        incoming[id]?.receiving?.fail()
         outgoing.removeValue(forKey: id); incoming.removeValue(forKey: id); grants.removeValue(forKey: id)
     }
     func cancel(_ id: String) {
@@ -613,6 +698,7 @@ final class WKStreamEngine {
 #endif
             // A short write, altered source, disconnect, or bad digest never
             // produces a complete portal file or a successful final ACK.
+            try item.receiving?.finishVerified()
             let result = WKReceivedFile(fd: item.fd, size: item.offset, sha256: frame.body.map { String(format: "%02x", $0) }.joined())
             item.fd = -1; incoming.removeValue(forKey: frame.id)
             onFile(frame.id, result)
@@ -635,6 +721,7 @@ final class WKStreamEngine {
 #endif
                 if let result = item.writer?.result() {
                     item.written += UInt64(try result.get()); item.writer = nil; item.activity = now
+                    item.receiving?.advance(to: item.written)
                     try enqueue(Frame(kind: 3, epoch: epoch, id: id, offset: item.written, body: Data()))
                     onProgress(id, item.written, item.offer.size)
                 }
@@ -784,16 +871,16 @@ final class WKStreamEngine {
 final class WKStreamFiles {
 #if WK_TREE
     private var selectionJobs = 0 // main-thread admission; filesystem work is cancellable
-    @discardableResult func prepareSelection(urls: [URL], nonce: String, completion: @escaping (Result<WKStreamSource, Error>) -> Void) -> WKTreeJob? {
+    @discardableResult func prepareSelection(urls: [URL], nonce: String, clipboardBundle: Bool = false, completion: @escaping (Result<WKStreamSource, Error>) -> Void) -> WKTreeJob? {
         guard selectionJobs < 2 else { completion(.failure(WKStreamError.capacity)); return nil }
         selectionJobs += 1; let job = WKTreeJob()
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let result = Result { () throws -> WKStreamSource in
                 // Preserve the single-file path and its immediate metadata offer.
                 if urls.count == 1, try urls[0].resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true {
-                    return try WKStreamSource(url: urls[0], nonce: nonce)
+                    return try WKStreamSource(url: urls[0], nonce: nonce, clipboardBundle: clipboardBundle)
                 }
-                return try WKStreamSource(tree: WKTransferTree(urls: urls, job: job), nonce: nonce)
+                return try WKStreamSource(tree: WKTransferTree(urls: urls, job: job), nonce: nonce, clipboardBundle: clipboardBundle)
             }
             DispatchQueue.main.async { self?.selectionJobs -= 1; completion(result) }
         }
@@ -815,6 +902,7 @@ final class WKStreamFiles {
     private(set) var isReady = false // main-thread observation only
     var onControl: (Data) -> Void = { _ in }
     var onAccepted: (String) -> Void = { _ in }
+    var onReceiving: (String, WKReceivingFile) -> Void = { _,_ in }
     var onProgress: (String, UInt64, UInt64) -> Void = { _,_,_ in }
     var onFile: (String, WKReceivedFile) -> Void = { _, _ in }
 #if WK_TREE
@@ -844,6 +932,9 @@ final class WKStreamFiles {
             do {
                 writeReady?.stop(); writeReady = nil
                 let io = try connect(), e = WKStreamEngine(io: io, directory: directory)
+#if WK_PROGRESSIVE_PORTAL
+                e.progressivePortal = true
+#endif
                 connectionGeneration &+= 1; let generation = connectionGeneration
                 engine = e; e.setEpoch(desiredEpoch)
                 e.onWorkAvailable = { [weak self] in
@@ -865,6 +956,7 @@ final class WKStreamFiles {
                     if let code { DispatchQueue.main.async { self?.onDiagnostic(code) } }
                 }
                 e.onAccepted = { [weak self] id in DispatchQueue.main.async { self?.onAccepted(id) } }
+                e.onReceiving = { [weak self] id, receiving in DispatchQueue.main.async { self?.onReceiving(id, receiving) } }
                 // UI progress is throttled; no per-cell main-thread flood.
                 var lastProgress: [String: Double] = [:]
                 e.onProgress = { [weak self] id, n, total in
@@ -897,6 +989,43 @@ final class WKStreamFiles {
     func setEpoch(_ epoch: UInt64) { worker.async { [self] in desiredEpoch = epoch; engine?.setEpoch(epoch) } }
     func prepare(url: URL, nonce: String, completion: @escaping (Result<WKStreamSource, Error>) -> Void) {
         DispatchQueue.global(qos: .utility).async { let result = Result { try WKStreamSource(url: url, nonce: nonce) }; DispatchQueue.main.async { completion(result) } }
+    }
+    @discardableResult func prepareBundle(clipboard: WKClipboard, revision: Int, nonce: String, files: [URL],
+        completion: @escaping (Result<WKStreamSource, Error>) -> Void) -> ImageJob? {
+        guard imageJobs < 2 else { completion(.failure(WKStreamError.capacity)); return nil }
+        imageJobs += 1; let job = ImageJob()
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let result = Result { () throws -> WKStreamSource in
+                let bundle = try WKClipboardBundle.capture(clipboard: clipboard, expectedRevision: revision, fileReference: { url in
+                    guard let index = files.firstIndex(where: { $0.standardizedFileURL == url.standardizedFileURL }) else { throw WKStreamError.invalid }
+                    return String(index)
+                }, check: { try job.check() })
+                try job.check(); let data = try bundle.encoded(); try job.check()
+                let url = FileManager.default.temporaryDirectory.appendingPathComponent("wk-bundle-" + UUID().uuidString + ".bin")
+                defer { try? FileManager.default.removeItem(at: url) }
+                try data.write(to: url, options: .withoutOverwriting)
+                let source = try WKStreamSource(url: url, nonce: nonce, kind: "clipboard-bundle", unlinkAfterOpen: true)
+                if data.count <= 128 * 1024, bundle.items.allSatisfy({ $0.representations.allSatisfy({ $0.kind == .fileURL }) }) { source.bundleMetadata = data }
+                try job.check(); return source
+            }
+            DispatchQueue.main.async { self?.imageJobs -= 1; completion(result) }
+        }
+        return job
+    }
+    @discardableResult func decodeBundle(file: WKReceivedFile,
+        completion: @escaping (Result<WKClipboardBundle, Error>) -> Void) -> ImageJob? {
+        guard imageJobs < 2 else { completion(.failure(WKStreamError.capacity)); return nil }
+        imageJobs += 1; let job = ImageJob()
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let result = Result { () throws -> WKClipboardBundle in
+                guard file.size <= WKClipboardBundle.maximumBytes else { throw WKStreamError.capacity }
+                var bytes = Data(); bytes.reserveCapacity(Int(file.size))
+                while bytes.count < file.size { try job.check(); bytes.append(try file.read(offset: UInt64(bytes.count), maximum: 65536)) }
+                try job.check(); return try WKClipboardBundle.decode(bytes)
+            }
+            DispatchQueue.main.async { self?.imageJobs -= 1; completion(result) }
+        }
+        return job
     }
     @discardableResult func prepareImage(clipboard: WKClipboard, revision: Int, nonce: String,
         completion: @escaping (Result<WKStreamSource, Error>) -> Void) -> ImageJob? {

@@ -34,6 +34,23 @@ public:
 
 int main(int argc, char **argv) {
     assert(argc == 2);
+    assert(wk::clipboard_v2_control("ROUTE", "1,2,0,12,34,0,0,0,1"));
+    assert(wk::clipboard_v2_control("RESULT", "5.ready.17"));
+    assert(wk::clipboard_v2_control("RESULT", "5.blocked"));
+    assert(!wk::clipboard_v2_control("RESULT", "5.ready"));
+    assert(!wk::clipboard_v2_control("ROUTE", "1,2,0,12,34,0,0,0,1,"));
+    assert(!wk::clipboard_v2_control("ROUTE", "1,2,0,12,34,0,0,0,4"));
+    assert(!wk::clipboard_v2_control("ROUTE", "1,2,3,12,34,0,0,0,1"));
+    assert(!wk::clipboard_v2_control("RESULT", "5.ready.arbitrary"));
+    assert(!wk::clipboard_v2_control("RESULT", "18446744073709551616.ready.17"));
+    assert(wk::clipboard_v2_intent({"C", "SELECT", "2", "0", "copy", "12", "1"}));
+    assert(wk::clipboard_v2_intent({"C", "SELECT", "3", "1", "cut", "34", "2"}));
+    assert(wk::clipboard_v2_intent({"C", "CONTEXT", "4", "1", "2"}));
+    assert(wk::clipboard_v2_intent({"C", "PASTE", "5", "1", "4", "0", "2"}));
+    assert(!wk::clipboard_v2_intent({"C", "PASTE", "5", "2", "4", "0", "2"}));
+    assert(!wk::clipboard_v2_intent({"C", "PASTE", "5", "1", "4", "0", "2", "extra"}));
+    assert(!wk::clipboard_v2_intent({"C", "SELECT", "2", "0", "run", "12", "1"}));
+    assert(!wk::clipboard_v2_intent({"C", "SELECT", "2", "0", "copy", "/private/file", "1"}));
     const std::string directory = argv[1], path = directory + "/channel.sock";
     Channel::Report report{};
     for (std::size_t i = 0; i < report.size(); ++i) report[i] = static_cast<uint8_t>(i);

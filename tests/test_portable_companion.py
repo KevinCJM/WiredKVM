@@ -39,6 +39,12 @@ class PortableCompanionTests(unittest.TestCase):
         self.assertIn("host/clipboard/WKTransferTree.swift", self.manifest["sources"])
         self.assertIn("native/transfer-tree/src/lib.rs", self.manifest["sources"])
         self.assertIn("wk_tree_create", symbols)
+        self.assertIn("host/clipboard/WKClipboardState.swift", self.manifest["sources"])
+        self.assertIn("native/clipboard-state/src/lib.rs", self.manifest["sources"])
+        self.assertIn("host/clipboard/WKClipboardBundle.swift", self.manifest["sources"])
+        self.assertIn("wkcs_create", symbols)
+        for path, digest in self.manifest["staticLibraries"].items():
+            self.assertEqual(hashlib.sha256(Path(path).read_bytes()).hexdigest(), digest)
 
     def test_portable_check_returns_without_runtime(self):
         result = subprocess.run([str(self.binary), "--portable-check"], capture_output=True, text=True, timeout=5)

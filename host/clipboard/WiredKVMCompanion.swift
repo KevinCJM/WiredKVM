@@ -23,7 +23,14 @@ enum WKMetadata {
         "file-portal-unavailable", "file-portal-access-denied", "file-transfer-queue-full", "file-offer-mismatch", "invalid-file-offer",
         "stream-file-interrupted", "stream-file-publish-failed", "stream-invalid", "stream-disconnected", "stream-integrity",
         "stream-source-changed", "stream-source-stat-failed", "stream-source-identity-changed", "stream-source-size-changed",
-        "stream-source-mtime-changed", "stream-source-ctime-changed", "stream-capacity", "stream-timeout", "stream-io", "bulk-image-decode-failed", "collection-publish-failed"
+        "stream-source-mtime-changed", "stream-source-ctime-changed", "stream-capacity", "stream-timeout", "stream-io", "bulk-image-decode-failed", "collection-publish-failed",
+        "bulk-transport-required", "bundle-decode-failed", "bundle-prepare-failed", "bundle-capacity", "bundle-file-resolver-required",
+        "bundle-image-memory-capacity", "bundle-image-over-64MiB", "bundle-integrity", "bundle-invalid-destination-file-url",
+        "bundle-invalid-file-reference", "bundle-invalid-header", "bundle-invalid-image", "bundle-invalid-length",
+        "bundle-invalid-representations", "bundle-invalid-segment", "bundle-invalid-source-file-url", "bundle-invalid-utf8",
+        "bundle-item-capacity", "bundle-new-local-copy-wins", "bundle-segment-integrity", "bundle-source-changed",
+        "bundle-text-over-1MiB", "bundle-unavailable-image", "bundle-unavailable-representation", "bundle-unavailable-text",
+        "bundle-unexpected-file-reference", "bundle-unreferenced-body", "bundle-unsupported-item", "bundle-write-denied"
     ]
     private static let booleans: Set<String> = ["accepted", "ready", "linkReady", "completedNonceMatches", "completedDirectionMatches",
         "latestNonceMatches", "latestDirectionMatches", "notCancelled", "revisionMatches", "notTransmitting", "noPending",
@@ -72,7 +79,7 @@ enum WKMetadata {
                 case "peerAccepted": valid = ["0", "1", "unknown"].contains(value)
                 case "token":
                     let parts = value.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
-                    valid = parts.count == 2 && parts.allSatisfy(WKMessage.validNonce)
+                    valid = (parts.count == 1 || parts.count == 2) && parts.allSatisfy(WKMessage.validNonce)
                 case "result": valid = ["READY", "BLOCK", "CHECK"].contains(value)
                 case "code": valid = safeCode(value)
                 case "usbMbps": valid = ["unknown", "1.5", "12", "480"].contains(value)
@@ -94,6 +101,7 @@ enum WKMetadata {
 // Main-thread coordinator. Clipboard changes and incoming transfers are serialized
 // here so that a fresh local copy cannot be overwritten by an older remote item.
 protocol WKFilePortalServing: AnyObject {
+    func beginReceiving(id: String, file: WKReceivingFile) throws
     var isAvailable: Bool { get }
     var diagnosticCounts: [UInt32]? { get }
     func start(completion: @escaping (Result<Void, Error>) -> Void)
@@ -111,6 +119,8 @@ protocol WKFilePortalServing: AnyObject {
 }
 
 extension WKFilePortalServing {
+    // Test/legacy portals may retain their whole-file-only behavior.
+    func beginReceiving(id: String, file: WKReceivingFile) throws {}
     var diagnosticCounts: [UInt32]? { nil }
     func stop(completion: @escaping () -> Void) { stop(); completion() }
     func offerStream(_ offer: WKStreamOffer) throws -> URL { throw WKFilePortalError.unavailable }

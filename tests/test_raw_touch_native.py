@@ -47,6 +47,23 @@ class TouchSession(FakeSession):
         except OSError:pass
 
 class RawTouchNativeTests(unittest.TestCase):
+    def test_suspended_capture_releases_held_keys_buttons_and_native_contacts(self):
+        raw="020000000000000031000088"
+        events=[(0,"E 5000 0"),(0,"H B 31"),(0,"H D 31 "+raw),
+                (0.01,"T 4 1"),(0,"B 1 0"),(0.01,"R 0 0"),
+                (0,"H D 31 "+raw)]
+        with TouchSession(events) as s:
+            self.assertTrue(wait_until(lambda:any(row=="MT2E,31" for _,row in s.touch)))
+            self.assertEqual([row for _,row in s.touch],
+                             ["MT2B,31","MT2D,31,"+raw,"MT2E,31"])
+            self.assertTrue(wait_until(lambda:s.counts['R']>=1))
+            # R is the existing firmware all-release command, including held
+            # keys/buttons. No explicit key-up can arrive after capture loss.
+            downs=[f for f in s.frames if f['kind']=='T' and f['b']==1]
+            self.assertEqual(len(downs),1)
+            self.assertTrue(any(f['kind']=='R' and f['at']>downs[0]['at'] for f in s.frames))
+            self.assertIsNone(s.proc.poll())
+
     def test_clipboard_traffic_keeps_native_touch_keys_and_automatic_edge_return(self):
         raw="020000000000000031000088"
         events=[(0.05,"E 5000 0"),(0,"H B 19"),(0,"H D 19 "+raw),

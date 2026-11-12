@@ -113,6 +113,10 @@ private final class WriteProbeIO: WKStreamIO {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
         defer { try? FileManager.default.removeItem(at: root) }
         if CommandLine.arguments.contains("--io-benchmark") { try ioBenchmark(root); return }
+        if CommandLine.arguments.contains("--progressive") { try progressive(root); return }
+        if CommandLine.arguments.contains("--state-pipeline") {
+            try WKFilePipelineSelfTest.run(); print("CLIPBOARD_STATE_PIPELINE_PASS"); return
+        }
 #if WK_TREE
         if CommandLine.arguments.contains("--collections") { try WKCollectionTransferSelfTest.run(root); return }
         if CommandLine.arguments.contains("--collection-pipeline") {
@@ -199,6 +203,33 @@ private final class WriteProbeIO: WKStreamIO {
         if let index = CommandLine.arguments.firstIndex(of: "--result"), index + 1 < CommandLine.arguments.count { try data.write(to: URL(fileURLWithPath: CommandLine.arguments[index+1])) }
         print(String(decoding: data, as: UTF8.self)); a.stop(); b.stop(); print("CH32_STREAM_STRESS_PASS")
     }
+    static func progressive(_ root: URL) throws {
+        let url=try source(root,"progressive.bin",262144,23), src=try WKStreamSource(url:url,nonce:"501")
+        let (pipe,a,b)=pair(root);b.progressivePortal=true
+        var receiving:WKReceivingFile?, file:WKReceivedFile?, written:UInt64=0
+        b.onReceiving={_,r in receiving=r};b.onProgress={_,n,_ in written=n};b.onFile={_,f in file=f}
+        try b.expect(src.offer,now:0);try a.add(src,now:0)
+        var tick=0
+        while written<65536&&tick<20000{a.step(now:Double(tick)*0.001);b.step(now:Double(tick)*0.001);pipe.probe(UInt32(tick));tick+=1}
+        try check(written>=65536&&file==nil&&receiving != nil,"actual engine exposes written prefix before completion")
+        let first=try receiving!.read(offset:0,maximum:4096,cancelled:{false})
+        let sourceHandle=try FileHandle(forReadingFrom:url);defer{try? sourceHandle.close()}
+        try check(first==sourceHandle.read(upToCount:4096),"prefix comes from received disk data")
+        while file==nil&&tick<20000{a.step(now:Double(tick)*0.001);b.step(now:Double(tick)*0.001);pipe.probe(UInt32(tick));tick+=1}
+        try check(file != nil&&digest(file!)==digest(url),"whole-file digest still required")
+        let tail=try receiving!.read(offset:src.offer.size-4096,maximum:4096,cancelled:{false})
+        try check(tail==file!.read(offset:src.offer.size-4096,maximum:4096),"verified tail exact")
+        let second=try WKStreamSource(url:url,nonce:"502");receiving=nil;file=nil;written=0
+        try b.expect(second.offer,now:Double(tick)*0.001);try a.add(second,now:Double(tick)*0.001)
+        let limit=tick+20000
+        while written<65536&&tick<limit{a.step(now:Double(tick)*0.001);b.step(now:Double(tick)*0.001);pipe.probe(UInt32(tick));tick+=1}
+        try check(receiving != nil&&file==nil,"pending prefix for cancellation")
+        b.cancel(second.offer.id)
+        var rejected=false;do{_ = try receiving!.read(offset:0,maximum:4096,cancelled:{false})}catch{rejected=true}
+        try check(rejected&&pipe.failures==0,"cancel wakes prefix reader and preserves input")
+        print("PROGRESSIVE_ENGINE_PASS actual_bridge=true prefix_before_complete=true whole_sha=true cancel_fails_reader=true physicalUSB=false")
+    }
+
     static func writeReadiness() throws {
         let queue = DispatchQueue(label: "WK.test.write-readiness")
         for initiallyEnabled in [false, true] {
