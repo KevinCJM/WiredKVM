@@ -231,7 +231,7 @@ def generate(out,pointer_collections=False,absolute_no_preferred=False,absolute_
         main=once(main,'        if(wk407_bulk_space(&bridge,p))arm(p,ep,usbd_get_speed(handles[p])==USB_SPEED_HIGH?512:64);',
                   '        if(p==0?(!wk_cable_setup_pending()&&(!wk_cable_setup_size()||!bridge.online[1]||wk407_bulk_space(&bridge,p))):wk407_bulk_space(&bridge,p))arm(p,ep,usbd_get_speed(handles[p])==USB_SPEED_HIGH?512:64);\n'
                   '        if(p==0&&!busy[p][ep]&&wk_cable_setup_pending()){uint8_t ack[512];size_t n=wk_cable_setup_ack(ack,sizeof(ack));if(n)send(0,ep,9,ack,(unsigned)n);}')
-        main=once(main,'    wk_setup_tick(&setup,now);','    if(wk_cable_setup_changed())wk_setup_refresh(&setup);\n    wk_setup_tick(&setup,now);')
+        main=once(main,'    wk_setup_tick(&setup,now);','    wk_cable_platform_poll(now);\n    if(wk_cable_setup_changed())wk_setup_refresh(&setup);\n    wk_setup_tick(&setup,now);')
         descriptors=once(descriptors,'0xac,0x05,0x65,0x02,0x6d,2,1,2,3,1','0xac,0x05,0x65,0x02,0x6e,2,1,2,3,1')
     if bulk_batch:
         main=once(main,'static void service(void) {','#include "bulk_batch.h"\nstatic void service(void) {')

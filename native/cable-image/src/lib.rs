@@ -13,6 +13,9 @@ pub const FINISH: u8 = 3;
 pub const ABORT: u8 = 4;
 /// Read-only platform telemetry; handled by the board adapter, never Upload.
 pub const DIAGNOSTIC: u8 = 5;
+/// Recover only an unavailable, unpublished platform. No address or payload.
+pub const RECOVER: u8 = 6;
+pub const MAX_RECOVERIES: u8 = 2;
 pub const DIAGNOSTIC_WORDS: usize = 16;
 
 pub fn diagnostic_reply(words: &[u32; DIAGNOSTIC_WORDS]) -> [u8; CELL] {
@@ -52,6 +55,9 @@ impl Reply {
 
 pub trait Memory {
     fn available(&self) -> bool;
+    /// Schedule bounded work, never perform a synchronous reinitialization.
+    /// True means recovery is pending, not that memory has passed its probes.
+    fn begin_recovery(&mut self) -> bool { false }
     /// The adapter must bounds-check and read back each write before returning.
     fn write_verified(&mut self, offset: u32, bytes: &[u8]) -> bool;
 }
@@ -72,7 +78,7 @@ pub struct Frame<'a> {
 }
 impl Frame<'_> {
     pub fn encode(&self) -> Option<[u8; CELL]> {
-        if self.body.len() > BODY || self.operation > DIAGNOSTIC { return None; }
+        if self.body.len() > BODY || self.operation > RECOVER { return None; }
         let mut b = [0u8; CELL]; b[..4].copy_from_slice(b"WKIM"); b[4] = 1; b[5] = self.operation;
         b[8..16].copy_from_slice(&self.session.to_le_bytes());
         b[16..20].copy_from_slice(&self.offset.to_le_bytes());
@@ -83,7 +89,7 @@ impl Frame<'_> {
         let checksum = crc32(&b[..508]); b[508..].copy_from_slice(&checksum.to_le_bytes()); Some(b)
     }
     pub fn decode(b: &[u8]) -> Option<Frame<'_>> {
-        if b.len() != CELL || &b[..4] != b"WKIM" || b[4] != 1 || b[5] > DIAGNOSTIC ||
+        if b.len() != CELL || &b[..4] != b"WKIM" || b[4] != 1 || b[5] > RECOVER ||
             b[6..8] != [0; 2] || b[30..32] != [0; 2] || crc32(&b[..508]) != u32le(&b[508..]) { return None; }
         let n = usize::from(u16::from_le_bytes(b[28..30].try_into().unwrap()));
         if n > BODY || b[32+n..508].iter().any(|&v| v != 0) { return None; }
@@ -110,6 +116,16 @@ impl Upload {
     pub fn accept(&mut self, port: u8, cell: &[u8], memory: &mut impl Memory) -> Reply {
         if port != 0 { return self.reply(Code::Invalid); }
         let Some(f) = Frame::decode(cell) else { return self.reply(Code::Invalid); };
+        if f.operation == RECOVER {
+            if f.session != 0 || f.offset != 0 || f.total != 0 || f.checksum != 0 || !f.body.is_empty() {
+                return self.reply(Code::Invalid);
+            }
+            // Sealed includes the incremental physical CRC and mounted-source
+            // lifetime. Neither it nor an active upload may be reset remotely.
+            if self.sealed || self.session != 0 { return self.reply(Code::Busy); }
+            return self.reply(if memory.available() { Code::Accepted }
+                else if memory.begin_recovery() { Code::Busy } else { Code::Unavailable });
+        }
         if !memory.available() { return self.reply(Code::Unavailable); }
         if f.operation == QUERY {
             if f.offset != 0 || f.total != 0 || f.checksum != 0 || !f.body.is_empty() { return self.reply(Code::Invalid); }

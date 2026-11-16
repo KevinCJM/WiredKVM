@@ -5,6 +5,7 @@ use wiredkvm_cable_image::{Memory, Upload, Frame, CELL, DIAGNOSTIC, DIAGNOSTIC_W
 
 extern "C" {
     fn wk_cable_platform_ready() -> i32;
+    fn wk_cable_platform_recover() -> i32;
     fn wk_cable_platform_write(offset: u32, data: *const u8, n: usize) -> i32;
     fn wk_cable_platform_diagnostic(out: *mut u32, count: usize);
     fn wk_cable_forward(data: *const u8, n: usize);
@@ -12,6 +13,7 @@ extern "C" {
 struct Ram;
 impl Memory for Ram {
     fn available(&self) -> bool { unsafe { wk_cable_platform_ready() != 0 } }
+    fn begin_recovery(&mut self) -> bool { unsafe { wk_cable_platform_recover() != 0 } }
     fn write_verified(&mut self, offset: u32, data: &[u8]) -> bool {
         unsafe { wk_cable_platform_write(offset, data.as_ptr(), data.len()) != 0 }
     }

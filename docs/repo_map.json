@@ -362,13 +362,13 @@
         "docs/history/TARGET_ZERO_RUNTIME_20261106.md",
         "host/WKRawTouch.swift",
         "native/raw_touch_wire.hpp",
-        "docs/history/LIVE_TOUCH_20261109.md",
-        "results/live-touch-20261109/CURRENT_RUNTIME.json",
-        "results/live-touch-20261109/accepted-native-v2/user-acceptance.json"
+        "docs/history/LIVE_TOUCH_20261109.md"
       ],
       "upstream_dependencies": [],
       "downstream_dependencies": [],
-      "out_of_scope_dependencies": [],
+      "out_of_scope_dependencies": [
+        "Private runtime evidence under ignored results/ is local only and is not required for public source validation."
+      ],
       "related_tests": [
         "tests",
         "tests/test_independent_input.py",
@@ -452,14 +452,13 @@
         "native/transfer-tree",
         "host/clipboard/WKTransferTree.swift",
         "docs/research/CLIPBOARD_ZERO_RUNTIME_GATE_20261109.md",
-        "results/clipboard-zero-runtime-20261109/admission_probe.c",
-        "results/clipboard-zero-runtime-20261109/admission-probe.log",
         "docs/research/FINDER_CANCEL_20261110.md"
       ],
       "upstream_dependencies": [],
       "downstream_dependencies": [],
       "out_of_scope_dependencies": [
-        "Earlier ignored audit/result artifacts missing from this checkout; historical claims require their original evidence."
+        "Earlier ignored audit/result artifacts missing from this checkout; historical claims require their original evidence.",
+        "Private runtime evidence under ignored results/ is local only and is not required for public source validation."
       ],
       "related_tests": [
         "tests/test_file_transfer_native.py",
@@ -874,8 +873,6 @@
         "experiments/mt2-usb/src/native_format.rs",
         "experiments/mt2-usb/examples/native_stationary_probe.rs",
         "experiments/mt2-petros-profile/probe_native_book.py",
-        "results/live-touch-20261109/CURRENT_RUNTIME.json",
-        "results/live-touch-20261109/accepted-native-v2/user-acceptance.json",
         "experiments/mt2-petros-profile/bulk_batch.h",
         "experiments/mt2-petros-profile/bulk_profile.h",
         "docs/research/BULK_THROUGHPUT_20261110.md"
@@ -886,7 +883,8 @@
       "downstream_dependencies": [],
       "out_of_scope_dependencies": [
         "macOS Apple driver behavior requires physical enumeration",
-        "recovered WCH SDK and toolchain outside project"
+        "recovered WCH SDK and toolchain outside project",
+        "Private runtime evidence under ignored results/ is local only and is not required for public source validation."
       ],
       "related_tests": [
         "experiments/mt2-usb/tests",
@@ -986,8 +984,7 @@
         "native/control-service/src/macos.c",
         "native/control-service/build.rs",
         "scripts/configure_control_autostart.py",
-        "docs/history/CONTROL_AUTOSTART_20261109.md",
-        "results/control-autostart-20261109/summary.json"
+        "docs/history/CONTROL_AUTOSTART_20261109.md"
       ],
       "upstream_dependencies": [
         "host_input"
@@ -995,7 +992,8 @@
       "downstream_dependencies": [],
       "out_of_scope_dependencies": [
         "macOS launchd and TCC",
-        "board electrical behavior"
+        "board electrical behavior",
+        "Private runtime evidence under ignored results/ is local only and is not required for public source validation."
       ],
       "related_tests": [
         "native/control-service/src/lib.rs",
@@ -1068,8 +1066,7 @@
         "hardware/USB_POWER_AND_HOTPLUG_REQUIREMENTS.md"
       ],
       "then_check_files": [
-        "docs/history/CONTROL_AUTOSTART_20261109.md",
-        "results/control-autostart-20261109/summary.json"
+        "docs/history/CONTROL_AUTOSTART_20261109.md"
       ],
       "upstream_dependencies": [],
       "downstream_dependencies": [
@@ -1077,7 +1074,8 @@
         "host_autostart"
       ],
       "out_of_scope_dependencies": [
-        "Petros board circuit and electrical measurement"
+        "Petros board circuit and electrical measurement",
+        "Private runtime evidence under ignored results/ is local only and is not required for public source validation."
       ],
       "related_tests": [],
       "related_configs": [],
@@ -1142,14 +1140,13 @@
         "docs/history/TOUCH_PHASE_20261109.md",
         "experiments/host-touch-observer/src/forward.rs",
         "docs/history/LIVE_TOUCH_20261109.md",
-        "experiments/host-touch-observer/src/forward_native.rs",
-        "results/live-touch-20261109/CURRENT_RUNTIME.json",
-        "results/live-touch-20261109/accepted-native-v2/user-acceptance.json"
+        "experiments/host-touch-observer/src/forward_native.rs"
       ],
       "upstream_dependencies": [],
       "downstream_dependencies": [],
       "out_of_scope_dependencies": [
-        "Apple private MultitouchSupport ABI and real user gestures"
+        "Apple private MultitouchSupport ABI and real user gestures",
+        "Private runtime evidence under ignored results/ is local only and is not required for public source validation."
       ],
       "related_tests": [
         "experiments/host-touch-observer/src/lib.rs",
@@ -1200,7 +1197,7 @@
       "name": "portable_cable_runtime",
       "path": "native/cable-image",
       "kind": "implementation_entrypoints",
-      "purpose": "Live diagnostic firmware and Book coordinator use unchanged v12 portable app/media and frozen input binaries. After a Book-only helper restart, fresh text in both directions is user-confirmed; native/capture/coordinator retain their identities and the same program image is reused. Current 8 MiB single-paste -43 remains unrooted despite protocol completion. Bounded HTTP portal counters pass isolated regression and packaging checks; candidate is not deployed. No target terminal or installation; no PCB. Physical speed, Finder cancellation and persistent portable autostart remain unaccepted.",
+      "purpose": "Readonly cable program and Book startup coordinator. The PSRAM recovery candidate adds CRC-protected RECOVER admission, two cooperative attempts per firmware boot, guarded host retry and immutable sealed-source protection. C/Rust integration, loader sockets and input/MSC regressions cover the offline contract; candidate deployment, physical PSRAM root cause and recovery acceptance remain unverified. Target app runs directly from the cable, without persistent installation or target terminal.",
       "module_tags": [
         "portable",
         "ram_setup",
@@ -1244,7 +1241,8 @@
         "native/control-service/src/main.rs",
         "native/control-service/README.md",
         "docs/research/FINDER_CANCEL_20261110.md",
-        "docs/research/BULK_THROUGHPUT_20261110.md"
+        "docs/research/BULK_THROUGHPUT_20261110.md",
+        "docs/research/PSRAM_RECOVERY.md"
       ],
       "upstream_dependencies": [
         "firmware_ch32",
@@ -1271,7 +1269,9 @@
         "tests/psram_model/ch32v4x7.h",
         "tests/psram_model/ch32v4x7_psram.h",
         "tests/psram_model/ch32v4x7_pwr.h",
-        "tests/test_flash_portable_candidate.py"
+        "tests/test_flash_portable_candidate.py",
+        "tests/test_psram_recovery_integration.py",
+        "tests/psram_recovery_integration.c"
       ],
       "related_configs": [
         "native/cable-image/Cargo.toml",
@@ -1299,12 +1299,14 @@
         "P39",
         "P40",
         "P41",
-        "P42"
+        "P42",
+        "P47"
       ],
       "minimum_regression": [
         "python3 tests/test_cable_runtime.py",
         "python3 experiments/mt2-petros-profile/test_live_touch.py --native-format --ram-setup",
-        "python3 tests/test_flash_portable_candidate.py"
+        "python3 tests/test_flash_portable_candidate.py",
+        "python3 tests/test_psram_recovery_integration.py"
       ],
       "routing_confidence": "high",
       "scope_flags": [
@@ -1319,7 +1321,10 @@
           "native/cable-loader/src/main.rs",
           "experiments/mt2-usb/src/ram_setup.rs",
           "firmware/ch32v467_petros/setup_ram.c",
-          "docs/research/DIRECT_CABLE_RUNTIME_20261109.md"
+          "docs/research/DIRECT_CABLE_RUNTIME_20261109.md",
+          "firmware/ch32v467_petros/setup_ram.h",
+          "tests/test_psram_recovery_integration.py",
+          "tests/psram_recovery_integration.c"
         ],
         "unsampled_paths": []
       }

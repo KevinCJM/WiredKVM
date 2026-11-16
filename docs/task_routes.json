@@ -277,7 +277,11 @@
         "验证安装",
         "签名",
         "交换盘",
-        "MSC"
+        "MSC",
+        "PSRAM",
+        "程序盘",
+        "内存校验",
+        "RECOVER"
       ],
       "negative_keywords": [],
       "route_priority": 80,
@@ -296,7 +300,8 @@
         "P18",
         "P19",
         "P22",
-        "P29"
+        "P29",
+        "P47"
       ],
       "expand_search_codes": [
         "read_reference_map_first"

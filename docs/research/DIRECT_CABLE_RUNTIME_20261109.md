@@ -30,6 +30,8 @@ mini 从线内只读卷打开应用，由 mini CPU 执行。不复制到 Applica
 
 ## RAM 装载协议
 
+故障后的分步、限次自动恢复及测试边界见 [程序盘 PSRAM 故障恢复](PSRAM_RECOVERY.md)。该修复候选需同时更新固件和 Book 装载工具；提交代码不等于已更新运行设备。
+
 `native/cable-image` 为无堆分配的 no_std Rust 状态机。`native/cable-loader` 是 Book 装载工具；C 仅封装 IOKit、TTY 和 PSRAM 寄存器。
 
 - 上传走 USB1 的文件 CDC，不占键鼠控制 CDC、目标 HID、触点端点或文件桥队列。

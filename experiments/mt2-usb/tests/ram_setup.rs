@@ -5,6 +5,7 @@ use wiredkvm_mt2_protocol_draft::ram_setup::*;
 static RAM:Mutex<Vec<u8>>=Mutex::new(Vec::new());
 static FORWARDED:Mutex<Vec<u8>>=Mutex::new(Vec::new());
 #[no_mangle] extern "C" fn wk_cable_platform_ready()->i32{1}
+#[no_mangle] extern "C" fn wk_cable_platform_recover()->i32{panic!("healthy or sealed memory must not be reset")}
 #[no_mangle] unsafe extern "C" fn wk_cable_platform_diagnostic(p:*mut u32,n:usize){
     assert_eq!(n,16);let out=std::slice::from_raw_parts_mut(p,n);out.fill(0);out[0]=1;out[3]=476;
 }

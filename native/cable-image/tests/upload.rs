@@ -79,3 +79,64 @@ fn fill(u: &mut Upload, m: &mut Ram, a: &[u8], nonce: u64) {
     fill(&mut u,&mut m,&a,2);assert_eq!(u.accept(0,&frame(FINISH,2,a.len() as u32,&a,&[]),&mut m).code,Code::Integrity);
     assert_eq!(u.published_bytes(),None);
 }
+
+// Unlike Ram above, this model retains the real adapter's unavailable latch.
+struct LatchedRam { inner: Ram, recoveries: u8, pending: bool }
+impl LatchedRam {
+    fn new() -> Self { Self { inner: Ram::new(), recoveries: 0, pending: false } }
+    fn poll(&mut self, healthy: bool) { if self.pending { self.pending=false;self.inner.available=healthy;self.inner.fail=!healthy; } }
+}
+impl Memory for LatchedRam {
+    fn available(&self) -> bool { self.inner.available }
+    fn begin_recovery(&mut self) -> bool {
+        if self.pending { return true; }
+        if self.recoveries==MAX_RECOVERIES { return false; }
+        self.recoveries+=1;self.pending=true;true
+    }
+    fn write_verified(&mut self, at: u32, b: &[u8]) -> bool {
+        let ok=self.inner.write_verified(at,b);if !ok {self.inner.available=false;}ok
+    }
+}
+fn recover() -> [u8;CELL] {
+    Frame{operation:RECOVER,session:0,offset:0,total:0,checksum:0,body:&[]}.encode().unwrap()
+}
+#[test] fn recovery_is_explicit_bounded_and_old_data_cannot_resume() {
+    let a=asset();let mut u=Upload::new();let mut m=LatchedRam::new();
+    u.accept(0,&frame(BEGIN,1,0,&a,&[]),&mut m);m.inner.fail=true;
+    assert_eq!(u.accept(0,&frame(DATA,1,0,&a,&a[..BODY]),&mut m).code,Code::Storage);
+    assert!(!m.available());assert_eq!(u.published_bytes(),None);
+    assert_eq!(u.accept(0,&recover(),&mut m).code,Code::Busy);
+    assert_eq!(u.accept(0,&recover(),&mut m).code,Code::Busy);assert_eq!(m.recoveries,1);
+    for op in [BEGIN,DATA,FINISH] {
+        assert_eq!(u.accept(0,&frame(op,2,0,&a,&[]),&mut m).code,Code::Unavailable);
+    }
+    m.poll(true);
+    assert_eq!(u.accept(0,&recover(),&mut m).code,Code::Accepted);assert_eq!(m.recoveries,1);
+    assert_eq!(u.accept(0,&frame(DATA,1,0,&a,&a[..BODY]),&mut m).code,Code::Stale);
+    assert_eq!(u.accept(0,&frame(BEGIN,2,0,&a,&[]),&mut m).code,Code::Accepted);
+    assert_eq!(u.accept(0,&recover(),&mut m).code,Code::Busy);assert_eq!(m.recoveries,1);
+    m.inner.fail=true;
+    assert_eq!(u.accept(0,&frame(DATA,2,0,&a,&a[..BODY]),&mut m).code,Code::Storage);
+    assert_eq!(u.accept(0,&recover(),&mut m).code,Code::Busy);m.poll(false);
+    for _ in 0..10 {u.disconnected();assert_eq!(u.accept(0,&recover(),&mut m).code,Code::Unavailable);}
+    assert_eq!(m.recoveries,MAX_RECOVERIES);assert_eq!(u.published_bytes(),None);
+}
+#[test] fn malformed_or_foreign_recovery_has_no_platform_effect() {
+    let a=asset();let mut u=Upload::new();let mut m=LatchedRam::new();m.inner.available=false;
+    assert_eq!(u.accept(1,&recover(),&mut m).code,Code::Invalid);
+    for field in 0..5 {
+        let mut f=Frame{operation:RECOVER,session:0,offset:0,total:0,checksum:0,body:&[]};
+        match field {0=>f.session=1,1=>f.offset=1,2=>f.total=1,3=>f.checksum=1,_=>f.body=&a[..1]}
+        assert_eq!(u.accept(0,&f.encode().unwrap(),&mut m).code,Code::Invalid);
+    }
+    let mut corrupt=recover();corrupt[508]^=1;
+    assert_eq!(u.accept(0,&corrupt,&mut m).code,Code::Invalid);assert_eq!(m.recoveries,0);
+}
+#[test] fn sealed_source_cannot_recover_even_when_platform_becomes_unavailable() {
+    let a=asset();let mut u=Upload::new();let mut m=Ram::new();fill(&mut u,&mut m,&a,3);
+    assert_eq!(u.accept(0,&frame(FINISH,3,a.len() as u32,&a,&[]),&mut m).code,Code::Sealed);
+    let mut latched=LatchedRam{inner:m,recoveries:0,pending:false};latched.inner.available=false;
+    assert_eq!(u.accept(0,&recover(),&mut latched).code,Code::Busy);
+    u.disconnected();assert_eq!(u.accept(0,&recover(),&mut latched).code,Code::Busy);
+    assert_eq!(latched.recoveries,0);assert_eq!(u.published_bytes(),Some(a.len() as u32));
+}

@@ -1586,6 +1586,49 @@
       "safe_observation_methods": [
         "用户已授权的 Book 独立自建文件实验；只记录有限事件与时间，保留退出和目标文件证据；不访问 mini 终端或其它应用日志。"
       ]
+    },
+    {
+      "id": "P47",
+      "title": "PSRAM故障锁定须有界分步恢复，封存来源盘不可复位",
+      "severity": "high",
+      "confidence": "high",
+      "risk_codes": [
+        "latched_ram_retry",
+        "published_source_reset",
+        "online_recovery_blocking"
+      ],
+      "symptoms": [
+        "Book反复重试上传但程序盘不出现",
+        "假内存始终available掩盖实际ready锁定",
+        "同步初始化阻塞输入主循环"
+      ],
+      "trigger_actions": [
+        "修改RAM镜像上传、PSRAM恢复或线内程序装载"
+      ],
+      "related_paths": [
+        "firmware/ch32v467_petros/setup_ram.c",
+        "native/cable-image/src/lib.rs",
+        "native/cable-loader/src/main.rs",
+        "experiments/mt2-usb/src/ram_setup.rs",
+        "docs/research/PSRAM_RECOVERY.md"
+      ],
+      "affected_modules": [
+        "portable_cable_runtime",
+        "firmware_ch32"
+      ],
+      "blast_radius": [
+        "program image admission and independent input service"
+      ],
+      "check_before_edit": [
+        "RECOVER在available拦截前验证零字段、格CRC、端口及无活动/封存会话；C另验未发布。",
+        "恢复每次固件启动至多两次；USB/Book进程重连不清预算，MCU复位会清BSS。每轮只做一个有界阶段或512字节探测；不可调用同步启动初始化。",
+        "排空已提交窗口，只有同会话Storage或诊断支持的Unavailable才恢复；新会话从零重传，错误ACK和I/O不能变成复位许可。",
+        "保留MSC全物理镜像CRC和sealed保护；封存后CRC失败不在自动恢复范围。离线模型不证明时序、供电或实机输入时延。"
+      ],
+      "safe_observation_methods": [
+        "python3 tests/test_cable_runtime.py",
+        "python3 tests/test_psram_recovery_integration.py"
+      ]
     }
   ]
 }
