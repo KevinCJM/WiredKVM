@@ -1049,20 +1049,22 @@
     {
       "id": "hardware_power_requirements",
       "name": "hardware_power_requirements",
-      "path": "hardware/USB_POWER_AND_HOTPLUG_REQUIREMENTS.md",
+      "path": "hardware/PCBA_REQUIREMENTS.md",
       "kind": "documentation",
-      "purpose": "User-confirmed PCBA power requirement: USB1 is the sole board power input; USB2 retains data and high-impedance VBUS detection without backfeed. Either plug order and independent replug must recover. Requirements only; no PCB design or hardware repair acceptance.",
+      "purpose": "User-confirmed PCBA requirements and rationale: one copper layer, USB-stick form, male USB1/female USB2, bounded component count and cost targets. CH32V407 is the production candidate, CH32V467 the development platform. USB1 alone powers the board; USB2 retains data and VBUS detection without backfeed. Requirements only; dimensions, component baseline, V407 storage, electrical feasibility and performance acceptance remain to be verified. No PCB implementation is authorized.",
       "module_tags": [
         "hardware",
         "requirements",
         "grounded"
       ],
       "entry_files": [
+        "hardware/PCBA_REQUIREMENTS.md",
         "hardware/USB_POWER_AND_HOTPLUG_REQUIREMENTS.md"
       ],
       "key_symbols": [],
       "child_modules": [],
       "first_read_files": [
+        "hardware/PCBA_REQUIREMENTS.md",
         "hardware/USB_POWER_AND_HOTPLUG_REQUIREMENTS.md"
       ],
       "then_check_files": [
@@ -1081,7 +1083,9 @@
       "related_configs": [],
       "risk_flags": [
         "requirements_not_implementation",
-        "backfeed_not_measured"
+        "backfeed_not_measured",
+        "single_layer_feasibility_unverified",
+        "v407_storage_not_frozen"
       ],
       "edit_risk": "low",
       "blast_radius": [
@@ -1101,6 +1105,7 @@
       "grounding": {
         "fact_status": "grounded",
         "evidence": [
+          "hardware/PCBA_REQUIREMENTS.md",
           "AGENTS.md",
           "hardware/USB_POWER_AND_HOTPLUG_REQUIREMENTS.md",
           "results/control-autostart-20261109/order-probe/port-failed.json",
@@ -1336,11 +1341,10 @@
     "codegraph_present": false,
     "complete_historical_project": false,
     "missing_known_paths": [
-      "hardware/PCBA_REQUIREMENTS.md",
       "host/gui/WiredKVMCore.swift",
       "host/gui/WiredKVMMenu.swift"
     ],
-    "requirements_document": "Missing; recover or explicitly reconstruct from user requirements. Do not invent historical threshold numbers.",
+    "requirements_document": "hardware/PCBA_REQUIREMENTS.md reconstructed from user-confirmed requirements on 2026-11-17. Requirements and acceptance criteria only; no PCB layout, manufacturing approval or unverified historical thresholds.",
     "runtime_facts_owner": "docs/history/SESSION_EVIDENCE_20261105.json",
     "runtime_facts_freshness": "Historical snapshot only. Refresh before device operations.",
     "language": "Recovered C/C++/Swift/Python remains; components that require rewriting use Rust."

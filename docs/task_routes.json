@@ -332,7 +332,11 @@
         "USB供电",
         "回灌",
         "插入顺序",
-        "USB1独供"
+        "USB1独供",
+        "PCB",
+        "单层板",
+        "公头",
+        "母头"
       ],
       "negative_keywords": [],
       "route_priority": 80,
