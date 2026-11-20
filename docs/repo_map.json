@@ -1202,12 +1202,11 @@
       "name": "portable_cable_runtime",
       "path": "native/cable-image",
       "kind": "implementation_entrypoints",
-      "purpose": "Readonly cable program and Book startup coordinator. The PSRAM recovery candidate adds CRC-protected RECOVER admission, two cooperative attempts per firmware boot, guarded host retry and immutable sealed-source protection. C/Rust integration, loader sockets and input/MSC regressions cover the offline contract; candidate deployment, physical PSRAM root cause and recovery acceptance remain unverified. Target app runs directly from the cable, without persistent installation or target terminal.",
+      "purpose": "Readonly cable program and Book startup coordinator. PSRAM recovery uses CRC-protected RECOVER admission, two cooperative attempts per firmware boot, guarded host retry and immutable sealed-source protection. C/Rust integration, loader sockets and input/MSC regressions cover the offline contract. A paired CH32V467 firmware and Book loader update passed one physical cold attach, with automatic mini disk appearance and working keyboard, mouse, two- and four-finger gestures and edge return. Physical recovery from a PSRAM fault and the first-error root cause remain unverified. Target app runs directly from the cable, without persistent installation or target terminal.",
       "module_tags": [
         "portable",
         "ram_setup",
-        "bulk",
-        "offline_candidate"
+        "bulk"
       ],
       "entry_files": [
         "scripts/build_portable_companion.py",
