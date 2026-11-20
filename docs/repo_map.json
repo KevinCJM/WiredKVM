@@ -1043,18 +1043,20 @@
       "name": "hardware_power_requirements",
       "path": "hardware/USB_POWER_AND_HOTPLUG_REQUIREMENTS.md",
       "kind": "documentation",
-      "purpose": "User-confirmed PCBA power requirement: USB1 is the sole board power input; USB2 retains data and high-impedance VBUS detection without backfeed. Either plug order and independent replug must recover. Requirements only; no PCB design or hardware repair acceptance.",
+      "purpose": "PCBA requirements (2026-11-20 reconstruction, not the lost original): single CH32V407 USB-stick board, USB-C male USB1 + female USB2, 2-layer copper with single-side SMT, LCEDA Pro. Power rule: USB1 is the sole board power input; USB2 retains data and high-impedance VBUS detection without backfeed. Either plug order and independent replug must recover. Requirements only; no schematic, PCB or hardware acceptance yet.",
       "module_tags": [
         "hardware",
         "requirements",
         "grounded"
       ],
       "entry_files": [
+        "hardware/PCBA_REQUIREMENTS.md",
         "hardware/USB_POWER_AND_HOTPLUG_REQUIREMENTS.md"
       ],
       "key_symbols": [],
       "child_modules": [],
       "first_read_files": [
+        "hardware/PCBA_REQUIREMENTS.md",
         "hardware/USB_POWER_AND_HOTPLUG_REQUIREMENTS.md"
       ],
       "then_check_files": [
@@ -1192,11 +1194,10 @@
     "codegraph_present": false,
     "complete_historical_project": false,
     "missing_known_paths": [
-      "hardware/PCBA_REQUIREMENTS.md",
       "host/gui/WiredKVMCore.swift",
       "host/gui/WiredKVMMenu.swift"
     ],
-    "requirements_document": "Missing; recover or explicitly reconstruct from user requirements. Do not invent historical threshold numbers.",
+    "requirements_document": "hardware/PCBA_REQUIREMENTS.md reconstructed 2026-11-20 from current user requirements; historical threshold numbers remain unrecovered and must not be invented.",
     "runtime_facts_owner": "docs/history/SESSION_EVIDENCE_20261105.json",
     "runtime_facts_freshness": "Historical snapshot only. Refresh before device operations.",
     "language": "Recovered C/C++/Swift/Python remains; components that require rewriting use Rust."
