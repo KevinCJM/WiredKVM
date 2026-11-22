@@ -1,0 +1,1 @@
+return {version:eda.sys_Environment.getEditorCurrentVersion(),isClient:eda.sys_Environment.isClient(),halfOffline:eda.sys_Environment.isHalfOfflineMode(),project:await eda.dmt_Project.getCurrentProjectInfo(),document:await eda.dmt_SelectControl.getCurrentDocumentInfo(),projectPaths:await eda.sys_FileSystem.getProjectsPaths()};

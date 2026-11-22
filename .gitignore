@@ -54,3 +54,6 @@
 /secrets.json
 /.vscode/
 /.idea/
+
+# macOS AppleDouble files created on the exFAT volume
+._*

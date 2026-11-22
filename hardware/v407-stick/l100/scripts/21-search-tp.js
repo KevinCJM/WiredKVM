@@ -1,0 +1,1 @@
+const out={};for(const k of __CLI__.args.keys){try{const r=await eda.lib_Device.search(k,undefined,undefined,undefined,30,1);out[k]=r.map(d=>({uuid:d.uuid,libraryUuid:d.libraryUuid,name:d.name,symbol:d.symbol?.name,footprint:d.footprint?.name,sid:d.supplierId,desc:(d.description||"").slice(0,60)}));}catch(e){out[k]={error:String(e)};}}return out;

@@ -1,0 +1,105 @@
+{
+  "name": "WiredKVM-V407-Stick-L100",
+  "owner_uuid": "3530d2bc0eca4d1da75c856ddede2f15",
+  "creator_uuid": "3530d2bc0eca4d1da75c856ddede2f15",
+  "created_at": "2026-11-20 23:15:07",
+  "updated_at": "2026-11-20 23:15:07",
+  "modifier_uuid": "3530d2bc0eca4d1da75c856ddede2f15",
+  "content": "WiredKVM CH32V407VET6 (LQFP100) dual USB2.0 HS bridge, USB-stick form, 2-layer single-side SMT. Variant of WiredKVM-V407-Stick (QFN68). WIP, not for order.",
+  "archive": false,
+  "cbb_project": 0,
+  "thumb": "",
+  "ticket": 1,
+  "g_ticket": 1,
+  "boards": [],
+  "block_symbol_attrs_groups": {},
+  "default_sheet": "3635e031ef732259",
+  "branch_uuid": "",
+  "pcb_count": 0,
+  "format": "folder",
+  "profile": {
+    "boards": {
+      "ddddcd097ffed920": {
+        "uuid": "ddddcd097ffed920",
+        "title": "Board1",
+        "zIndex": 1
+      }
+    },
+    "schematics": {
+      "3a973cf1726fa281": {
+        "uuid": "3a973cf1726fa281",
+        "name": "WiredKVM-V407-Stick",
+        "board": "ddddcd097ffed920",
+        "source": "",
+        "version": "1795277955318",
+        "updateTime": 1795277955318
+      }
+    },
+    "sheets": {
+      "f4dfc3117690325d": {
+        "uuid": "f4dfc3117690325d",
+        "title": "MCU",
+        "schematic_uuid": "3a973cf1726fa281",
+        "zIndex": 21,
+        "source": "",
+        "version": "1795277954612",
+        "updateTime": 1795277954612
+      },
+      "1503672ef7465fb0": {
+        "uuid": "1503672ef7465fb0",
+        "title": "USB_Power",
+        "schematic_uuid": "3a973cf1726fa281",
+        "zIndex": 22,
+        "source": "",
+        "version": "1795277955318",
+        "updateTime": 1795277955318
+      }
+    },
+    "pcbs": {
+      "b548f4f398f3a4f4": {
+        "uuid": "b548f4f398f3a4f4",
+        "title": "PCB1",
+        "board": "ddddcd097ffed920",
+        "parent_uuid": "",
+        "source": "",
+        "version": "1795278091559",
+        "updateTime": 1795278091559
+      }
+    },
+    "panels": {
+      "89e61852bc528429": {
+        "uuid": "89e61852bc528429",
+        "title": "Panel1",
+        "zIndex": null
+      }
+    },
+    "blockSymbols": {},
+    "owner": {
+      "uuid": "3530d2bc0eca4d1da75c856ddede2f15"
+    },
+    "simSchematics": {},
+    "simulations": {}
+  },
+  "config": {
+    "defaultSheet": "3635e031ef732259",
+    "settings": {
+      "UNIVERSAL": {
+        "dataType": "UNIVERSAL",
+        "data": {
+          "allowLibRename": true,
+          "defaultNetName": true,
+          "wireMultipleNet": true,
+          "netFlagCrossLayerConnection": true,
+          "netLabelCrossPageConnection": true,
+          "busGenerateNetClass": true,
+          "relevanceDisplayRow": "SINGLE",
+          "relevanceBelongSchPage": "NAME",
+          "relevanceLocation": "ZONE",
+          "multipartCrossLayer": true,
+          "nonElectronicAddIntoBom": false,
+          "nonElectronicUpdatePcb": false
+        }
+      }
+    }
+  }
+}
