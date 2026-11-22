@@ -1051,7 +1051,7 @@
       "name": "hardware_power_requirements",
       "path": "hardware/PCBA_REQUIREMENTS.md",
       "kind": "documentation",
-      "purpose": "User-confirmed PCBA requirements and rationale: one copper layer, USB-stick form, male USB1/female USB2, bounded component count and cost targets. CH32V407 is the production candidate, CH32V467 the development platform. USB1 alone powers the board; USB2 retains data and VBUS detection without backfeed. Requirements only; dimensions, component baseline, V407 storage, electrical feasibility and performance acceptance remain to be verified. No PCB implementation is authorized.",
+      "purpose": "User-confirmed PCBA requirements and rationale: one copper layer, USB-stick form, male USB1/female USB2, bounded component count and cost targets. CH32V407 is the production candidate, CH32V467 the development platform. USB1 alone powers the board; USB2 retains data and VBUS detection without backfeed. Requirements only. The R1 board design that answers them lives in hardware_v407_stick; it departs from the one-copper-layer requirement (R1 is two-layer), which still needs the user's decision. Ordering, prototyping and purchasing still need user confirmation.",
       "module_tags": [
         "hardware",
         "requirements",
@@ -1073,7 +1073,8 @@
       "upstream_dependencies": [],
       "downstream_dependencies": [
         "firmware_ch32",
-        "host_autostart"
+        "host_autostart",
+        "hardware_v407_stick"
       ],
       "out_of_scope_dependencies": [
         "Petros board circuit and electrical measurement",
@@ -1099,7 +1100,6 @@
       "minimum_regression": [],
       "routing_confidence": "high",
       "scope_flags": [
-        "no_pcb_design",
         "requirements_only"
       ],
       "grounding": {
@@ -1110,6 +1110,78 @@
           "hardware/USB_POWER_AND_HOTPLUG_REQUIREMENTS.md",
           "results/control-autostart-20261109/order-probe/port-failed.json",
           "results/control-autostart-20261109/order-probe/port-mini-removed.json"
+        ],
+        "unsampled_paths": []
+      }
+    },
+    {
+      "id": "hardware_v407_stick",
+      "name": "hardware_v407_stick",
+      "path": "hardware/v407-stick",
+      "kind": "hardware_design",
+      "purpose": "Snapshot of the CH32V407 USB-stick board R1: EasyEDA Pro projects, schematic/PCB images, Gerber, drill, BOM, CPL and IPC-356 production files, build/check scripts and design notes for the LQFP100 variant to order (l100) and the shelved QFN68 variant (qfn68), plus the l100 enclosure v2 build123d source, STEP and STL. Software checks only (DRC, netlist, export checks, CAD interference/DFM); not ordered, no physical board. The authoritative working copy is a local workspace outside the repo; this folder is synced from it.",
+      "module_tags": [
+        "hardware",
+        "pcb",
+        "pcba",
+        "bom",
+        "cad",
+        "grounded"
+      ],
+      "entry_files": [
+        "hardware/v407-stick/README.md",
+        "hardware/v407-stick/l100/docs/pcb/DESIGN_NOTES.md"
+      ],
+      "key_symbols": [],
+      "child_modules": [],
+      "first_read_files": [
+        "hardware/v407-stick/README.md",
+        "hardware/v407-stick/l100/docs/pcb/DESIGN_NOTES.md",
+        "hardware/v407-stick/l100/README.md"
+      ],
+      "then_check_files": [
+        "hardware/v407-stick/l100/manufacturing/R1-WIP/README.md",
+        "hardware/v407-stick/l100/mechanical/README.md",
+        "hardware/v407-stick/l100/scripts/pcb_layout.py",
+        "hardware/PCBA_REQUIREMENTS.md"
+      ],
+      "upstream_dependencies": [
+        "hardware_power_requirements"
+      ],
+      "downstream_dependencies": [
+        "firmware_ch32"
+      ],
+      "out_of_scope_dependencies": [
+        "Raw EasyEDA evidence logs, vendor datasheets and the EasyEDA session stay in the local workspace; scripts/eda.sh only runs there.",
+        "JLCPCB ordering, prototype boards and physical tests have not happened."
+      ],
+      "related_tests": [],
+      "related_configs": [],
+      "risk_flags": [
+        "software_checks_only",
+        "two_layer_vs_single_layer_requirement",
+        "not_ordered",
+        "enclosure_not_printed",
+        "plug_joint_bending_strength_estimated_only"
+      ],
+      "edit_risk": "medium",
+      "blast_radius": [
+        "PCBA order files",
+        "enclosure fit"
+      ],
+      "pitfall_ids": [],
+      "minimum_regression": [],
+      "routing_confidence": "high",
+      "scope_flags": [
+        "snapshot_of_local_workspace",
+        "order_needs_user_confirmation"
+      ],
+      "grounding": {
+        "fact_status": "grounded",
+        "evidence": [
+          "hardware/v407-stick/README.md",
+          "hardware/v407-stick/l100/docs/pcb/DESIGN_NOTES.md",
+          "hardware/v407-stick/l100/manufacturing/R1-WIP/SHA256SUMS.txt"
         ],
         "unsampled_paths": []
       }
@@ -1343,7 +1415,7 @@
       "host/gui/WiredKVMCore.swift",
       "host/gui/WiredKVMMenu.swift"
     ],
-    "requirements_document": "hardware/PCBA_REQUIREMENTS.md reconstructed from user-confirmed requirements on 2026-11-17. Requirements and acceptance criteria only; no PCB layout, manufacturing approval or unverified historical thresholds.",
+    "requirements_document": "hardware/PCBA_REQUIREMENTS.md reconstructed from user-confirmed requirements on 2026-11-17. Requirements and acceptance criteria only. The R1 board design (not ordered) is under hardware/v407-stick/.",
     "runtime_facts_owner": "docs/history/SESSION_EVIDENCE_20261105.json",
     "runtime_facts_freshness": "Historical snapshot only. Refresh before device operations.",
     "language": "Recovered C/C++/Swift/Python remains; components that require rewriting use Rust."
