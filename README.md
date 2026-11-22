@@ -22,8 +22,8 @@
 
 - 当前开发板：Petros／XPU Labs **CH32V467WEU6**。
 - 量产候选：**CH32V407**；目标保留 USB-C 公头＋USB-C 母头。
-- 现行 [PCBA 需求规格书](hardware/PCBA_REQUIREMENTS.md)：单层铜、U 盘大小、器件数量及成本目标、功能验收和设计原因。
-- [量产板 R1 设计文件](hardware/v407-stick/README.md)：嘉立创 EDA 工程、Gerber、BOM、贴片坐标、设计笔记和外壳模型（STEP／STL）。只做过软件检查，没有下单；R1 是双层板，和需求书的“单层铜”不一致，待确认。
+- 现行 [PCBA 需求规格书](hardware/PCBA_REQUIREMENTS.md)：双层板单面贴装、U 盘大小、器件数量及成本目标、功能验收和设计原因。
+- [量产板 R1 设计文件](hardware/v407-stick/README.md)：嘉立创 EDA 工程、Gerber、BOM、贴片坐标、设计笔记和外壳模型（STEP／STL）。只做过软件检查，没有下单。
 - 当前接线：USB1 接主控 MacBook，USB2 接 Mac mini；DBG 仅用于经核对后的调试与刷写。
 - 量产电源要求：仅 USB1 给整板供电；USB2 只提供数据和 VBUS 检测，不得回灌。
 - 产品数据仅走有线 USB；不依赖 Wi-Fi、蓝牙或 macOS 共享服务。

@@ -1051,7 +1051,7 @@
       "name": "hardware_power_requirements",
       "path": "hardware/PCBA_REQUIREMENTS.md",
       "kind": "documentation",
-      "purpose": "User-confirmed PCBA requirements and rationale: one copper layer, USB-stick form, male USB1/female USB2, bounded component count and cost targets. CH32V407 is the production candidate, CH32V467 the development platform. USB1 alone powers the board; USB2 retains data and VBUS detection without backfeed. Requirements only. The R1 board design that answers them lives in hardware_v407_stick; it departs from the one-copper-layer requirement (R1 is two-layer), which still needs the user's decision. Ordering, prototyping and purchasing still need user confirmation.",
+      "purpose": "User-confirmed PCBA requirements and rationale: two copper layers with top-side assembly only (changed from one layer, user-confirmed 2026-11-22), USB-stick form, male USB1/female USB2, bounded component count and cost targets. CH32V407 is the production candidate, CH32V467 the development platform. USB1 alone powers the board; USB2 retains data and VBUS detection without backfeed. Requirements only. The R1 board design that answers them lives in hardware_v407_stick. Ordering, prototyping and purchasing still need user confirmation.",
       "module_tags": [
         "hardware",
         "requirements",
@@ -1085,7 +1085,6 @@
       "risk_flags": [
         "requirements_not_implementation",
         "backfeed_not_measured",
-        "single_layer_feasibility_unverified",
         "v407_storage_not_frozen"
       ],
       "edit_risk": "low",
@@ -1159,7 +1158,6 @@
       "related_configs": [],
       "risk_flags": [
         "software_checks_only",
-        "two_layer_vs_single_layer_requirement",
         "not_ordered",
         "enclosure_not_printed",
         "plug_joint_bending_strength_estimated_only"
